@@ -67,7 +67,7 @@ func LoadConfig(filename string) (*Config, error) {
 		config.Profiles = []Profile{
 			{
 				Name:    "Default",
-				Version: config.OSType,
+				Version: "latest",
 			},
 		}
 	}
@@ -209,30 +209,22 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			text := scanner.Text()
-			um.app.RunOnMainThread(func() {
-				um.LogVerbose(text)
-			})
+			um.LogVerbose(text)
 		}
 	}()
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			text := scanner.Text()
-			um.app.RunOnMainThread(func() {
-				um.LogVerbose("ERR: " + text)
-			})
+			um.LogVerbose("ERR: " + text)
 		}
 	}()
 
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			um.app.RunOnMainThread(func() {
-				um.LogImportant(fmt.Sprintf("OpenTTD exited with error: %v", err))
-			})
+			um.LogImportant(fmt.Sprintf("OpenTTD exited with error: %v", err))
 		} else {
-			um.app.RunOnMainThread(func() {
-				um.LogVerbose("OpenTTD exited normally")
-			})
+			um.LogVerbose("OpenTTD exited normally")
 		}
 	}()
 }
