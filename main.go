@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -16,18 +15,29 @@ import (
 	"time"
 )
 
-// Config holds the launcher configuration
+// Profile represents a launch profile (per-launch settings)
+type Profile struct {
+	Name                  string `json:"name"`
+	Version               string `json:"version"`
+	SavePath              string `json:"savePath"`
+	ServerIpPort          string `json:"serverIpPort"`
+	ServerPassword        string `json:"serverPassword"`
+	ServerCompanyNumber   string `json:"serverCompanyNumber"`
+	ServerCompanyPassword string `json:"serverCompanyPassword"`
+}
+
+// Config holds global launcher configuration and profiles
 type Config struct {
-	ParentDir              string `json:"parentDir"`
-	DocsBasePath           string `json:"docsBasePath"`
-	GithubApiUrl           string `json:"githubApiUrl"`
-	OSType                 string `json:"osType"`
-	Version                string `json:"version"`
-	SavePath               string `json:"savePath"`
-	ServerIpPort           string `json:"serverIpPort"`
-	ServerPassword         string `json:"serverPassword"`
-	ServerCompanyNumber    string `json:"serverCompanyNumber"`
-	ServerCompanyPassword  string `json:"serverCompanyPassword"`
+	// Global settings
+	ParentDir        string `json:"parentDir"`
+	DocsBasePath     string `json:"docsBasePath"`
+	GithubApiUrl     string `json:"githubApiUrl"`
+	OSType           string `json:"osType"`
+	AutoCloseOnStart bool   `json:"autoCloseOnStart"` // default: false (keep window open)
+	Verbose          bool   `json:"verbose"`          // default: false (only show important messages)
+
+	// Profiles for different launch configurations
+	Profiles []Profile `json:"profiles"`
 }
 
 // ReleaseInfo represents GitHub release information
@@ -52,7 +62,30 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// Ensure at least one profile exists
+	if len(config.Profiles) == 0 {
+		config.Profiles = []Profile{
+			{
+				Name:    "Default",
+				Version: config.OSType,
+			},
+		}
+	}
+
 	return &config, nil
+}
+
+// SaveConfig saves configuration to config.json
+func SaveConfig(filename string, config *Config) error {
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	err = os.WriteFile(filename, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	return nil
 }
 
 // FindVersionFolder returns the first subfolder matching the version pattern
@@ -121,10 +154,17 @@ func FindLatestSaveFile(gamePath string) string {
 }
 
 // ExecuteOpenTTD launches the OpenTTD executable with specified parameters
-func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword, companyPassword, saveFile string, l *Logger) {
+func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword, companyPassword, savePath string, l *Logger, um *UIManager) {
+	// Find the save file if savePath is specified
+	var saveFile string
+	if savePath != "" {
+		gamePath := filepath.Join(um.config.DocsBasePath, "save", savePath)
+		saveFile = FindLatestSaveFile(gamePath)
+	}
+
 	exePath := filepath.Join(versionFolder, "openttd.exe")
 	if _, err := os.Stat(exePath); err != nil {
-		fmt.Printf("Executable not found in %s\n", versionFolder)
+		l.Append(fmt.Sprintf("Executable not found in %s", versionFolder))
 		return
 	}
 
@@ -148,35 +188,51 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 
 	// Start a process and capture its output so we can show logs in the UI.
 	cmd = exec.Command(exePath, args...)
-	l.Append(fmt.Sprintf("Running command: %s %v", exePath, args))
+	um.LogVerbose(fmt.Sprintf("Running command: %s %v", exePath, args))
+
+	// Set up process attributes for detaching if auto-close is enabled
+	cmd.SysProcAttr = getDetachedSysProcAttr()
 
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 
 	if err := cmd.Start(); err != nil {
-		l.Append(fmt.Sprintf("Failed to start OpenTTD: %v", err))
+		um.LogImportant(fmt.Sprintf("Failed to start OpenTTD: %v", err))
 		return
 	}
 
-	// Read stdout/stderr and forward to logger.
+	um.LogImportant("OpenTTD started successfully")
+	um.OnOpenTTDStarted()
+
+	// Read stdout/stderr and forward to logger on main UI thread
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			l.Append(scanner.Text())
+			text := scanner.Text()
+			um.app.RunOnMainThread(func() {
+				um.LogVerbose(text)
+			})
 		}
 	}()
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			l.Append("ERR: " + scanner.Text())
+			text := scanner.Text()
+			um.app.RunOnMainThread(func() {
+				um.LogVerbose("ERR: " + text)
+			})
 		}
 	}()
 
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			l.Append(fmt.Sprintf("OpenTTD exited with error: %v", err))
+			um.app.RunOnMainThread(func() {
+				um.LogImportant(fmt.Sprintf("OpenTTD exited with error: %v", err))
+			})
 		} else {
-			l.Append("OpenTTD exited")
+			um.app.RunOnMainThread(func() {
+				um.LogVerbose("OpenTTD exited normally")
+			})
 		}
 	}()
 }
@@ -289,40 +345,6 @@ func (l *Logger) GetAll() []string {
 	return out
 }
 
-// startLogServer starts a small HTTP server serving logs and a basic UI.
-func startLogServer(l *Logger) (string, error) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(l.GetAll())
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, `<!doctype html><html><head><meta charset="utf-8"><title>Launcher Logs</title><style>body{font-family:Arial,monospace;background:#111;color:#eee;padding:10px}pre{white-space:pre-wrap}</style></head><body><h2>Launcher Logs</h2><pre id="log">Loading...</pre><script>async function upd(){let r=await fetch('/logs');let j=await r.json();document.getElementById('log').textContent=j.join('\n');}setInterval(upd,800);upd();</script></body></html>`)
-	})
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "", err
-	}
-	addr := ln.Addr().String()
-	srv := &http.Server{Handler: mux}
-	go srv.Serve(ln)
-	return "http://" + addr, nil
-}
-
-func openBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	_ = cmd.Start()
-}
 
 // extractZip extracts a zip file to a directory
 func extractZip(zipPath, destDir string) error {
@@ -370,7 +392,7 @@ func CheckForNewVersion(config *Config) string {
 	return ""
 }
 
-// Main launches OpenTTD with the configured settings
+// Main launches the GUI launcher
 func main() {
 	config, err := LoadConfig("config.json")
 	if err != nil {
@@ -378,72 +400,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	versionToUse := config.Version
-	var versionFolder string
-
-	if versionToUse == "" {
-		fmt.Println("Checking for the latest version...")
-		versionToUse = CheckForNewVersion(config)
-		if versionToUse == "" {
-			fmt.Println("Could not determine latest version. Trying to find latest local version.")
-			versionFolder = FindLatestFolder(config.ParentDir)
-		} else {
-			fmt.Printf("Latest version is %s.\n", versionToUse)
-			versionFolder = FindVersionFolder(config.ParentDir, versionToUse)
-		}
-	} else {
-		versionFolder = FindVersionFolder(config.ParentDir, versionToUse)
-	}
-
-	if versionFolder == "" {
-		fmt.Printf("Version %s not found locally. Attempting to download.\n", versionToUse)
-		if !DownloadAndExtractVersion(versionToUse, config) {
-			fmt.Printf("Failed to download version %s.\n", versionToUse)
-			os.Exit(1)
-		}
-		versionFolder = FindVersionFolder(config.ParentDir, versionToUse)
-	}
-
-	if versionFolder != "" {
-		fmt.Printf("Using version folder: %s\n", versionFolder)
-		var gamePath string
-		if config.SavePath != "" {
-			gamePath = filepath.Join(config.DocsBasePath, "save", config.SavePath)
-		} else {
-			gamePath = filepath.Join(config.DocsBasePath, "save")
-		}
-
-		var latestSaveFile string
-		if config.SavePath != "" {
-			latestSaveFile = FindLatestSaveFile(gamePath)
-		}
-
-		ipPort := config.ServerIpPort
-		if ipPort == "" {
-			ipPort = ""
-		}
-		companyNumber := config.ServerCompanyNumber
-		if companyNumber == "" {
-			companyNumber = ""
-		}
-
-		// Start local log UI and keep app running so errors/logs are visible.
-		logger := &Logger{}
-		url, err := startLogServer(logger)
-		if err == nil {
-			logger.Append("Log server started at " + url)
-			openBrowser(url)
-		} else {
-			fmt.Printf("Failed to start log server: %v\n", err)
-		}
-
-		logger.Append(fmt.Sprintf("Using version folder: %s", versionFolder))
-		ExecuteOpenTTD(versionFolder, ipPort, companyNumber, config.ServerPassword, config.ServerCompanyPassword, latestSaveFile, logger)
-
-		// Keep the program running so the UI stays up and shows any errors.
-		select {}
-	} else {
-		fmt.Println("Could not find or download a suitable version to run.")
-		os.Exit(1)
-	}
+	ui := NewUIManager(config)
+	ui.Show()
 }

@@ -5,8 +5,10 @@ package main
 
 import "syscall"
 
-func getWindowsSysProcAttr() *syscall.SysProcAttr {
-    return &syscall.SysProcAttr{
-        CreationFlags: 0x08000000 | 0x00000008, // CREATE_NO_WINDOW | DETACHED_PROCESS
-    }
+// getDetachedSysProcAttr returns process attributes to detach the process on Windows
+// so that it survives parent exit.
+func getDetachedSysProcAttr() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{
+		CreationFlags: 0x00000008, // DETACHED_PROCESS
+	}
 }
