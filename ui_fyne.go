@@ -72,8 +72,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	selectedConfig := widget.NewLabel("")
 	selectedConfig.Wrapping = fyne.TextWrapWord
 
-	selectionHint := widget.NewLabel("Tip: use Run after selecting a profile, or double-click a row to launch.")
+	selectionHint := widget.NewLabel("Tip: select a profile, then press Enter, double-click the row, or use Run Selected.")
 	selectionHint.Wrapping = fyne.TextWrapWord
+
+	var profileList *widget.List
+	var refreshDetails func()
 
 	runSelected := func() {
 		if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
@@ -83,7 +86,35 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		dialog.ShowError(fmt.Errorf("select a profile to launch"), um.window)
 	}
 
-	refreshDetails := func() {
+	selectProfile := func(idx int) {
+		if idx < 0 || idx >= len(um.config.Profiles) {
+			selectedIdx = -1
+			um.selectedProfileName = ""
+			return
+		}
+
+		selectedIdx = idx
+		um.selectedProfileName = um.config.Profiles[selectedIdx].Name
+		refreshDetails()
+		selectedSummary.Refresh()
+		selectedConfig.Refresh()
+		selectedLabel.Refresh()
+	}
+
+	handleRowTap := func(idx int) {
+		now := time.Now()
+		if idx == selectedIdx && idx == um.lastListSelectID && now.Sub(um.lastListSelectAt) < 450*time.Millisecond {
+			um.lastListSelectAt = time.Time{}
+			runSelected()
+			return
+		}
+
+		um.lastListSelectID = idx
+		um.lastListSelectAt = now
+		profileList.Select(widget.ListItemID(idx))
+	}
+
+	refreshDetails = func() {
 		if selectedIdx < 0 || selectedIdx >= len(um.config.Profiles) {
 			selectedLabel.SetText("No profile selected")
 			selectedSummary.SetText("Choose a profile to see its version, save path, and multiplayer settings.")
@@ -109,47 +140,35 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		))
 	}
 
-	profileList := widget.NewList(
+	profileList = widget.NewList(
 		func() int { return len(um.config.Profiles) },
-		func() fyne.CanvasObject { return widget.NewLabel("Profile") },
+		func() fyne.CanvasObject {
+			btn := widget.NewButton("Profile", nil)
+			btn.Importance = widget.LowImportance
+			btn.Alignment = widget.ButtonAlignLeading
+			return btn
+		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			label := o.(*widget.Label)
+			button := o.(*widget.Button)
 			if i < len(um.config.Profiles) {
 				profile := um.config.Profiles[i]
 				versionText := profile.Version
 				if versionText == "" {
 					versionText = "latest"
 				}
-				label.SetText(fmt.Sprintf("%s   •   %s", profile.Name, versionText))
+				button.SetText(fmt.Sprintf("%s   •   %s", profile.Name, versionText))
+				idx := int(i)
+				button.OnTapped = func() {
+					handleRowTap(idx)
+				}
 			}
 		},
 	)
 	profileList.OnSelected = func(id widget.ListItemID) {
-		newIdx := int(id)
-		if newIdx == um.lastListSelectID && time.Since(um.lastListSelectAt) < 450*time.Millisecond {
-			selectedIdx = newIdx
-			if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
-				um.selectedProfileName = um.config.Profiles[selectedIdx].Name
-			}
-			um.lastListSelectAt = time.Time{}
-			runSelected()
-			return
-		}
-
-		selectedIdx = newIdx
-		if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
-			um.selectedProfileName = um.config.Profiles[selectedIdx].Name
-		}
-		um.lastListSelectID = newIdx
-		um.lastListSelectAt = time.Now()
-		refreshDetails()
-		selectedSummary.Refresh()
-		selectedConfig.Refresh()
-		selectedLabel.Refresh()
+		selectProfile(int(id))
 	}
 	profileList.OnUnselected = func(_ widget.ListItemID) {
-		selectedIdx = -1
-		um.selectedProfileName = ""
+		selectProfile(-1)
 		refreshDetails()
 		selectedSummary.Refresh()
 		selectedConfig.Refresh()
@@ -244,14 +263,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			return
 		}
 
-		focused := um.window.Canvas().Focused()
-		if focused != nil {
-			if _, isList := focused.(*widget.List); !isList {
-				return
-			}
+		if selectedIdx >= 0 {
+			runSelected()
 		}
-
-		runSelected()
 	})
 
 	return mainContent
