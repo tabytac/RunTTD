@@ -403,9 +403,11 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 func (um *UIManager) showSettingsView() {
 	parentDirEntry := widget.NewEntry()
 	parentDirEntry.SetText(um.config.ParentDir)
+	parentDirEntry.SetPlaceHolder("Folder where JGRPP versions are installed")
 
 	docsBasePathEntry := widget.NewEntry()
 	docsBasePathEntry.SetText(um.config.DocsBasePath)
+	docsBasePathEntry.SetPlaceHolder("OpenTTD documents base folder")
 
 	githubApiUrlEntry := widget.NewEntry()
 	githubApiUrlEntry.SetText(um.config.GithubApiUrl)
@@ -419,14 +421,38 @@ func (um *UIManager) showSettingsView() {
 	verboseCheck := widget.NewCheck("Verbose logging (show all messages)", nil)
 	verboseCheck.SetChecked(um.config.Verbose)
 
-	form := container.NewVBox(
-		widget.NewCard("Parent Dir", "", parentDirEntry),
-		widget.NewCard("Docs Base Path", "", docsBasePathEntry),
-		widget.NewCard("GitHub API URL", "", githubApiUrlEntry),
-		widget.NewCard("OS Type", "", osTypeEntry),
-		autoCloseCheck,
-		verboseCheck,
+	sectionTitle := func(title string) *widget.Label {
+		label := widget.NewLabel(title)
+		label.TextStyle = fyne.TextStyle{Bold: true}
+		return label
+	}
+
+	basicSection := widget.NewCard(
+		"Basic",
+		"Commonly changed settings",
+		container.NewVBox(
+			sectionTitle("Install Paths"),
+			widget.NewLabel("Parent Directory"), parentDirEntry,
+			widget.NewLabel("Docs Base Path"), docsBasePathEntry,
+		),
 	)
+
+	behaviorSection := widget.NewCard(
+		"Behavior",
+		"Launch behavior and UI logging",
+		container.NewVBox(autoCloseCheck, verboseCheck),
+	)
+
+	advancedSection := widget.NewCard(
+		"Advanced",
+		"Only change if you know what you are doing",
+		container.NewVBox(
+			widget.NewLabel("GitHub API URL"), githubApiUrlEntry,
+			widget.NewLabel("OS Type"), osTypeEntry,
+		),
+	)
+
+	form := container.NewVBox(basicSection, behaviorSection, advancedSection)
 
 	saveBtn := widget.NewButton("Save Settings", func() {
 		um.config.ParentDir = parentDirEntry.Text
@@ -458,6 +484,13 @@ func (um *UIManager) showSettingsView() {
 // showLogView shows a window with logs while launching a profile
 func (um *UIManager) showLogView(profileIdx int) {
 	profile := um.config.Profiles[profileIdx]
+	statusBinding := binding.NewString()
+	_ = statusBinding.Set("Preparing launch")
+
+	summary := widget.NewLabel(fmt.Sprintf("Profile: %s\nVersion: %s\nSave path: %s\nServer: %s", profile.Name, valueOrDefault(profile.Version, "latest"), valueOrDefault(profile.SavePath, "(none)"), valueOrDefault(profile.ServerIpPort, "(none)")))
+	summary.Wrapping = fyne.TextWrapWord
+	statusLabel := widget.NewLabelWithData(statusBinding)
+	statusLabel.Wrapping = fyne.TextWrapWord
 
 	// Create log text widget using data binding (thread-safe)
 	logBinding := binding.NewString()
@@ -475,24 +508,44 @@ func (um *UIManager) showLogView(profileIdx int) {
 	}
 
 	// Start a goroutine to periodically update the log display
+	done := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
-		for range ticker.C {
-			updateLogDisplay()
+		for {
+			select {
+			case <-ticker.C:
+				updateLogDisplay()
+			case <-done:
+				return
+			}
 		}
 	}()
 
 	logBox := container.NewVScroll(logLabel)
 	logBox.SetMinSize(fyne.NewSize(600, 400))
 
-	closeBtn := widget.NewButton("Close", func() {
+	closeBtn := widget.NewButton("Return to Main", func() {
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
 		um.window.SetContent(um.makeMainView())
 	})
 
+	refreshBtn := widget.NewButton("Refresh Logs", func() {
+		updateLogDisplay()
+	})
+
+	top := container.NewVBox(
+		widget.NewCard("Launching", "Current launch context", summary),
+		widget.NewCard("Status", "Background operations", statusLabel),
+	)
+
 	content := container.NewBorder(
-		widget.NewRichTextFromMarkdown("**Launching: " + profile.Name + "**"),
-		closeBtn,
+		top,
+		container.NewHBox(closeBtn, refreshBtn),
 		nil,
 		nil,
 		logBox,
@@ -501,51 +554,95 @@ func (um *UIManager) showLogView(profileIdx int) {
 	um.window.SetContent(content)
 
 	// Launch OpenTTD in background
-	go um.launchProfile(profile, updateLogDisplay)
+	go um.launchProfile(profile, func(status string) {
+		_ = statusBinding.Set(status)
+	})
 }
 
 // launchProfile launches OpenTTD with the specified profile
-func (um *UIManager) launchProfile(profile Profile, updateUI func()) {
+func (um *UIManager) launchProfile(profile Profile, updateStatus func(status string)) {
+	if updateStatus != nil {
+		updateStatus("Resolving profile and version")
+	}
 	um.LogImportant(fmt.Sprintf("Launching profile %q", profile.Name))
 	um.LogVerbose(fmt.Sprintf("Profile config: version=%q savePath=%q server=%q company=%q", profile.Version, profile.SavePath, profile.ServerIpPort, profile.ServerCompanyNumber))
 
 	requested := strings.TrimSpace(profile.Version)
 	version := requested
 	if requested == "" || strings.EqualFold(requested, "latest") {
+		if updateStatus != nil {
+			updateStatus("Resolving latest JGRPP version")
+		}
 		um.LogImportant("Resolving latest JGRPP version")
 		version = CheckForNewVersion(um.config)
 		if version == "" {
 			um.LogImportant("Could not determine latest version from GitHub; trying latest local install.")
+			if updateStatus != nil {
+				updateStatus("Latest version lookup failed, using latest local install")
+			}
 			versionFolder := FindLatestFolder(um.config.ParentDir)
 			if versionFolder == "" {
+				if updateStatus != nil {
+					updateStatus("Failed: no local JGRPP installation found")
+				}
 				um.LogImportant("No local JGRPP installation found.")
 				return
 			}
 			um.LogVerbose(fmt.Sprintf("Using latest local version folder: %s", versionFolder))
+			if updateStatus != nil {
+				updateStatus("Starting OpenTTD from latest local installation")
+			}
 			ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, um.logger, um)
+			if updateStatus != nil {
+				updateStatus("Launch command sent")
+			}
 			return
 		}
 	}
 	if requested != "" && !strings.EqualFold(requested, "latest") {
+		if updateStatus != nil {
+			updateStatus(fmt.Sprintf("Using requested JGRPP version %s", version))
+		}
 		um.LogImportant(fmt.Sprintf("Using requested JGRPP version %s", version))
 	}
 
+	if updateStatus != nil {
+		updateStatus("Looking for local version folder")
+	}
 	versionFolder := FindVersionFolder(um.config.ParentDir, version)
 	if versionFolder == "" {
+		if updateStatus != nil {
+			updateStatus("Version not found locally, downloading")
+		}
 		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download.", version))
 		if !DownloadAndExtractVersion(version, um.config) {
+			if updateStatus != nil {
+				updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
+			}
 			um.LogImportant(fmt.Sprintf("Failed to download version %s.", version))
 			return
 		}
+		if updateStatus != nil {
+			updateStatus("Download complete, resolving extracted folder")
+		}
 		versionFolder = FindVersionFolder(um.config.ParentDir, version)
 		if versionFolder == "" {
+			if updateStatus != nil {
+				updateStatus("Failed: downloaded version folder could not be located")
+			}
 			um.LogImportant("Failed to locate downloaded version.")
 			return
 		}
 	}
 
 	um.LogVerbose(fmt.Sprintf("Using version folder: %s", versionFolder))
+	if updateStatus != nil {
+		updateStatus("Starting OpenTTD")
+	}
 	ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, um.logger, um)
+	if updateStatus != nil {
+		updateStatus("Launch command sent")
+	}
 }
 
 // OnOpenTTDStarted is called when OpenTTD successfully starts
