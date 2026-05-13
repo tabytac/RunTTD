@@ -267,6 +267,25 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			dialog.ShowError(fmt.Errorf("select a profile to edit"), um.window)
 		}
 	})
+	duplicateBtn := widget.NewButton("Duplicate", func() {
+		if selectedIdx >= 0 {
+			dup := um.config.Profiles[selectedIdx]
+			dup.Name = dup.Name + " Copy"
+			um.config.Profiles = append(um.config.Profiles, dup)
+			_ = SaveConfig(um.configPath, um.config)
+
+			selectedIdx = len(um.config.Profiles) - 1
+			um.selectedProfileName = um.config.Profiles[selectedIdx].Name
+			profileList.Refresh()
+			profileList.Select(widget.ListItemID(selectedIdx))
+			refreshDetails()
+			selectedSummary.Refresh()
+			selectedConfig.Refresh()
+			selectedLabel.Refresh()
+		} else {
+			dialog.ShowError(fmt.Errorf("select a profile to duplicate"), um.window)
+		}
+	})
 	deleteBtn := widget.NewButton("Delete", func() {
 		if selectedIdx >= 0 {
 			if len(um.config.Profiles) > 1 {
@@ -301,7 +320,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	actionsContent := container.NewVBox(
 		runBtn,
-		container.NewGridWithColumns(2, editBtn, deleteBtn),
+		container.NewGridWithColumns(3, editBtn, duplicateBtn, deleteBtn),
 		widget.NewSeparator(),
 		newBtn,
 		settingsBtn,
@@ -333,7 +352,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	split := container.NewHSplit(leftPanel, rightPanel)
 	split.Offset = 0.42
 
-	header := widget.NewCard("JGRPP Launcher", "Profiles, details, and launch actions", widget.NewLabel("Choose a profile on the left, review its details on the right, then run or edit it."))
+	header := widget.NewLabel("JGRPP Launcher")
+	header.TextStyle = fyne.TextStyle{Bold: true}
 
 	mainContent := container.NewBorder(header, nil, nil, nil, split)
 	um.window.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
