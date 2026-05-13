@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +28,7 @@ type Profile struct {
 }
 
 type Config struct {
+	FirstRun         bool      `json:"-"`
 	ParentDir        string    `json:"parentDir"`
 	DocsBasePath     string    `json:"docsBasePath"`
 	GithubApiUrl     string    `json:"githubApiUrl"`
@@ -426,12 +428,52 @@ func main() {
 
 	config, err := LoadConfig(configPath)
 	if err != nil {
-		message := fmt.Sprintf("Startup failed while loading config: %v", err)
-		if bootstrapFileLog {
-			appendToLogFile(logPath, message)
+		// If config is missing, create a sensible default and continue.
+		if errors.Is(err, os.ErrNotExist) {
+			homeDir, _ := os.UserHomeDir()
+			defaultParentDir := ""
+			defaultDocsDir := ""
+			if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+				defaultDocsDir = filepath.Join(homeDir, "Documents", "OpenTTD")
+				defaultParentDir = filepath.Join(homeDir, "Documents", "OpenTTD-JGRPP")
+			} else {
+				defaultDocsDir = filepath.Join(homeDir, ".local", "share", "openttd")
+				defaultParentDir = filepath.Join(homeDir, ".local", "share", "openttd-jgrpp")
+			}
+
+			defaultCfg := &Config{
+				FirstRun:         true,
+				ParentDir:        defaultParentDir,
+				DocsBasePath:     defaultDocsDir,
+				GithubApiUrl:     "https://api.github.com/repos/JGRennison/OpenTTD-patches",
+				OSType:           runtime.GOOS,
+				AutoCloseOnStart: false,
+				Verbose:          false,
+				LogToFile:        false,
+				Profiles:         []Profile{{Name: "Default", Version: "latest"}},
+			}
+
+			if saveErr := SaveConfig(configPath, defaultCfg); saveErr != nil {
+				message := fmt.Sprintf("Failed to create default config at %s: %v", configPath, saveErr)
+				if bootstrapFileLog {
+					appendToLogFile(logPath, message)
+				}
+				fmt.Fprintln(os.Stderr, message)
+				os.Exit(1)
+			}
+
+			config = defaultCfg
+			if config.LogToFile {
+				appendToLogFile(logPath, fmt.Sprintf("Default config created at %s", configPath))
+			}
+		} else {
+			message := fmt.Sprintf("Startup failed while loading config: %v", err)
+			if bootstrapFileLog {
+				appendToLogFile(logPath, message)
+			}
+			fmt.Fprintln(os.Stderr, message)
+			os.Exit(1)
 		}
-		fmt.Fprintln(os.Stderr, message)
-		os.Exit(1)
 	}
 
 	if config.LogToFile {
