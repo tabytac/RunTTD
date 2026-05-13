@@ -5,8 +5,10 @@ package main
 
 import "syscall"
 
-// getWindowsSysProcAttr returns nil on non-Windows platforms so callers can
-// assign it safely without referencing Windows-only struct fields.
-func getWindowsSysProcAttr() *syscall.SysProcAttr {
-    return nil
+// getDetachedSysProcAttr returns process attributes to detach the process on Unix-like systems
+// so that it survives parent exit.
+func getDetachedSysProcAttr() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{
+		Setsid: true,
+	}
 }
