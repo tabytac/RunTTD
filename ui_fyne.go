@@ -317,9 +317,13 @@ func (um *UIManager) showLogView(profileIdx int) {
 
 // launchProfile launches OpenTTD with the specified profile
 func (um *UIManager) launchProfile(profile Profile, updateUI func()) {
+	um.LogImportant(fmt.Sprintf("Launching profile %q", profile.Name))
+	um.LogVerbose(fmt.Sprintf("Profile config: version=%q savePath=%q server=%q company=%q", profile.Version, profile.SavePath, profile.ServerIpPort, profile.ServerCompanyNumber))
+
 	requested := strings.TrimSpace(profile.Version)
 	version := requested
 	if requested == "" || strings.EqualFold(requested, "latest") {
+		um.LogImportant("Resolving latest JGRPP version")
 		version = CheckForNewVersion(um.config)
 		if version == "" {
 			um.LogImportant("Could not determine latest version from GitHub; trying latest local install.")
@@ -332,6 +336,9 @@ func (um *UIManager) launchProfile(profile Profile, updateUI func()) {
 			ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, um.logger, um)
 			return
 		}
+	}
+	if requested != "" && !strings.EqualFold(requested, "latest") {
+		um.LogImportant(fmt.Sprintf("Using requested JGRPP version %s", version))
 	}
 
 	versionFolder := FindVersionFolder(um.config.ParentDir, version)

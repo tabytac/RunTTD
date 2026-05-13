@@ -10,12 +10,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Profile represents a launch profile (per-launch settings)
 type Profile struct {
 	Name                  string `json:"name"`
 	Version               string `json:"version"`
@@ -26,22 +26,17 @@ type Profile struct {
 	ServerCompanyPassword string `json:"serverCompanyPassword"`
 }
 
-// Config holds global launcher configuration and profiles
 type Config struct {
-	// Global settings
-	ParentDir        string `json:"parentDir"`
-	DocsBasePath     string `json:"docsBasePath"`
-	GithubApiUrl     string `json:"githubApiUrl"`
-	OSType           string `json:"osType"`
-	AutoCloseOnStart bool   `json:"autoCloseOnStart"` // default: false (keep window open)
-	Verbose          bool   `json:"verbose"`          // default: false (only show important messages)
-	LogToFile        bool   `json:"logToFile"`        // default: false (write launcher logs to log.txt)
-
-	// Profiles for different launch configurations
-	Profiles []Profile `json:"profiles"`
+	ParentDir        string    `json:"parentDir"`
+	DocsBasePath     string    `json:"docsBasePath"`
+	GithubApiUrl     string    `json:"githubApiUrl"`
+	OSType           string    `json:"osType"`
+	AutoCloseOnStart bool      `json:"autoCloseOnStart"`
+	Verbose          bool      `json:"verbose"`
+	LogToFile        bool      `json:"logToFile"`
+	Profiles         []Profile `json:"profiles"`
 }
 
-// ReleaseInfo represents GitHub release information
 type ReleaseInfo struct {
 	TagName string `json:"tag_name"`
 	Assets  []struct {
@@ -50,7 +45,6 @@ type ReleaseInfo struct {
 	} `json:"assets"`
 }
 
-// LoadConfig loads configuration from config.json
 func LoadConfig(filename string) (*Config, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -58,32 +52,23 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 
 	var config Config
-	err = json.Unmarshal(data, &config)
-	if err != nil {
+	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Ensure at least one profile exists
 	if len(config.Profiles) == 0 {
-		config.Profiles = []Profile{
-			{
-				Name:    "Default",
-				Version: "latest",
-			},
-		}
+		config.Profiles = []Profile{{Name: "Default", Version: "latest"}}
 	}
 
 	return &config, nil
 }
 
-// SaveConfig saves configuration to config.json
 func SaveConfig(filename string, config *Config) error {
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	err = os.WriteFile(filename, data, 0644)
-	if err != nil {
+	if err := os.WriteFile(filename, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 	return nil
@@ -95,7 +80,6 @@ func resolveConfigPath() string {
 	if wd, err := os.Getwd(); err == nil {
 		candidates = append(candidates, filepath.Join(wd, "config.json"))
 	}
-
 	if exePath, err := os.Executable(); err == nil {
 		exeDir := filepath.Dir(exePath)
 		candidates = append(candidates,
@@ -105,12 +89,9 @@ func resolveConfigPath() string {
 	}
 
 	seen := map[string]bool{}
-	for _, c := range candidates {
-		abs, err := filepath.Abs(c)
-		if err != nil {
-			continue
-		}
-		if seen[abs] {
+	for _, candidate := range candidates {
+		abs, err := filepath.Abs(candidate)
+		if err != nil || seen[abs] {
 			continue
 		}
 		seen[abs] = true
@@ -122,7 +103,6 @@ func resolveConfigPath() string {
 	if len(candidates) > 0 {
 		return candidates[0]
 	}
-
 	return "config.json"
 }
 
@@ -130,7 +110,6 @@ func resolveLogPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "log.txt")
 }
 
-// FindVersionFolder returns the first subfolder matching the version pattern
 func FindVersionFolder(parentDir, version string) string {
 	entries, err := os.ReadDir(parentDir)
 	if err != nil {
@@ -145,7 +124,6 @@ func FindVersionFolder(parentDir, version string) string {
 	return ""
 }
 
-// FindLatestFolder returns the most recently modified jgrpp folder
 func FindLatestFolder(parentDir string) string {
 	entries, err := os.ReadDir(parentDir)
 	if err != nil {
@@ -170,7 +148,6 @@ func FindLatestFolder(parentDir string) string {
 	return latestFolder
 }
 
-// FindLatestSaveFile returns the most recently modified .sav file
 func FindLatestSaveFile(gamePath string) string {
 	entries, err := os.ReadDir(gamePath)
 	if err != nil {
@@ -195,9 +172,7 @@ func FindLatestSaveFile(gamePath string) string {
 	return latestFile
 }
 
-// ExecuteOpenTTD launches the OpenTTD executable with specified parameters
 func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword, companyPassword, savePath string, l *Logger, um *UIManager) {
-	// Find the save file if savePath is specified
 	var saveFile string
 	if savePath != "" {
 		gamePath := filepath.Join(um.config.DocsBasePath, "save", savePath)
@@ -212,7 +187,6 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 
 	var cmd *exec.Cmd
 	var args []string
-
 	if ipPort != "" && serverPassword != "" {
 		nArg := ipPort
 		if companyNumber != "" && companyPassword != "" {
@@ -223,16 +197,12 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 			args = []string{"-n", nArg, "-p", serverPassword}
 		}
 	}
-
 	if saveFile != "" {
 		args = append(args, "-g", saveFile)
 	}
 
-	// Start a process and capture its output so we can show logs in the UI.
 	cmd = exec.Command(exePath, args...)
 	um.LogVerbose(fmt.Sprintf("Running command: %s %v", exePath, args))
-
-	// Set up process attributes for detaching if auto-close is enabled
 	cmd.SysProcAttr = getDetachedSysProcAttr()
 
 	stdout, _ := cmd.StdoutPipe()
@@ -246,22 +216,18 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 	um.LogImportant("OpenTTD started successfully")
 	um.OnOpenTTDStarted()
 
-	// Read stdout/stderr and forward to logger on main UI thread
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			text := scanner.Text()
-			um.LogVerbose(text)
+			um.LogVerbose(scanner.Text())
 		}
 	}()
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			text := scanner.Text()
-			um.LogVerbose("ERR: " + text)
+			um.LogVerbose("ERR: " + scanner.Text())
 		}
 	}()
-
 	go func() {
 		if err := cmd.Wait(); err != nil {
 			um.LogImportant(fmt.Sprintf("OpenTTD exited with error: %v", err))
@@ -271,7 +237,6 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 	}()
 }
 
-// DownloadAndExtractVersion downloads and extracts a specific JGR version
 func DownloadAndExtractVersion(version string, config *Config) bool {
 	repoURL := fmt.Sprintf("%s/releases/tags/jgrpp-%s", config.GithubApiUrl, version)
 	downloadDir := config.ParentDir
@@ -282,15 +247,13 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 		return false
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != 200 {
 		fmt.Printf("Failed to get release info for version %s: HTTP %d\n", version, resp.StatusCode)
 		return false
 	}
 
 	var releaseInfo ReleaseInfo
-	err = json.NewDecoder(resp.Body).Decode(&releaseInfo)
-	if err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&releaseInfo); err != nil {
 		fmt.Printf("Failed to parse release info: %v\n", err)
 		return false
 	}
@@ -308,7 +271,6 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 			break
 		}
 	}
-
 	if downloadURL == "" {
 		fmt.Printf("No downloadable asset found for version %s\n", tagName)
 		return false
@@ -323,7 +285,6 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 		return false
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != 200 {
 		fmt.Printf("Failed to download file: HTTP %d\n", resp.StatusCode)
 		return false
@@ -336,16 +297,13 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	}
 	defer file.Close()
 
-	_, err = io.Copy(file, resp.Body)
-	if err != nil {
+	if _, err = io.Copy(file, resp.Body); err != nil {
 		fmt.Printf("Failed to write zip file: %v\n", err)
 		os.Remove(zipPath)
 		return false
 	}
 
-	// Extract ZIP
-	err = extractZip(zipPath, downloadDir)
-	if err != nil {
+	if err := extractZip(zipPath, downloadDir); err != nil {
 		fmt.Printf("Failed to extract zip: %v\n", err)
 		os.Remove(zipPath)
 		return false
@@ -356,7 +314,6 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	return true
 }
 
-// Simple in-memory logger used by the local web UI
 type Logger struct {
 	mu        sync.Mutex
 	lines     []string
@@ -365,10 +322,7 @@ type Logger struct {
 }
 
 func NewLogger(logToFile bool, logPath string) *Logger {
-	return &Logger{
-		logToFile: logToFile,
-		logPath:   logPath,
-	}
+	return &Logger{logToFile: logToFile, logPath: logPath}
 }
 
 func appendToLogFile(path, msg string) {
@@ -385,15 +339,12 @@ func shouldLogToFile(configPath string) bool {
 	if err != nil {
 		return false
 	}
-
 	var cfg struct {
 		LogToFile bool `json:"logToFile"`
 	}
-
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return false
 	}
-
 	return cfg.LogToFile
 }
 
@@ -417,24 +368,16 @@ func (l *Logger) GetAll() []string {
 	return out
 }
 
-
-// extractZip extracts a zip file to a directory
 func extractZip(zipPath, destDir string) error {
-	// Using a simpler approach - this is a placeholder
-	// For production, use github.com/klauspost/compress/zip or similar
-	// For now, we'll rely on system unzip command on Unix or PowerShell on Windows
 	var cmd *exec.Cmd
-
 	if runtime.GOOS == "windows" {
 		cmd = exec.Command("powershell", "-Command", fmt.Sprintf("Expand-Archive -Path '%s' -DestinationPath '%s'", zipPath, destDir))
 	} else {
 		cmd = exec.Command("unzip", "-q", zipPath, "-d", destDir)
 	}
-
 	return cmd.Run()
 }
 
-// CheckForNewVersion returns the latest JGR version number from GitHub
 func CheckForNewVersion(config *Config) string {
 	repoURL := fmt.Sprintf("%s/releases/latest", config.GithubApiUrl)
 
@@ -444,15 +387,13 @@ func CheckForNewVersion(config *Config) string {
 		return ""
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != 200 {
 		fmt.Printf("Failed to get latest release info: HTTP %d\n", resp.StatusCode)
 		return ""
 	}
 
 	var releaseInfo ReleaseInfo
-	err = json.NewDecoder(resp.Body).Decode(&releaseInfo)
-	if err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&releaseInfo); err != nil {
 		fmt.Printf("Failed to parse latest release info: %v\n", err)
 		return ""
 	}
@@ -464,7 +405,6 @@ func CheckForNewVersion(config *Config) string {
 	return ""
 }
 
-// Main launches the GUI launcher
 func main() {
 	configPath := resolveConfigPath()
 	logPath := resolveLogPath(configPath)
@@ -473,24 +413,29 @@ func main() {
 		appendToLogFile(logPath, fmt.Sprintf("Launcher process starting (config: %s)", configPath))
 	}
 
-	config, err := LoadConfig(configPath)
-	if err != nil {
-		appendToLogFile(logPath, fmt.Sprintf("Startup failed while loading config: %v", err))
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
-
 	defer func() {
 		if r := recover(); r != nil {
-			if config.LogToFile {
-				appendToLogFile(logPath, fmt.Sprintf("Panic: %v", r))
+			message := fmt.Sprintf("panic: %v\n%s", r, string(debug.Stack()))
+			if bootstrapFileLog {
+				appendToLogFile(logPath, message)
 			}
-			panic(r)
+			fmt.Fprintln(os.Stderr, message)
+			os.Exit(1)
 		}
 	}()
 
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		message := fmt.Sprintf("Startup failed while loading config: %v", err)
+		if bootstrapFileLog {
+			appendToLogFile(logPath, message)
+		}
+		fmt.Fprintln(os.Stderr, message)
+		os.Exit(1)
+	}
+
 	if config.LogToFile {
-		appendToLogFile(logPath, "Config loaded successfully")
+		appendToLogFile(logPath, fmt.Sprintf("Config loaded successfully from %s", configPath))
 	}
 
 	ui := NewUIManager(config, configPath)
