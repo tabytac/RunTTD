@@ -1,6 +1,6 @@
 module jgrpp-launcher
 
-go 1.21
+go 1.26
 
 require fyne.io/fyne/v2 v2.7.4
 

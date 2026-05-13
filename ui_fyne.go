@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -20,13 +19,11 @@ type UIManager struct {
 	window       fyne.Window
 	config       *Config
 	logger       *Logger
-	mu           sync.Mutex
-	closeOnExit  bool
-	currentView  string
+	configPath   string
 }
 
 // NewUIManager creates a new UI manager
-func NewUIManager(config *Config) *UIManager {
+func NewUIManager(config *Config, configPath string) *UIManager {
 	fyneApp := app.New()
 	window := fyneApp.NewWindow("JGRPP Launcher")
 	window.Resize(fyne.NewSize(800, 600))
@@ -35,7 +32,8 @@ func NewUIManager(config *Config) *UIManager {
 		app:    fyneApp,
 		window: window,
 		config: config,
-		logger: &Logger{},
+		logger: NewLogger(config.LogToFile, resolveLogPath(configPath)),
+		configPath: configPath,
 	}
 }
 
@@ -59,12 +57,6 @@ func (um *UIManager) Show() {
 
 // makeMainView creates the main profile selection view
 func (um *UIManager) makeMainView() fyne.CanvasObject {
-	// Profile list
-	profileNames := make([]string, len(um.config.Profiles))
-	for i, p := range um.config.Profiles {
-		profileNames[i] = p.Name
-	}
-
 	profileList := widget.NewList(
 		func() int { return len(um.config.Profiles) },
 		func() fyne.CanvasObject {
@@ -97,7 +89,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		if selectedIdx >= 0 {
 			if len(um.config.Profiles) > 1 {
 				um.config.Profiles = append(um.config.Profiles[:selectedIdx], um.config.Profiles[selectedIdx+1:]...)
-				_ = SaveConfig("config.json", um.config)
+				_ = SaveConfig(um.configPath, um.config)
 				selectedIdx = -1
 				profileList.Refresh()
 			} else {
@@ -198,7 +190,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			um.config.Profiles[profileIdx] = profile
 		}
 
-		_ = SaveConfig("config.json", um.config)
+		_ = SaveConfig(um.configPath, um.config)
 		dialog.ShowInformation("Success", "Profile saved", um.window)
 		um.window.SetContent(um.makeMainView())
 	})
@@ -255,7 +247,7 @@ func (um *UIManager) showSettingsView() {
 		um.config.AutoCloseOnStart = autoCloseCheck.Checked
 		um.config.Verbose = verboseCheck.Checked
 
-		_ = SaveConfig("config.json", um.config)
+		_ = SaveConfig(um.configPath, um.config)
 		dialog.ShowInformation("Success", "Settings saved", um.window)
 	})
 
@@ -363,7 +355,6 @@ func (um *UIManager) launchProfile(profile Profile, updateUI func()) {
 // OnOpenTTDStarted is called when OpenTTD successfully starts
 func (um *UIManager) OnOpenTTDStarted() {
 	if um.config.AutoCloseOnStart {
-		um.closeOnExit = true
 		um.app.Quit()
 	}
 }
