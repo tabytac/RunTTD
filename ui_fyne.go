@@ -198,6 +198,14 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		um.showSettingsView()
 	})
 
+	actionsContent := container.NewVBox(
+		runBtn,
+		container.NewGridWithColumns(2, editBtn, deleteBtn),
+		widget.NewSeparator(),
+		newBtn,
+		settingsBtn,
+	)
+
 	leftPanel := container.NewBorder(
 		widget.NewCard("Profiles", "", widget.NewLabel("Select a profile to edit or run it.")),
 		nil,
@@ -208,8 +216,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	detailsSection := container.NewVBox(
 		widget.NewCard("Profile Details", "", container.NewVBox(selectedLabel, selectedSummary, widget.NewSeparator(), selectedConfig)),
-		widget.NewCard("Actions", "", container.NewVBox(runBtn, editBtn, deleteBtn, widget.NewSeparator(), newBtn, settingsBtn)),
-		selectionHint,
+		widget.NewSeparator(),
+		widget.NewCard("Actions", "", actionsContent),
+		container.NewPadded(selectionHint),
 	)
 
 	rightPanel := container.NewVScroll(detailsSection)
@@ -225,7 +234,27 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	header := widget.NewCard("JGRPP Launcher", "Profiles, details, and launch actions", widget.NewLabel("Choose a profile on the left, review its details on the right, then run or edit it."))
 
-	return container.NewBorder(header, nil, nil, nil, split)
+	mainContent := container.NewBorder(header, nil, nil, nil, split)
+	um.window.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
+		if um.window.Content() != mainContent {
+			return
+		}
+
+		if event.Name != fyne.KeyReturn && event.Name != fyne.KeyEnter {
+			return
+		}
+
+		focused := um.window.Canvas().Focused()
+		if focused != nil {
+			if _, isList := focused.(*widget.List); !isList {
+				return
+			}
+		}
+
+		runSelected()
+	})
+
+	return mainContent
 }
 
 func valueOrDefault(value, fallback string) string {
