@@ -16,11 +16,11 @@ import (
 
 // UIManager manages the Fyne GUI application
 type UIManager struct {
-	app          fyne.App
-	window       fyne.Window
-	config       *Config
-	logger       *Logger
-	configPath   string
+	app                 fyne.App
+	window              fyne.Window
+	config              *Config
+	logger              *Logger
+	configPath          string
 	selectedProfileName string
 	lastListSelectID    int
 	lastListSelectAt    time.Time
@@ -33,11 +33,11 @@ func NewUIManager(config *Config, configPath string) *UIManager {
 	window.Resize(fyne.NewSize(800, 600))
 
 	return &UIManager{
-		app:    fyneApp,
-		window: window,
-		config: config,
-		logger: NewLogger(config.LogToFile, resolveLogPath(configPath)),
-		configPath: configPath,
+		app:              fyneApp,
+		window:           window,
+		config:           config,
+		logger:           NewLogger(config.LogToFile, resolveLogPath(configPath)),
+		configPath:       configPath,
 		lastListSelectID: -1,
 	}
 }
@@ -56,8 +56,90 @@ func (um *UIManager) LogImportant(msg string) {
 
 // Show displays the launcher UI and runs the event loop
 func (um *UIManager) Show() {
-	um.window.SetContent(um.makeMainView())
+	if um.config.FirstRun {
+		um.window.SetContent(um.makeOnboardingView())
+	} else {
+		um.window.SetContent(um.makeMainView())
+	}
 	um.window.ShowAndRun()
+}
+
+// makeOnboardingView creates the first-run configuration screen
+func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
+	welcomeLabel := widget.NewLabel("Welcome to JGRPP Launcher!")
+	welcomeLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: false}
+	welcomeLabel.Alignment = fyne.TextAlignCenter
+
+	instructions := widget.NewLabel("Before we begin, please confirm your installation folders.\nThese default paths are based on your operating system, but you can change them if you have a custom setup.")
+	instructions.Wrapping = fyne.TextWrapWord
+
+	parentDirEntry := widget.NewEntry()
+	parentDirEntry.SetText(um.config.ParentDir)
+	parentDirEntry.SetPlaceHolder("Folder where OpenTTD game files / executables will be automatically installed")
+
+	docsBasePathEntry := widget.NewEntry()
+	docsBasePathEntry.SetText(um.config.DocsBasePath)
+	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
+
+	statusLabel := widget.NewLabel("")
+	statusLabel.Wrapping = fyne.TextWrapWord
+
+	validate := func() bool {
+		if strings.TrimSpace(parentDirEntry.Text) == "" {
+			statusLabel.SetText("Parent Directory cannot be empty.")
+			return false
+		}
+		if strings.TrimSpace(docsBasePathEntry.Text) == "" {
+			statusLabel.SetText("Docs Base Path cannot be empty.")
+			return false
+		}
+		statusLabel.SetText("")
+		return true
+	}
+
+	var continueBtn *widget.Button
+	continueBtn = widget.NewButton("Continue", func() {
+		if !validate() {
+			return
+		}
+
+		um.config.ParentDir = strings.TrimSpace(parentDirEntry.Text)
+		um.config.DocsBasePath = strings.TrimSpace(docsBasePathEntry.Text)
+		um.config.FirstRun = false
+
+		_ = SaveConfig(um.configPath, um.config)
+
+		um.window.SetContent(um.makeMainView())
+	})
+	continueBtn.Importance = widget.HighImportance
+
+	updateState := func(_ string) {
+		if strings.TrimSpace(parentDirEntry.Text) != "" && strings.TrimSpace(docsBasePathEntry.Text) != "" {
+			continueBtn.Enable()
+		} else {
+			continueBtn.Disable()
+		}
+	}
+	parentDirEntry.OnChanged = updateState
+	docsBasePathEntry.OnChanged = updateState
+
+	form := container.NewVBox(
+		welcomeLabel,
+		widget.NewSeparator(),
+		instructions,
+		widget.NewSeparator(),
+		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"), parentDirEntry,
+		widget.NewLabel("Docs Base Path (Saves & config)"), docsBasePathEntry,
+		statusLabel,
+	)
+
+	return container.NewBorder(
+		nil,
+		container.NewHBox(widget.NewLabel(""), continueBtn),
+		nil,
+		nil,
+		container.NewPadded(container.NewVScroll(form)),
+	)
 }
 
 // makeMainView creates the main profile selection view
@@ -486,11 +568,11 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 func (um *UIManager) showSettingsView() {
 	parentDirEntry := widget.NewEntry()
 	parentDirEntry.SetText(um.config.ParentDir)
-	parentDirEntry.SetPlaceHolder("Folder where JGRPP versions are installed")
+	parentDirEntry.SetPlaceHolder("Folder where game files / executables will be automatically installed")
 
 	docsBasePathEntry := widget.NewEntry()
 	docsBasePathEntry.SetText(um.config.DocsBasePath)
-	docsBasePathEntry.SetPlaceHolder("OpenTTD documents base folder")
+	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
 
 	githubApiUrlEntry := widget.NewEntry()
 	githubApiUrlEntry.SetText(um.config.GithubApiUrl)
@@ -515,8 +597,8 @@ func (um *UIManager) showSettingsView() {
 		"Commonly changed settings",
 		container.NewVBox(
 			sectionTitle("Install Paths"),
-			widget.NewLabel("Parent Directory"), parentDirEntry,
-			widget.NewLabel("Docs Base Path"), docsBasePathEntry,
+			widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"), parentDirEntry,
+			widget.NewLabel("Docs Base Path (Saves & config)"), docsBasePathEntry,
 		),
 	)
 
