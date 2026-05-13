@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -26,9 +28,7 @@ type UIManager struct {
 // NewUIManager creates a new UI manager
 func NewUIManager(config *Config) *UIManager {
 	fyneApp := app.New()
-	fyneApp.Settings().SetTheme(nil) // Use system theme
-	window := fyneApp.NewWindow()
-	window.SetTitle("JGRPP Launcher")
+	window := fyneApp.NewWindow("JGRPP Launcher")
 	window.Resize(fyne.NewSize(800, 600))
 
 	return &UIManager{
@@ -77,8 +77,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			}
 		},
 	)
+	selectedIdx := -1
 	profileList.OnSelected = func(id widget.ListItemID) {
-		// Handle profile selection
+		selectedIdx = int(id)
 	}
 
 	// Buttons
@@ -86,17 +87,18 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		um.showProfileEditor(-1)
 	})
 	editBtn := widget.NewButton("Edit", func() {
-		if profileList.SelectedItemID >= 0 {
-			um.showProfileEditor(profileList.SelectedItemID)
+		if selectedIdx >= 0 {
+			um.showProfileEditor(selectedIdx)
 		} else {
 			dialog.ShowError(fmt.Errorf("select a profile to edit"), um.window)
 		}
 	})
 	deleteBtn := widget.NewButton("Delete", func() {
-		if profileList.SelectedItemID >= 0 {
+		if selectedIdx >= 0 {
 			if len(um.config.Profiles) > 1 {
-				um.config.Profiles = append(um.config.Profiles[:profileList.SelectedItemID], um.config.Profiles[profileList.SelectedItemID+1:]...)
+				um.config.Profiles = append(um.config.Profiles[:selectedIdx], um.config.Profiles[selectedIdx+1:]...)
 				_ = SaveConfig("config.json", um.config)
+				selectedIdx = -1
 				profileList.Refresh()
 			} else {
 				dialog.ShowError(fmt.Errorf("cannot delete the last profile"), um.window)
@@ -105,8 +107,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	})
 
 	runBtn := widget.NewButton("Run", func() {
-		if profileList.SelectedItemID >= 0 {
-			um.showLogView(profileList.SelectedItemID)
+		if selectedIdx >= 0 {
+			um.showLogView(selectedIdx)
 		} else {
 			dialog.ShowError(fmt.Errorf("select a profile to launch"), um.window)
 		}
@@ -173,7 +175,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 
 	form := container.NewVBox(
 		widget.NewCard("Profile Name", "", nameEntry),
-		widget.NewCard("Version Override", "", versionEntry),
+		widget.NewCard("JGRPP Version (e.g. 0.71.2 or latest)", "", versionEntry),
 		widget.NewCard("Save Path", "", savePathEntry),
 		widget.NewCard("Server IP:Port", "", ipPortEntry),
 		widget.NewCard("Server Password", "", serverPassEntry),
@@ -276,9 +278,10 @@ func (um *UIManager) showSettingsView() {
 func (um *UIManager) showLogView(profileIdx int) {
 	profile := um.config.Profiles[profileIdx]
 
-	// Create log text widget bound to logger
-	logText := widget.NewRichTextFromMarkdown("")
+	// Create log text widget using data binding (thread-safe)
 	logBinding := binding.NewString()
+	logLabel := widget.NewLabelWithData(logBinding)
+	logLabel.Wrapping = fyne.TextWrapWord
 
 	// Update the log display whenever logger changes
 	updateLogDisplay := func() {
@@ -288,20 +291,18 @@ func (um *UIManager) showLogView(profileIdx int) {
 			text += line + "\n"
 		}
 		_ = logBinding.Set(text)
-		logText.Markup = text
-		logText.Refresh()
 	}
 
 	// Start a goroutine to periodically update the log display
 	go func() {
-		for {
-			fyne.CurrentApp().RunOnMainThread(func() {
-				updateLogDisplay()
-			})
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			updateLogDisplay()
 		}
 	}()
 
-	logBox := container.NewVScroll(logText)
+	logBox := container.NewVScroll(logLabel)
 	logBox.SetMinSize(fyne.NewSize(600, 400))
 
 	closeBtn := widget.NewButton("Close", func() {
@@ -324,9 +325,21 @@ func (um *UIManager) showLogView(profileIdx int) {
 
 // launchProfile launches OpenTTD with the specified profile
 func (um *UIManager) launchProfile(profile Profile, updateUI func()) {
-	version := profile.Version
-	if version == "" {
-		version = um.config.OSType
+	requested := strings.TrimSpace(profile.Version)
+	version := requested
+	if requested == "" || strings.EqualFold(requested, "latest") {
+		version = CheckForNewVersion(um.config)
+		if version == "" {
+			um.LogImportant("Could not determine latest version from GitHub; trying latest local install.")
+			versionFolder := FindLatestFolder(um.config.ParentDir)
+			if versionFolder == "" {
+				um.LogImportant("No local JGRPP installation found.")
+				return
+			}
+			um.LogVerbose(fmt.Sprintf("Using latest local version folder: %s", versionFolder))
+			ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, um.logger, um)
+			return
+		}
 	}
 
 	versionFolder := FindVersionFolder(um.config.ParentDir, version)
