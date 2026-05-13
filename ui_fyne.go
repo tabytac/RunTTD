@@ -21,6 +21,9 @@ type UIManager struct {
 	config       *Config
 	logger       *Logger
 	configPath   string
+	selectedProfileName string
+	lastListSelectID    int
+	lastListSelectAt    time.Time
 }
 
 // NewUIManager creates a new UI manager
@@ -35,6 +38,7 @@ func NewUIManager(config *Config, configPath string) *UIManager {
 		config: config,
 		logger: NewLogger(config.LogToFile, resolveLogPath(configPath)),
 		configPath: configPath,
+		lastListSelectID: -1,
 	}
 }
 
@@ -58,7 +62,7 @@ func (um *UIManager) Show() {
 
 // makeMainView creates the main profile selection view
 func (um *UIManager) makeMainView() fyne.CanvasObject {
-	selectedIdx := -1
+	selectedIdx := indexOfProfileByName(um.config.Profiles, um.selectedProfileName)
 	selectedLabel := widget.NewLabel("No profile selected")
 	selectedLabel.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -70,6 +74,14 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	selectionHint := widget.NewLabel("Tip: use Run after selecting a profile, or double-click a row to launch.")
 	selectionHint.Wrapping = fyne.TextWrapWord
+
+	runSelected := func() {
+		if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
+			um.showLogView(selectedIdx)
+			return
+		}
+		dialog.ShowError(fmt.Errorf("select a profile to launch"), um.window)
+	}
 
 	refreshDetails := func() {
 		if selectedIdx < 0 || selectedIdx >= len(um.config.Profiles) {
@@ -113,7 +125,23 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		},
 	)
 	profileList.OnSelected = func(id widget.ListItemID) {
-		selectedIdx = int(id)
+		newIdx := int(id)
+		if newIdx == um.lastListSelectID && time.Since(um.lastListSelectAt) < 450*time.Millisecond {
+			selectedIdx = newIdx
+			if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
+				um.selectedProfileName = um.config.Profiles[selectedIdx].Name
+			}
+			um.lastListSelectAt = time.Time{}
+			runSelected()
+			return
+		}
+
+		selectedIdx = newIdx
+		if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
+			um.selectedProfileName = um.config.Profiles[selectedIdx].Name
+		}
+		um.lastListSelectID = newIdx
+		um.lastListSelectAt = time.Now()
 		refreshDetails()
 		selectedSummary.Refresh()
 		selectedConfig.Refresh()
@@ -121,13 +149,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	}
 	profileList.OnUnselected = func(_ widget.ListItemID) {
 		selectedIdx = -1
-		refreshDetails()
-		selectedSummary.Refresh()
-		selectedConfig.Refresh()
-		selectedLabel.Refresh()
-	}
-	profileList.OnSelected = func(id widget.ListItemID) {
-		selectedIdx = int(id)
+		um.selectedProfileName = ""
 		refreshDetails()
 		selectedSummary.Refresh()
 		selectedConfig.Refresh()
@@ -149,9 +171,16 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			if len(um.config.Profiles) > 1 {
 				um.config.Profiles = append(um.config.Profiles[:selectedIdx], um.config.Profiles[selectedIdx+1:]...)
 				_ = SaveConfig(um.configPath, um.config)
-				selectedIdx = -1
-				profileList.UnselectAll()
+
+				nextIdx := selectedIdx
+				if nextIdx >= len(um.config.Profiles) {
+					nextIdx = len(um.config.Profiles) - 1
+				}
+
+				selectedIdx = nextIdx
+				um.selectedProfileName = um.config.Profiles[selectedIdx].Name
 				profileList.Refresh()
+				profileList.Select(widget.ListItemID(selectedIdx))
 				refreshDetails()
 				selectedSummary.Refresh()
 				selectedConfig.Refresh()
@@ -162,13 +191,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 	})
 
-	runBtn := widget.NewButton("Run Selected", func() {
-		if selectedIdx >= 0 {
-			um.showLogView(selectedIdx)
-		} else {
-			dialog.ShowError(fmt.Errorf("select a profile to launch"), um.window)
-		}
-	})
+	runBtn := widget.NewButton("Run Selected", runSelected)
 	runBtn.Importance = widget.HighImportance
 
 	settingsBtn := widget.NewButton("Settings", func() {
@@ -192,6 +215,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	rightPanel := container.NewVScroll(detailsSection)
 	rightPanel.SetMinSize(fyne.NewSize(320, 0))
 
+	if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
+		profileList.Select(widget.ListItemID(selectedIdx))
+	}
 	refreshDetails()
 
 	split := container.NewHSplit(leftPanel, rightPanel)
@@ -214,6 +240,19 @@ func maskedOrEmpty(value string) string {
 		return "(none)"
 	}
 	return "set"
+}
+
+func indexOfProfileByName(profiles []Profile, name string) int {
+	needle := strings.TrimSpace(name)
+	if needle == "" {
+		return -1
+	}
+	for i, p := range profiles {
+		if strings.EqualFold(strings.TrimSpace(p.Name), needle) {
+			return i
+		}
+	}
+	return -1
 }
 
 // showProfileEditor shows a dialog to create or edit a profile
@@ -330,6 +369,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		} else {
 			um.config.Profiles[profileIdx] = profile
 		}
+		um.selectedProfileName = profile.Name
 
 		_ = SaveConfig(um.configPath, um.config)
 		dialog.ShowInformation("Success", "Profile saved", um.window)
