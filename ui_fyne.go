@@ -2,15 +2,18 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"strconv"
 	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -24,15 +27,17 @@ type UIManager struct {
 	selectedProfileName string
 	lastListSelectID    int
 	lastListSelectAt    time.Time
+	themeOverride       *fyne.ThemeVariant
 }
 
 // NewUIManager creates a new UI manager
 func NewUIManager(config *Config, configPath string) *UIManager {
 	fyneApp := app.New()
+	// theme is set later
 	window := fyneApp.NewWindow("JGRPP Launcher")
 	window.Resize(fyne.NewSize(800, 600))
 
-	return &UIManager{
+	um := &UIManager{
 		app:              fyneApp,
 		window:           window,
 		config:           config,
@@ -40,6 +45,8 @@ func NewUIManager(config *Config, configPath string) *UIManager {
 		configPath:       configPath,
 		lastListSelectID: -1,
 	}
+	fyneApp.Settings().SetTheme(&premiumTheme{Theme: theme.DefaultTheme(), overrideVariant: um.themeOverride})
+	return um
 }
 
 // LogVerbose appends a message only if verbose logging is enabled
@@ -326,13 +333,14 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		settingsBtn,
 	)
 
-	leftPanel := container.NewBorder(
+	leftPanelObj := container.NewBorder(
 		widget.NewCard("Profiles", "", widget.NewLabel("Select a profile to edit or run it.")),
 		nil,
 		nil,
 		nil,
 		profileList,
 	)
+	leftPanel := newThemedBox(colorNameSidebar, leftPanelObj)
 
 	detailsSection := container.NewVBox(
 		widget.NewCard("Profile Details", "", container.NewVBox(selectedLabel, selectedSummary, widget.NewSeparator(), selectedConfig)),
@@ -341,8 +349,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		container.NewPadded(selectionHint),
 	)
 
-	rightPanel := container.NewVScroll(detailsSection)
-	rightPanel.SetMinSize(fyne.NewSize(320, 0))
+	rightPanelObj := container.NewVScroll(detailsSection)
+	rightPanelObj.SetMinSize(fyne.NewSize(320, 0))
+	rightPanel := newThemedBox(colorNameContent, rightPanelObj)
 
 	if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
 		profileList.Select(widget.ListItemID(selectedIdx))
@@ -352,8 +361,26 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	split := container.NewHSplit(leftPanel, rightPanel)
 	split.Offset = 0.42
 
-	header := widget.NewLabel("JGRPP Launcher")
-	header.TextStyle = fyne.TextStyle{Bold: true}
+	headerLabel := widget.NewLabel("JGRPP Launcher")
+	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
+	themeToggleBtn := widget.NewButtonWithIcon("", theme.ColorPaletteIcon(), func() {
+		current := fyne.CurrentApp().Settings().ThemeVariant()
+		if um.themeOverride != nil {
+			current = *um.themeOverride
+		}
+		var next fyne.ThemeVariant
+		if current == theme.VariantDark {
+			next = theme.VariantLight
+		} else {
+			next = theme.VariantDark
+		}
+		um.themeOverride = &next
+		fyne.CurrentApp().Settings().SetTheme(&premiumTheme{Theme: theme.DefaultTheme(), overrideVariant: um.themeOverride})
+	})
+	themeToggleBtn.Importance = widget.LowImportance
+
+	headerContent := container.NewBorder(nil, nil, nil, themeToggleBtn, headerLabel)
+	header := newThemedBox(colorNameHeader, container.NewPadded(headerContent))
 
 	mainContent := container.NewBorder(header, nil, nil, nil, split)
 	um.window.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
@@ -836,3 +863,94 @@ func (um *UIManager) OnOpenTTDStarted() {
 		um.app.Quit()
 	}
 }
+
+// --- Custom Premium Theming ---
+
+const (
+	colorNameSidebar fyne.ThemeColorName = "premiumSidebar"
+	colorNameContent fyne.ThemeColorName = "premiumContent"
+	colorNameHeader  fyne.ThemeColorName = "premiumHeader"
+)
+
+type premiumTheme struct {
+	fyne.Theme
+	overrideVariant *fyne.ThemeVariant
+}
+
+func (p *premiumTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	if p.overrideVariant != nil {
+		variant = *p.overrideVariant
+	}
+	if variant == theme.VariantDark {
+		switch name {
+		case theme.ColorNameBackground:
+			return color.NRGBA{R: 26, G: 26, B: 29, A: 255} // Base app bg
+		case colorNameSidebar:
+			return color.NRGBA{R: 20, G: 20, B: 22, A: 255} // Deep dark sidebar
+		case colorNameContent:
+			return color.NRGBA{R: 30, G: 30, B: 34, A: 255} // Slightly elevated main content
+		case colorNameHeader:
+			return color.NRGBA{R: 36, G: 36, B: 42, A: 255} // Distinct header
+		case theme.ColorNamePrimary:
+			return color.NRGBA{R: 98, G: 114, B: 164, A: 255} // Premium indigo
+		}
+	} else {
+		switch name {
+		case theme.ColorNameBackground:
+			return color.NRGBA{R: 245, G: 245, B: 247, A: 255}
+		case colorNameSidebar:
+			return color.NRGBA{R: 235, G: 235, B: 238, A: 255} // Slightly darker gray for contrast
+		case colorNameContent:
+			return color.NRGBA{R: 250, G: 250, B: 252, A: 255} // Bright clean content
+		case colorNameHeader:
+			return color.NRGBA{R: 220, G: 220, B: 225, A: 255} // Sleek gray header
+		case theme.ColorNamePrimary:
+			return color.NRGBA{R: 65, G: 88, B: 208, A: 255} // Vibrant blue
+		}
+	}
+	return p.Theme.Color(name, variant)
+}
+
+type themedBox struct {
+	widget.BaseWidget
+	content   fyne.CanvasObject
+	colorName fyne.ThemeColorName
+}
+
+func newThemedBox(colorName fyne.ThemeColorName, content fyne.CanvasObject) *themedBox {
+	b := &themedBox{content: content, colorName: colorName}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *themedBox) CreateRenderer() fyne.WidgetRenderer {
+	rect := canvas.NewRectangle(theme.Color(b.colorName))
+	return &themedBoxRenderer{rect: rect, content: b.content, b: b}
+}
+
+type themedBoxRenderer struct {
+	rect    *canvas.Rectangle
+	content fyne.CanvasObject
+	b       *themedBox
+}
+
+func (r *themedBoxRenderer) Layout(size fyne.Size) {
+	r.rect.Resize(size)
+	r.content.Resize(size)
+}
+
+func (r *themedBoxRenderer) MinSize() fyne.Size {
+	return r.content.MinSize()
+}
+
+func (r *themedBoxRenderer) Refresh() {
+	r.rect.FillColor = theme.Color(r.b.colorName)
+	r.rect.Refresh()
+	r.content.Refresh()
+}
+
+func (r *themedBoxRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.rect, r.content}
+}
+
+func (r *themedBoxRenderer) Destroy() {}
