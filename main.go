@@ -35,6 +35,7 @@ type Config struct {
 	OSType           string `json:"osType"`
 	AutoCloseOnStart bool   `json:"autoCloseOnStart"` // default: false (keep window open)
 	Verbose          bool   `json:"verbose"`          // default: false (only show important messages)
+	LogToFile        bool   `json:"logToFile"`        // default: false (write launcher logs to log.txt)
 
 	// Profiles for different launch configurations
 	Profiles []Profile `json:"profiles"`
@@ -86,6 +87,47 @@ func SaveConfig(filename string, config *Config) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 	return nil
+}
+
+func resolveConfigPath() string {
+	candidates := make([]string, 0, 3)
+
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(wd, "config.json"))
+	}
+
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "config.json"),
+			filepath.Join(filepath.Dir(exeDir), "config.json"),
+		)
+	}
+
+	seen := map[string]bool{}
+	for _, c := range candidates {
+		abs, err := filepath.Abs(c)
+		if err != nil {
+			continue
+		}
+		if seen[abs] {
+			continue
+		}
+		seen[abs] = true
+		if _, err := os.Stat(abs); err == nil {
+			return abs
+		}
+	}
+
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+
+	return "config.json"
+}
+
+func resolveLogPath(configPath string) string {
+	return filepath.Join(filepath.Dir(configPath), "log.txt")
 }
 
 // FindVersionFolder returns the first subfolder matching the version pattern
@@ -316,8 +358,43 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 
 // Simple in-memory logger used by the local web UI
 type Logger struct {
-	mu    sync.Mutex
-	lines []string
+	mu        sync.Mutex
+	lines     []string
+	logToFile bool
+	logPath   string
+}
+
+func NewLogger(logToFile bool, logPath string) *Logger {
+	return &Logger{
+		logToFile: logToFile,
+		logPath:   logPath,
+	}
+}
+
+func appendToLogFile(path, msg string) {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(fmt.Sprintf("[%s] %s\n", time.Now().Format(time.RFC3339), msg))
+}
+
+func shouldLogToFile(configPath string) bool {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return false
+	}
+
+	var cfg struct {
+		LogToFile bool `json:"logToFile"`
+	}
+
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return false
+	}
+
+	return cfg.LogToFile
 }
 
 func (l *Logger) Append(s string) {
@@ -326,6 +403,9 @@ func (l *Logger) Append(s string) {
 	l.lines = append(l.lines, s)
 	if len(l.lines) > 2000 {
 		l.lines = l.lines[len(l.lines)-2000:]
+	}
+	if l.logToFile {
+		appendToLogFile(l.logPath, s)
 	}
 }
 
@@ -386,12 +466,39 @@ func CheckForNewVersion(config *Config) string {
 
 // Main launches the GUI launcher
 func main() {
-	config, err := LoadConfig("config.json")
+	configPath := resolveConfigPath()
+	logPath := resolveLogPath(configPath)
+	bootstrapFileLog := shouldLogToFile(configPath)
+	if bootstrapFileLog {
+		appendToLogFile(logPath, fmt.Sprintf("Launcher process starting (config: %s)", configPath))
+	}
+
+	config, err := LoadConfig(configPath)
 	if err != nil {
+		appendToLogFile(logPath, fmt.Sprintf("Startup failed while loading config: %v", err))
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	ui := NewUIManager(config)
+	defer func() {
+		if r := recover(); r != nil {
+			if config.LogToFile {
+				appendToLogFile(logPath, fmt.Sprintf("Panic: %v", r))
+			}
+			panic(r)
+		}
+	}()
+
+	if config.LogToFile {
+		appendToLogFile(logPath, "Config loaded successfully")
+	}
+
+	ui := NewUIManager(config, configPath)
+	if config.LogToFile {
+		appendToLogFile(logPath, "Launching UI")
+	}
 	ui.Show()
+	if config.LogToFile {
+		appendToLogFile(logPath, "UI exited")
+	}
 }
