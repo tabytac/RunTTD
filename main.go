@@ -527,15 +527,23 @@ func main() {
 	if err != nil {
 		// If config is missing, create a sensible default and continue.
 		if errors.Is(err, os.ErrNotExist) {
-			homeDir, _ := os.UserHomeDir()
-			defaultParentDir := ""
-			defaultDocsDir := ""
-			if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-				defaultDocsDir = filepath.Join(homeDir, "Documents", "OpenTTD")
-				defaultParentDir = filepath.Join(homeDir, "Documents", "OpenTTD-JGRPP")
-			} else {
-				defaultDocsDir = filepath.Join(homeDir, ".local", "share", "openttd")
-				defaultParentDir = filepath.Join(homeDir, ".local", "share", "openttd-jgrpp")
+			docsBase := getDocumentsDir()
+
+			// OpenTTD folder name varies by OS
+			ottdDirName := "OpenTTD"
+			if runtime.GOOS == "linux" {
+				ottdDirName = "openttd"
+			}
+
+			defaultDocsDir := filepath.Join(docsBase, ottdDirName)
+			defaultParentDir := filepath.Join(docsBase, ottdDirName+"-JGRPP")
+
+			// Validate: check for openttd.cfg to confirm this is the right folder
+			cfgPath := filepath.Join(defaultDocsDir, "openttd.cfg")
+			if _, statErr := os.Stat(cfgPath); statErr != nil {
+				if bootstrapFileLog {
+					appendToLogFile(logPath, fmt.Sprintf("Warning: openttd.cfg not found at %s — docs path may need adjusting in Settings", cfgPath))
+				}
 			}
 
 			defaultCfg := &Config{
