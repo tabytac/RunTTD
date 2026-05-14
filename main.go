@@ -194,7 +194,11 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 		}
 	}
 
-	exePath := filepath.Join(versionFolder, "openttd.exe")
+	exeName := "openttd"
+	if runtime.GOOS == "windows" {
+		exeName = "openttd.exe"
+	}
+	exePath := filepath.Join(versionFolder, exeName)
 	if _, err := os.Stat(exePath); err != nil {
 		l.Append(fmt.Sprintf("Executable not found in %s", versionFolder))
 		return
