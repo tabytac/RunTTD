@@ -317,6 +317,12 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	archivePath := filepath.Join(downloadDir, assetName)
 	fmt.Printf("Downloading version: %s\n", tagName)
 
+	// Ensure the download directory exists
+	if err := os.MkdirAll(downloadDir, 0755); err != nil {
+		fmt.Printf("Failed to create download directory %s: %v\n", downloadDir, err)
+		return false
+	}
+
 	resp, err = http.Get(downloadURL)
 	if err != nil {
 		fmt.Printf("Failed to download file: %v\n", err)
