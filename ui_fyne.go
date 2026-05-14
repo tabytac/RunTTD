@@ -35,7 +35,7 @@ func NewUIManager(config *Config, configPath string) *UIManager {
 	fyneApp := app.New()
 	// theme is set later
 	window := fyneApp.NewWindow("JGRPP Launcher")
-	window.Resize(fyne.NewSize(800, 600))
+	window.Resize(fyne.NewSize(960, 720))
 
 	um := &UIManager{
 		app:              fyneApp,
@@ -566,11 +566,18 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		widget.NewLabel("Company Password"), companyPassEntry,
 	)
 
-	form := container.NewVBox(
-		statusLabel,
+	leftColumn := container.NewVBox(
 		identitySection,
 		storageSection,
+	)
+	rightColumn := container.NewVBox(
 		multiplayerSection,
+	)
+	columns := container.NewGridWithColumns(2, leftColumn, rightColumn)
+
+	form := container.NewVBox(
+		statusLabel,
+		columns,
 	)
 
 	saveBtn = widget.NewButton("Save", func() { saveProfile(false) })
@@ -605,6 +612,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	updateState()
 
 	editDialog = dialog.NewCustom("Edit Profile", "Close", content, um.window)
+	editDialog.Resize(fyne.NewSize(750, 450))
 	editDialog.Show()
 }
 
