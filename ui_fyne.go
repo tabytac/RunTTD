@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed" // required to activate //go:embed directives
 	"fmt"
 	"image/color"
 	"strconv"
@@ -16,6 +17,9 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
+
+//go:embed app_icon.png
+var appIconBytes []byte
 
 // UIManager manages the Fyne GUI application
 type UIManager struct {
@@ -34,7 +38,10 @@ type UIManager struct {
 func NewUIManager(config *Config, configPath string) *UIManager {
 	fyneApp := app.New()
 	// theme is set later
+	appIcon := fyne.NewStaticResource("app_icon.png", appIconBytes)
+	fyneApp.SetIcon(appIcon)
 	window := fyneApp.NewWindow("JGRPP Launcher")
+	window.SetIcon(appIcon)
 	window.Resize(fyne.NewSize(960, 720))
 
 	um := &UIManager{
