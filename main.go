@@ -339,13 +339,14 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 		fmt.Printf("Failed to create archive file: %v\n", err)
 		return false
 	}
-	defer file.Close()
 
 	if _, err = io.Copy(file, resp.Body); err != nil {
+		file.Close()
 		fmt.Printf("Failed to write archive file: %v\n", err)
 		os.Remove(archivePath)
 		return false
 	}
+	file.Close() // Must close before extraction — Windows locks open files
 
 	if err := extractArchive(archivePath, downloadDir); err != nil {
 		fmt.Printf("Failed to extract archive: %v\n", err)
