@@ -328,14 +328,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	actionsContent := container.NewVBox(
 		runBtn,
 		container.NewGridWithColumns(3, editBtn, duplicateBtn, deleteBtn),
-		widget.NewSeparator(),
-		newBtn,
-		settingsBtn,
 	)
 
 	leftPanelObj := container.NewBorder(
 		widget.NewCard("Profiles", "", widget.NewLabel("Select a profile to edit or run it.")),
-		nil,
+		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, settingsBtn)),
 		nil,
 		nil,
 		profileList,
