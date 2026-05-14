@@ -541,7 +541,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		um.selectedProfileName = profile.Name
 
 		_ = SaveConfig(um.configPath, um.config)
-		dialog.ShowInformation("Success", "Profile saved", um.window)
 		editDialog.Hide()
 		um.window.SetContent(um.makeMainView())
 		if runAfter {
@@ -618,18 +617,27 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 
 // showSettingsView shows a dialog to edit global settings
 func (um *UIManager) showSettingsView() {
-	parentDirEntry := widget.NewEntry()
+	// scrollBox is assigned later; forwardScroll is captured by closure so entries
+	// always forward to the real scroll container once it is created.
+	var scrollBox *container.Scroll
+	forwardScroll := func(ev *fyne.ScrollEvent) {
+		if scrollBox != nil {
+			scrollBox.Scrolled(ev)
+		}
+	}
+
+	parentDirEntry := newScrollForwardingEntry(forwardScroll)
 	parentDirEntry.SetText(um.config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where game files / executables will be automatically installed")
 
-	docsBasePathEntry := widget.NewEntry()
+	docsBasePathEntry := newScrollForwardingEntry(forwardScroll)
 	docsBasePathEntry.SetText(um.config.DocsBasePath)
 	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
 
-	githubApiUrlEntry := widget.NewEntry()
+	githubApiUrlEntry := newScrollForwardingEntry(forwardScroll)
 	githubApiUrlEntry.SetText(um.config.GithubApiUrl)
 
-	osTypeEntry := widget.NewEntry()
+	osTypeEntry := newScrollForwardingEntry(forwardScroll)
 	osTypeEntry.SetText(um.config.OSType)
 
 	autoCloseCheck := widget.NewCheck("Auto-close launcher when OpenTTD starts", nil)
@@ -671,6 +679,8 @@ func (um *UIManager) showSettingsView() {
 
 	form := container.NewVBox(basicSection, behaviorSection, advancedSection)
 
+	var settingsDialog dialog.Dialog
+
 	saveBtn := widget.NewButton("Save Settings", func() {
 		um.config.ParentDir = parentDirEntry.Text
 		um.config.DocsBasePath = docsBasePathEntry.Text
@@ -680,11 +690,12 @@ func (um *UIManager) showSettingsView() {
 		um.config.Verbose = verboseCheck.Checked
 
 		_ = SaveConfig(um.configPath, um.config)
-		dialog.ShowInformation("Success", "Settings saved", um.window)
+		if settingsDialog != nil {
+			settingsDialog.Hide()
+		}
 	})
 
-	scrollBox := container.NewVScroll(form)
-	scrollBox.SetMinSize(fyne.NewSize(400, 300))
+	scrollBox = container.NewVScroll(form)
 
 	content := container.NewBorder(
 		nil,
@@ -694,7 +705,8 @@ func (um *UIManager) showSettingsView() {
 		scrollBox,
 	)
 
-	settingsDialog := dialog.NewCustom("Settings", "Close", content, um.window)
+	settingsDialog = dialog.NewCustom("Settings", "Close", content, um.window)
+	settingsDialog.Resize(fyne.NewSize(750, 450))
 	settingsDialog.Show()
 }
 
@@ -866,6 +878,25 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 func (um *UIManager) OnOpenTTDStarted() {
 	if um.config.AutoCloseOnStart {
 		um.app.Quit()
+	}
+}
+
+// --- Scroll Forwarding Entry ---
+
+type scrollForwardingEntry struct {
+	widget.Entry
+	forward func(ev *fyne.ScrollEvent)
+}
+
+func newScrollForwardingEntry(forward func(ev *fyne.ScrollEvent)) *scrollForwardingEntry {
+	e := &scrollForwardingEntry{forward: forward}
+	e.ExtendBaseWidget(e)
+	return e
+}
+
+func (e *scrollForwardingEntry) Scrolled(ev *fyne.ScrollEvent) {
+	if e.forward != nil {
+		e.forward(ev)
 	}
 }
 
