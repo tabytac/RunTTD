@@ -177,8 +177,21 @@ func FindLatestSaveFile(gamePath string) string {
 func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword, companyPassword, savePath string, l *Logger, um *UIManager) {
 	var saveFile string
 	if savePath != "" {
-		gamePath := filepath.Join(um.config.DocsBasePath, "save", savePath)
-		saveFile = FindLatestSaveFile(gamePath)
+		gamePath := savePath
+		if !filepath.IsAbs(savePath) {
+			gamePath = filepath.Join(um.config.DocsBasePath, "save", savePath)
+		}
+		
+		info, err := os.Stat(gamePath)
+		if err == nil {
+			if info.IsDir() {
+				saveFile = FindLatestSaveFile(gamePath)
+			} else {
+				saveFile = gamePath
+			}
+		} else {
+			l.Append(fmt.Sprintf("Save path not found: %s (%v)", gamePath, err))
+		}
 	}
 
 	exePath := filepath.Join(versionFolder, "openttd.exe")
@@ -189,16 +202,22 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 
 	var cmd *exec.Cmd
 	var args []string
-	if ipPort != "" && serverPassword != "" {
+	
+	if ipPort != "" {
 		nArg := ipPort
-		if companyNumber != "" && companyPassword != "" {
+		if companyNumber != "" {
 			nArg = fmt.Sprintf("%s#%s", ipPort, companyNumber)
-			args = []string{"-n", nArg, "-p", serverPassword, "-P", companyPassword}
-		} else {
-			nArg = fmt.Sprintf("%s#255", ipPort)
-			args = []string{"-n", nArg, "-p", serverPassword}
+		}
+		args = append(args, "-n", nArg)
+		
+		if serverPassword != "" {
+			args = append(args, "-p", serverPassword)
+		}
+		if companyPassword != "" {
+			args = append(args, "-P", companyPassword)
 		}
 	}
+	
 	if saveFile != "" {
 		args = append(args, "-g", saveFile)
 	}
