@@ -290,9 +290,11 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	}
 
 	var downloadURL string
+	var assetName string
 	for _, asset := range releaseInfo.Assets {
-		if strings.Contains(asset.Name, config.OSType) && strings.HasSuffix(asset.Name, ".zip") {
+		if strings.Contains(asset.Name, config.OSType) && (strings.HasSuffix(asset.Name, ".zip") || strings.HasSuffix(asset.Name, ".tar.xz")) {
 			downloadURL = asset.BrowserDownloadURL
+			assetName = asset.Name
 			break
 		}
 	}
@@ -301,7 +303,7 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 		return false
 	}
 
-	zipPath := filepath.Join(downloadDir, fmt.Sprintf("%s.zip", tagName))
+	archivePath := filepath.Join(downloadDir, assetName)
 	fmt.Printf("Downloading version: %s\n", tagName)
 
 	resp, err = http.Get(downloadURL)
@@ -315,27 +317,27 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 		return false
 	}
 
-	file, err := os.Create(zipPath)
+	file, err := os.Create(archivePath)
 	if err != nil {
-		fmt.Printf("Failed to create zip file: %v\n", err)
+		fmt.Printf("Failed to create archive file: %v\n", err)
 		return false
 	}
 	defer file.Close()
 
 	if _, err = io.Copy(file, resp.Body); err != nil {
-		fmt.Printf("Failed to write zip file: %v\n", err)
-		os.Remove(zipPath)
+		fmt.Printf("Failed to write archive file: %v\n", err)
+		os.Remove(archivePath)
 		return false
 	}
 
-	if err := extractZip(zipPath, downloadDir); err != nil {
-		fmt.Printf("Failed to extract zip: %v\n", err)
-		os.Remove(zipPath)
+	if err := extractArchive(archivePath, downloadDir); err != nil {
+		fmt.Printf("Failed to extract archive: %v\n", err)
+		os.Remove(archivePath)
 		return false
 	}
 
 	fmt.Printf("Download and extraction completed: %s\n", tagName)
-	os.Remove(zipPath)
+	os.Remove(archivePath)
 	return true
 }
 
@@ -393,14 +395,37 @@ func (l *Logger) GetAll() []string {
 	return out
 }
 
-func extractZip(zipPath, destDir string) error {
+func extractArchive(archivePath, destDir string) error {
+	if strings.HasSuffix(archivePath, ".tar.xz") {
+		cmd := exec.Command("tar", "-xf", archivePath, "-C", destDir)
+		return cmd.Run()
+	}
+	// .zip
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-Command", fmt.Sprintf("Expand-Archive -Path '%s' -DestinationPath '%s'", zipPath, destDir))
+		cmd = exec.Command("powershell", "-Command", fmt.Sprintf("Expand-Archive -Path '%s' -DestinationPath '%s'", archivePath, destDir))
 	} else {
-		cmd = exec.Command("unzip", "-q", zipPath, "-d", destDir)
+		cmd = exec.Command("unzip", "-q", archivePath, "-d", destDir)
 	}
 	return cmd.Run()
+}
+
+func defaultOSType() string {
+	switch runtime.GOOS {
+	case "windows":
+		switch runtime.GOARCH {
+		case "386":
+			return "windows-win32"
+		case "arm64":
+			return "windows-arm64"
+		default:
+			return "windows-win64"
+		}
+	case "darwin":
+		return "macos-universal"
+	default:
+		return "linux-generic-amd64"
+	}
 }
 
 func CheckForNewVersion(config *Config) string {
@@ -469,7 +494,7 @@ func main() {
 				ParentDir:        defaultParentDir,
 				DocsBasePath:     defaultDocsDir,
 				GithubApiUrl:     "https://api.github.com/repos/JGRennison/OpenTTD-patches",
-				OSType:           runtime.GOOS,
+				OSType:           defaultOSType(),
 				AutoCloseOnStart: false,
 				Verbose:          false,
 				LogToFile:        false,
