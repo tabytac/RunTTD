@@ -200,8 +200,19 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 	}
 	exePath := filepath.Join(versionFolder, exeName)
 	if _, err := os.Stat(exePath); err != nil {
-		l.Append(fmt.Sprintf("Executable not found in %s", versionFolder))
-		return
+		// macOS: look inside .app bundle
+		if runtime.GOOS == "darwin" {
+			appGlob, _ := filepath.Glob(filepath.Join(versionFolder, "*.app", "Contents", "MacOS", "openttd"))
+			if len(appGlob) > 0 {
+				exePath = appGlob[0]
+			} else {
+				l.Append(fmt.Sprintf("Executable not found in %s (also checked .app bundles)", versionFolder))
+				return
+			}
+		} else {
+			l.Append(fmt.Sprintf("Executable not found in %s", versionFolder))
+			return
+		}
 	}
 
 	var cmd *exec.Cmd
@@ -292,7 +303,7 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	var downloadURL string
 	var assetName string
 	for _, asset := range releaseInfo.Assets {
-		if strings.Contains(asset.Name, config.OSType) && (strings.HasSuffix(asset.Name, ".zip") || strings.HasSuffix(asset.Name, ".tar.xz")) {
+		if strings.Contains(asset.Name, config.OSType) && (strings.HasSuffix(asset.Name, ".zip") || strings.HasSuffix(asset.Name, ".tar.xz") || strings.HasSuffix(asset.Name, ".dmg")) {
 			downloadURL = asset.BrowserDownloadURL
 			assetName = asset.Name
 			break
@@ -400,6 +411,9 @@ func extractArchive(archivePath, destDir string) error {
 		cmd := exec.Command("tar", "-xf", archivePath, "-C", destDir)
 		return cmd.Run()
 	}
+	if strings.HasSuffix(archivePath, ".dmg") {
+		return extractDMG(archivePath, destDir)
+	}
 	// .zip
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
@@ -408,6 +422,41 @@ func extractArchive(archivePath, destDir string) error {
 		cmd = exec.Command("unzip", "-q", archivePath, "-d", destDir)
 	}
 	return cmd.Run()
+}
+
+func extractDMG(dmgPath, destDir string) error {
+	mountPoint := filepath.Join(os.TempDir(), "jgrpp_dmg_mount")
+	_ = os.MkdirAll(mountPoint, 0755)
+	defer func() {
+		_ = exec.Command("hdiutil", "detach", mountPoint, "-quiet").Run()
+		_ = os.RemoveAll(mountPoint)
+	}()
+
+	if err := exec.Command("hdiutil", "attach", "-nobrowse", "-mountpoint", mountPoint, dmgPath).Run(); err != nil {
+		return fmt.Errorf("failed to mount DMG: %w", err)
+	}
+
+	// Derive output folder name from DMG filename (e.g. openttd-jgrpp-0.72.2-macos-universal)
+	baseName := filepath.Base(dmgPath)
+	baseName = strings.TrimSuffix(baseName, ".dmg")
+	outputDir := filepath.Join(destDir, baseName)
+	_ = os.MkdirAll(outputDir, 0755)
+
+	// Copy .app bundles from the mounted volume
+	entries, err := os.ReadDir(mountPoint)
+	if err != nil {
+		return fmt.Errorf("failed to read mounted DMG: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() && strings.HasSuffix(entry.Name(), ".app") {
+			src := filepath.Join(mountPoint, entry.Name())
+			dst := filepath.Join(outputDir, entry.Name())
+			if err := exec.Command("cp", "-R", src, dst).Run(); err != nil {
+				return fmt.Errorf("failed to copy %s: %w", entry.Name(), err)
+			}
+		}
+	}
+	return nil
 }
 
 func defaultOSType() string {
