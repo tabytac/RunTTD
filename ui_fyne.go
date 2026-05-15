@@ -325,8 +325,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	refreshDetails = func() {
 		updateButtonStates()
 		if selectedIdx < 0 || selectedIdx >= len(um.config.Profiles) {
-			selectedLabel.SetText("No profile selected")
-			selectedSummary.SetText("Choose a profile to see its version, save path, and multiplayer settings.")
+			selectedLabel.SetText("Welcome to JGRPP Launcher")
+			selectedSummary.SetText("Select a profile on the left to see its details and launch the game.")
 			selectedConfig.SetText("")
 			return
 		}
@@ -834,9 +834,18 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	var editDialog dialog.Dialog
 
 	validate := func() (bool, string) {
-		if strings.TrimSpace(nameEntry.Text) == "" {
+		name := strings.TrimSpace(nameEntry.Text)
+		if name == "" {
 			return false, "Profile name is required."
 		}
+
+		// Check for duplicate names
+		for i, p := range um.config.Profiles {
+			if i != profileIdx && strings.EqualFold(strings.TrimSpace(p.Name), name) {
+				return false, "A profile with this name already exists."
+			}
+		}
+
 
 		if strings.TrimSpace(versionEntry.Text) == "" {
 			return false, "JGRPP version is required or use latest."
@@ -1147,6 +1156,9 @@ func (um *UIManager) showLogView(profileIdx int) {
 	logLabel := widget.NewLabelWithData(logBinding)
 	logLabel.Wrapping = fyne.TextWrapWord
 
+	logBox := container.NewVScroll(logLabel)
+	logBox.SetMinSize(fyne.NewSize(600, 400))
+
 	// Update the log display whenever logger changes
 	updateLogDisplay := func() {
 		logs := um.logger.GetAll()
@@ -1155,8 +1167,8 @@ func (um *UIManager) showLogView(profileIdx int) {
 			text += line + "\n"
 		}
 		_ = logBinding.Set(text)
+		logBox.ScrollToBottom()
 	}
-
 	// Start a goroutine to periodically update the log display
 	done := make(chan struct{})
 	go func() {
@@ -1171,9 +1183,6 @@ func (um *UIManager) showLogView(profileIdx int) {
 			}
 		}
 	}()
-
-	logBox := container.NewVScroll(logLabel)
-	logBox.SetMinSize(fyne.NewSize(600, 400))
 
 	closeBtn := widget.NewButton("Return to Main", func() {
 		select {
