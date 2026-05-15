@@ -21,6 +21,7 @@ import (
 	"github.com/ncruces/zenity"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 //go:embed app_icon.png
@@ -38,6 +39,26 @@ type UIManager struct {
 	lastListSelectAt    time.Time
 	themeOverride       *fyne.ThemeVariant
 	cachedVersions      []string
+}
+
+// rightClickButton is a button that also handles right-clicks
+type rightClickButton struct {
+	widget.Button
+	onSecondaryTapped func()
+}
+
+func newRightClickButton(tapped func(), secondaryTapped func()) *rightClickButton {
+	b := &rightClickButton{onSecondaryTapped: secondaryTapped}
+	b.OnTapped = tapped
+	b.Importance = widget.LowImportance
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *rightClickButton) TappedSecondary(_ *fyne.PointEvent) {
+	if b.onSecondaryTapped != nil {
+		b.onSecondaryTapped()
+	}
 }
 
 // NewUIManager creates a new UI manager
@@ -99,11 +120,20 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 
 	parentDirBtn := widget.NewButton("Browse...", func() {
 		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			defer func() {
+				if r := recover(); r != nil {
+					um.logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
+				}
+			}()
+			um.logger.Append("Opening Parent Directory picker...")
 			directory, err := zenity.SelectFile(
 				zenity.Directory(),
 				zenity.Title("Select Parent Directory"),
-				zenity.Attach(um.window),
+				zenity.Filename(parentDirEntry.Text),
 			)
+			um.logger.Append(fmt.Sprintf("Picker closed. Err: %v", err))
 			if err == nil && directory != "" {
 				parentDirEntry.SetText(directory)
 			}
@@ -119,11 +149,20 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 
 	docsBasePathBtn := widget.NewButton("Browse...", func() {
 		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			defer func() {
+				if r := recover(); r != nil {
+					um.logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
+				}
+			}()
+			um.logger.Append("Opening Docs Base Path picker...")
 			directory, err := zenity.SelectFile(
 				zenity.Directory(),
 				zenity.Title("Select Docs Base Path"),
-				zenity.Attach(um.window),
+				zenity.Filename(docsBasePathEntry.Text),
 			)
+			um.logger.Append(fmt.Sprintf("Picker closed. Err: %v", err))
 			if err == nil && directory != "" {
 				docsBasePathEntry.SetText(directory)
 			}
@@ -230,12 +269,28 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	var profileList *fyneadvancedlist.List
 	var refreshDetails func()
 
+	var runBtn, editBtn, duplicateBtn, deleteBtn *widget.Button
+
 	runSelected := func() {
 		if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
 			um.showLogView(selectedIdx)
 			return
 		}
 		dialog.ShowError(fmt.Errorf("select a profile to launch"), um.window)
+	}
+
+	updateButtonStates := func() {
+		if selectedIdx >= 0 {
+			runBtn.Enable()
+			editBtn.Enable()
+			duplicateBtn.Enable()
+			deleteBtn.Enable()
+		} else {
+			runBtn.Disable()
+			editBtn.Disable()
+			duplicateBtn.Disable()
+			deleteBtn.Disable()
+		}
 	}
 
 	selectProfile := func(idx int) {
@@ -267,6 +322,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	}
 
 	refreshDetails = func() {
+		updateButtonStates()
 		if selectedIdx < 0 || selectedIdx >= len(um.config.Profiles) {
 			selectedLabel.SetText("No profile selected")
 			selectedSummary.SetText("Choose a profile to see its version, save path, and multiplayer settings.")
@@ -295,8 +351,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	profileList = fyneadvancedlist.NewList(
 		func() int { return len(um.config.Profiles) },
 		func() fyne.CanvasObject {
-			btn := widget.NewButton("", nil)
-			btn.Importance = widget.LowImportance
+			btn := newRightClickButton(nil, nil)
+
 
 			nameLabel := widget.NewLabel("")
 			versionLabel := widget.NewLabel("")
@@ -312,7 +368,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			stack := o.(*fyne.Container)
-			btn := stack.Objects[0].(*widget.Button)
+			btn := stack.Objects[0].(*rightClickButton)
 			padding := stack.Objects[1].(*fyne.Container)
 			layout := padding.Objects[0].(*fyne.Container)
 			nameLabel := layout.Objects[0].(*widget.Label)
@@ -330,6 +386,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				idx := int(i)
 				btn.OnTapped = func() {
 					handleRowTap(idx)
+				}
+				btn.onSecondaryTapped = func() {
+					um.showProfileEditor(idx)
 				}
 			}
 		},
@@ -381,14 +440,14 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	newBtn := widget.NewButton("New Profile", func() {
 		um.showProfileEditor(-1)
 	})
-	editBtn := widget.NewButton("Edit", func() {
+	editBtn = widget.NewButton("Edit", func() {
 		if selectedIdx >= 0 {
 			um.showProfileEditor(selectedIdx)
 		} else {
 			dialog.ShowError(fmt.Errorf("select a profile to edit"), um.window)
 		}
 	})
-	duplicateBtn := widget.NewButton("Duplicate", func() {
+	duplicateBtn = widget.NewButton("Duplicate", func() {
 		if selectedIdx >= 0 {
 			dup := um.config.Profiles[selectedIdx]
 			dup.Name = dup.Name + " Copy"
@@ -407,7 +466,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			dialog.ShowError(fmt.Errorf("select a profile to duplicate"), um.window)
 		}
 	})
-	deleteBtn := widget.NewButton("Delete", func() {
+	deleteBtn = widget.NewButton("Delete", func() {
 		if selectedIdx >= 0 {
 			if len(um.config.Profiles) > 1 {
 				um.config.Profiles = append(um.config.Profiles[:selectedIdx], um.config.Profiles[selectedIdx+1:]...)
@@ -432,7 +491,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 	})
 
-	runBtn := widget.NewButton("Run Selected", runSelected)
+	runBtn = widget.NewButton("Run Selected", runSelected)
 	runBtn.Importance = widget.HighImportance
 
 	settingsBtn := widget.NewButton("Settings", func() {
@@ -469,6 +528,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
 		profileList.Select(widget.ListItemID(selectedIdx))
 	}
+	updateButtonStates()
 	refreshDetails()
 
 	split := container.NewHSplit(leftPanel, rightPanel)
@@ -580,6 +640,24 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		versionEntry.SetSelected("latest")
 	}
 	versionEntry.PlaceHolder = "latest or 0.71.2"
+	
+	// Auto-detect mode for legacy configs or unsaved changes
+	if profile.LaunchMode == "" {
+		if profile.ServerIpPort != "" {
+			profile.LaunchMode = "multiplayer"
+		} else if profile.SavePath != "" {
+			// Check if SavePath is a directory
+			abs := profile.SavePath
+			if !filepath.IsAbs(abs) && um.config.DocsBasePath != "" {
+				abs = filepath.Join(um.config.DocsBasePath, "save", abs)
+			}
+			if info, err := os.Stat(abs); err == nil && info.IsDir() {
+				profile.LaunchMode = "folder"
+			} else {
+				profile.LaunchMode = "file"
+			}
+		}
+	}
 
 	// Launch Mode selection
 	modeMap := map[string]string{
@@ -604,19 +682,17 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	ipPortEntry.SetText(profile.ServerIpPort)
 	ipPortEntry.SetPlaceHolder("host:port")
 
-	serverPassEntry := widget.NewEntry()
+	serverPassEntry := widget.NewPasswordEntry()
 	serverPassEntry.SetText(profile.ServerPassword)
-	serverPassEntry.Password = true
 	serverPassEntry.SetPlaceHolder("Optional password")
+
+	companyPassEntry := widget.NewPasswordEntry()
+	companyPassEntry.SetText(profile.ServerCompanyPassword)
+	companyPassEntry.SetPlaceHolder("Optional company password")
 
 	companyNumEntry := widget.NewEntry()
 	companyNumEntry.SetText(profile.ServerCompanyNumber)
 	companyNumEntry.SetPlaceHolder("Optional company number")
-
-	companyPassEntry := widget.NewEntry()
-	companyPassEntry.SetText(profile.ServerCompanyPassword)
-	companyPassEntry.Password = true
-	companyPassEntry.SetPlaceHolder("Optional company password")
 
 	// Save fields
 	savePathEntry := widget.NewEntry()
@@ -625,12 +701,24 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 
 	browseFileBtn := widget.NewButtonWithIcon("Browse File...", theme.FileIcon(), func() {
 		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+
+			startPath := savePathEntry.Text
+			if startPath == "" {
+				if um.config.DocsBasePath != "" {
+					startPath = filepath.Join(um.config.DocsBasePath, "save")
+				}
+			} else if !filepath.IsAbs(startPath) && um.config.DocsBasePath != "" {
+				startPath = filepath.Join(um.config.DocsBasePath, "save", startPath)
+			}
+
 			file, err := zenity.SelectFile(
 				zenity.Title("Select Save or Scenario"),
 				zenity.FileFilters{
 					{Name: "OpenTTD Saves/Scenarios", Patterns: []string{"*.sav", "*.scn"}},
 				},
-				zenity.Attach(um.window),
+				zenity.Filename(startPath),
 			)
 			if err == nil && file != "" {
 				path := file
@@ -647,10 +735,22 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 
 	browseFolderBtn := widget.NewButtonWithIcon("Browse Folder...", theme.FolderIcon(), func() {
 		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+
+			startPath := savePathEntry.Text
+			if startPath == "" {
+				if um.config.DocsBasePath != "" {
+					startPath = filepath.Join(um.config.DocsBasePath, "save")
+				}
+			} else if !filepath.IsAbs(startPath) && um.config.DocsBasePath != "" {
+				startPath = filepath.Join(um.config.DocsBasePath, "save", startPath)
+			}
+
 			directory, err := zenity.SelectFile(
 				zenity.Directory(),
 				zenity.Title("Select Save Folder"),
-				zenity.Attach(um.window),
+				zenity.Filename(startPath),
 			)
 			if err == nil && directory != "" {
 				path := directory
@@ -880,11 +980,20 @@ func (um *UIManager) showSettingsView() {
 
 	parentDirBtn := widget.NewButton("Browse...", func() {
 		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			defer func() {
+				if r := recover(); r != nil {
+					um.logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
+				}
+			}()
+			um.logger.Append("Opening Parent Directory picker (Settings)...")
 			directory, err := zenity.SelectFile(
 				zenity.Directory(),
 				zenity.Title("Select Parent Directory"),
-				zenity.Attach(um.window),
+				zenity.Filename(parentDirEntry.Text),
 			)
+			um.logger.Append(fmt.Sprintf("Picker closed (Settings). Err: %v", err))
 			if err == nil && directory != "" {
 				parentDirEntry.SetText(directory)
 			}
@@ -900,11 +1009,20 @@ func (um *UIManager) showSettingsView() {
 
 	docsBasePathBtn := widget.NewButton("Browse...", func() {
 		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			defer func() {
+				if r := recover(); r != nil {
+					um.logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
+				}
+			}()
+			um.logger.Append("Opening Docs Base Path picker (Settings)...")
 			directory, err := zenity.SelectFile(
 				zenity.Directory(),
 				zenity.Title("Select Docs Base Path"),
-				zenity.Attach(um.window),
+				zenity.Filename(docsBasePathEntry.Text),
 			)
+			um.logger.Append(fmt.Sprintf("Picker closed (Settings). Err: %v", err))
 			if err == nil && directory != "" {
 				docsBasePathEntry.SetText(directory)
 			}

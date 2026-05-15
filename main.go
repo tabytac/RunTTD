@@ -17,6 +17,16 @@ import (
 	"time"
 )
 
+func setupGuiOutput() {
+	if runtime.GOOS == "windows" {
+		f, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		if err == nil {
+			os.Stdout = f
+			os.Stderr = f
+		}
+	}
+}
+
 type Profile struct {
 	Name                  string `json:"name"`
 	Version               string `json:"version"`
@@ -288,12 +298,10 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 
 	resp, err := http.Get(repoURL)
 	if err != nil {
-		fmt.Printf("Failed to get release info for version %s: %v\n", version, err)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		fmt.Printf("Failed to get release info for version %s: HTTP %d\n", version, resp.StatusCode)
 		return false
 	}
 
@@ -339,31 +347,26 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		fmt.Printf("Failed to download file: HTTP %d\n", resp.StatusCode)
 		return false
 	}
 
 	file, err := os.Create(archivePath)
 	if err != nil {
-		fmt.Printf("Failed to create archive file: %v\n", err)
 		return false
 	}
 
 	if _, err = io.Copy(file, resp.Body); err != nil {
 		file.Close()
-		fmt.Printf("Failed to write archive file: %v\n", err)
 		os.Remove(archivePath)
 		return false
 	}
 	file.Close() // Must close before extraction — Windows locks open files
 
 	if err := extractArchive(archivePath, downloadDir); err != nil {
-		fmt.Printf("Failed to extract archive: %v\n", err)
 		os.Remove(archivePath)
 		return false
 	}
 
-	fmt.Printf("Download and extraction completed: %s\n", tagName)
 	os.Remove(archivePath)
 	return true
 }
@@ -549,6 +552,7 @@ func FetchAvailableVersions(config *Config) ([]string, error) {
 }
 
 func main() {
+	setupGuiOutput()
 	configPath := resolveConfigPath()
 	logPath := resolveLogPath(configPath)
 	bootstrapFileLog := shouldLogToFile(configPath)
