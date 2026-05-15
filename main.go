@@ -544,6 +544,7 @@ func main() {
 	logPath := resolveLogPath(configPath)
 	bootstrapFileLog := shouldLogToFile(configPath)
 	if bootstrapFileLog {
+		_ = os.WriteFile(logPath, []byte{}, 0644) // Clear old logs from previous sessions
 		appendToLogFile(logPath, fmt.Sprintf("Launcher process starting (config: %s)", configPath))
 	}
 
