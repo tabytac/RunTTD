@@ -549,10 +549,7 @@ func FetchAvailableVersions(config *Config) ([]string, error) {
 
 	versions := []string{"latest"}
 	for _, release := range releases {
-		tag := release.TagName
-		if strings.HasPrefix(tag, "jgrpp-") {
-			tag = strings.TrimPrefix(tag, "jgrpp-")
-		}
+		tag := strings.TrimPrefix(release.TagName, "jgrpp-")
 		versions = append(versions, tag)
 	}
 	return versions, nil

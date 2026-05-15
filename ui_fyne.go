@@ -8,6 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"os"
+	"path/filepath"
+	"runtime"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
@@ -17,11 +21,8 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/dweymouth/fyne-advanced-list"
+	fyneadvancedlist "github.com/dweymouth/fyne-advanced-list"
 	"github.com/ncruces/zenity"
-	"os"
-	"path/filepath"
-	"runtime"
 )
 
 //go:embed app_icon.png
@@ -883,12 +884,13 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		profile.ServerCompanyPassword = companyPassEntry.Text
 		profile.LaunchMode = modeMap[modeSelect.Selected]
 		profile.ExtraArgs = strings.TrimSpace(extraArgsEntry.Text)
-		if profile.LaunchMode == "" {
+		switch profile.LaunchMode {
+		case "":
 			profile.SavePath = ""
 			profile.ServerIpPort = ""
-		} else if profile.LaunchMode == "multiplayer" {
+		case "multiplayer":
 			profile.SavePath = ""
-		} else {
+		default:
 			profile.ServerIpPort = ""
 		}
 
