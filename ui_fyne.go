@@ -297,22 +297,34 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	profileList = widget.NewList(
 		func() int { return len(um.config.Profiles) },
 		func() fyne.CanvasObject {
-			btn := widget.NewButton("Profile", nil)
+			btn := widget.NewButton("", nil)
 			btn.Importance = widget.LowImportance
-			btn.Alignment = widget.ButtonAlignLeading
-			return btn
+
+			nameLabel := widget.NewLabel("")
+			versionLabel := widget.NewLabel("")
+			versionLabel.Alignment = fyne.TextAlignTrailing
+
+			layout := container.NewBorder(nil, nil, nameLabel, versionLabel, nil)
+			return container.NewStack(btn, container.NewPadded(layout))
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			button := o.(*widget.Button)
+			stack := o.(*fyne.Container)
+			btn := stack.Objects[0].(*widget.Button)
+			padding := stack.Objects[1].(*fyne.Container)
+			layout := padding.Objects[0].(*fyne.Container)
+			nameLabel := layout.Objects[0].(*widget.Label)
+			versionLabel := layout.Objects[1].(*widget.Label)
+
 			if i < len(um.config.Profiles) {
 				profile := um.config.Profiles[i]
 				versionText := profile.Version
 				if versionText == "" {
 					versionText = "latest"
 				}
-				button.SetText(fmt.Sprintf("%s   •   %s", profile.Name, versionText))
+				nameLabel.SetText(fmt.Sprintf("%d. %s", i+1, profile.Name))
+				versionLabel.SetText(versionText)
 				idx := int(i)
-				button.OnTapped = func() {
+				btn.OnTapped = func() {
 					handleRowTap(idx)
 				}
 			}
@@ -542,7 +554,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			}
 			savePathEntry.SetText(path)
 		}, um.window)
-		
+
 		startPath := um.config.DocsBasePath
 		if startPath != "" {
 			startPath = filepath.Join(startPath, "save")
