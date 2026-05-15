@@ -36,6 +36,7 @@ type Profile struct {
 	ServerCompanyNumber   string `json:"serverCompanyNumber"`
 	ServerCompanyPassword string `json:"serverCompanyPassword"`
 	LaunchMode            string `json:"launchMode"` // "", "file", "folder", "multiplayer"
+	ExtraArgs             string `json:"extraArgs"`
 }
 
 type Config struct {
@@ -186,7 +187,7 @@ func FindLatestSaveFile(gamePath string) string {
 	return latestFile
 }
 
-func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword, companyPassword, savePath, launchMode string, l *Logger, um *UIManager) {
+func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword, companyPassword, savePath, launchMode, extraArgs string, l *Logger, um *UIManager) {
 	var saveFile string
 	var finalIpPort string
 
@@ -236,14 +237,14 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 
 	var cmd *exec.Cmd
 	var args []string
-	
+
 	if finalIpPort != "" {
 		nArg := finalIpPort
 		if companyNumber != "" {
 			nArg = fmt.Sprintf("%s#%s", finalIpPort, companyNumber)
 		}
 		args = append(args, "-n", nArg)
-		
+
 		if serverPassword != "" {
 			args = append(args, "-p", serverPassword)
 		}
@@ -251,9 +252,15 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 			args = append(args, "-P", companyPassword)
 		}
 	}
-	
+
 	if saveFile != "" {
 		args = append(args, "-g", saveFile)
+	}
+
+	// Append extra arguments from the Advanced tab
+	if extraArgs != "" {
+		fields := strings.Fields(extraArgs)
+		args = append(args, fields...)
 	}
 
 	cmd = exec.Command(exePath, args...)

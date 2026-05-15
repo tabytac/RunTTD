@@ -353,7 +353,6 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		func() fyne.CanvasObject {
 			btn := newRightClickButton(nil, nil)
 
-
 			nameLabel := widget.NewLabel("")
 			versionLabel := widget.NewLabel("")
 			versionLabel.Alignment = fyne.TextAlignTrailing
@@ -640,7 +639,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		versionEntry.SetText("latest")
 	}
 	versionEntry.PlaceHolder = "latest or 0.71.2"
-	
+
 	// Auto-detect mode for legacy configs or unsaved changes
 	if profile.LaunchMode == "" {
 		if profile.ServerIpPort != "" {
@@ -698,6 +697,11 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	savePathEntry := widget.NewEntry()
 	savePathEntry.SetText(profile.SavePath)
 	savePathEntry.SetPlaceHolder("Path to file or folder")
+
+	extraArgsEntry := widget.NewMultiLineEntry()
+	extraArgsEntry.SetText(profile.ExtraArgs)
+	extraArgsEntry.SetPlaceHolder("Example: -mainmenu -v null")
+	extraArgsEntry.Wrapping = fyne.TextWrapWord
 
 	browseFileBtn := widget.NewButtonWithIcon("Browse File...", theme.FileIcon(), func() {
 		go func() {
@@ -798,7 +802,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	)
 	normalOption := widget.NewLabel("The game will launch normally to the main menu.")
 
-	optionsStack := container.NewStack(normalOption, fileOption, folderOption, multiplayerOption, pathManualOption)
+	optionsStack := container.NewVBox(normalOption, fileOption, folderOption, multiplayerOption, pathManualOption)
 
 	updateVisibility := func(mode string) {
 		normalOption.Hide()
@@ -827,8 +831,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
 	var editDialog dialog.Dialog
-
-
 
 	validate := func() (bool, string) {
 		if strings.TrimSpace(nameEntry.Text) == "" {
@@ -880,6 +882,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		profile.ServerCompanyNumber = strings.TrimSpace(companyNumEntry.Text)
 		profile.ServerCompanyPassword = companyPassEntry.Text
 		profile.LaunchMode = modeMap[modeSelect.Selected]
+		profile.ExtraArgs = strings.TrimSpace(extraArgsEntry.Text)
 		if profile.LaunchMode == "" {
 			profile.SavePath = ""
 			profile.ServerIpPort = ""
@@ -906,20 +909,26 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 	}
 
-	generalTab := container.NewTabItemWithIcon("General", theme.SettingsIcon(), container.NewVBox(
+	generalTab := container.NewTabItemWithIcon("General Options", theme.InfoIcon(), container.NewVBox(
 		sectionTitle("Identity"),
 		widget.NewLabel("Name"), nameEntry,
 		widget.NewLabel("JGRPP Version"), versionEntry,
 	))
 
-	launchTab := container.NewTabItemWithIcon("Launch Mode", theme.MediaPlayIcon(), container.NewVBox(
+	launchTab := container.NewTabItemWithIcon("Launch Options", theme.MediaPlayIcon(), container.NewVBox(
 		sectionTitle("How should the game start?"),
 		modeSelect,
 		widget.NewSeparator(),
 		optionsStack,
 	))
 
-	tabs := container.NewAppTabs(generalTab, launchTab)
+	advancedTab := container.NewTabItemWithIcon("Advanced Options", theme.SettingsIcon(), container.NewVBox(
+		sectionTitle("Custom Command Line Arguments"),
+		widget.NewLabel("Specify extra flags to pass to the OpenTTD executable:"),
+		extraArgsEntry,
+	))
+
+	tabs := container.NewAppTabs(generalTab, launchTab, advancedTab)
 	tabs.SetTabLocation(container.TabLocationTop)
 
 	form := container.NewVBox(
@@ -1107,8 +1116,6 @@ func (um *UIManager) showSettingsView() {
 		}
 	})
 
-
-
 	content := container.NewBorder(
 		nil,
 		container.NewPadded(saveBtn),
@@ -1233,7 +1240,7 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 			if updateStatus != nil {
 				updateStatus("Starting OpenTTD from latest local installation")
 			}
-			ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, um.logger, um)
+			ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, profile.ExtraArgs, um.logger, um)
 			if updateStatus != nil {
 				updateStatus("Launch command sent")
 			}
@@ -1280,7 +1287,7 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 	if updateStatus != nil {
 		updateStatus("Starting OpenTTD")
 	}
-	ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, um.logger, um)
+	ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, profile.ExtraArgs, um.logger, um)
 	if updateStatus != nil {
 		updateStatus("Launch command sent")
 	}
