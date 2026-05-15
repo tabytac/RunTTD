@@ -621,23 +621,23 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	nameEntry.SetText(profile.Name)
 	nameEntry.SetPlaceHolder("Profile name")
 
-	versionEntry := widget.NewSelect(um.cachedVersions, nil)
+	versionEntry := widget.NewSelectEntry(um.cachedVersions)
 	if len(um.cachedVersions) == 0 {
-		versionEntry.Options = []string{"latest"}
+		versionEntry.SetOptions([]string{"latest"})
 		go func() {
 			versions, err := FetchAvailableVersions(um.config)
 			if err == nil && len(versions) > 0 {
 				um.cachedVersions = versions
-				versionEntry.Options = versions
+				versionEntry.SetOptions(versions)
 				versionEntry.Refresh()
 			}
 		}()
 	}
 	// Fallback if the profile's version isn't in the options yet
 	if profile.Version != "" {
-		versionEntry.SetSelected(profile.Version)
+		versionEntry.SetText(profile.Version)
 	} else {
-		versionEntry.SetSelected("latest")
+		versionEntry.SetText("latest")
 	}
 	versionEntry.PlaceHolder = "latest or 0.71.2"
 	
@@ -774,11 +774,16 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	// Visibility Containers
 	fileOption := container.NewVBox(
 		widget.NewLabel("Select a specific save or scenario file to load:"),
-		container.NewBorder(nil, nil, nil, browseFileBtn, savePathEntry),
+		browseFileBtn,
 	)
 	folderOption := container.NewVBox(
 		widget.NewLabel("Select a folder; the launcher will auto-load the most recent save inside it:"),
-		container.NewBorder(nil, nil, nil, browseFolderBtn, savePathEntry),
+		browseFolderBtn,
+	)
+	pathManualOption := container.NewVBox(
+		widget.NewSeparator(),
+		widget.NewLabel("Path (Relative or Absolute)"),
+		savePathEntry,
 	)
 	multiplayerOption := container.NewVBox(
 		sectionTitle("Server Connection"),
@@ -793,20 +798,23 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	)
 	normalOption := widget.NewLabel("The game will launch normally to the main menu.")
 
-	optionsStack := container.NewStack(normalOption, fileOption, folderOption, multiplayerOption)
+	optionsStack := container.NewStack(normalOption, fileOption, folderOption, multiplayerOption, pathManualOption)
 
 	updateVisibility := func(mode string) {
 		normalOption.Hide()
 		fileOption.Hide()
 		folderOption.Hide()
 		multiplayerOption.Hide()
+		pathManualOption.Hide()
 		switch mode {
 		case "Normal":
 			normalOption.Show()
 		case "Single File":
 			fileOption.Show()
+			pathManualOption.Show()
 		case "Auto-Latest Folder":
 			folderOption.Show()
+			pathManualOption.Show()
 		case "Multiplayer":
 			multiplayerOption.Show()
 		}
@@ -827,7 +835,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			return false, "Profile name is required."
 		}
 
-		if strings.TrimSpace(versionEntry.Selected) == "" {
+		if strings.TrimSpace(versionEntry.Text) == "" {
 			return false, "JGRPP version is required or use latest."
 		}
 
@@ -862,9 +870,9 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 
 		profile.Name = strings.TrimSpace(nameEntry.Text)
-		profile.Version = strings.TrimSpace(versionEntry.Selected)
-		if profile.Version == "" {
-			profile.Version = "latest"
+		profile.Version = strings.TrimSpace(versionEntry.Text)
+		if profile.Version == "latest" {
+			profile.Version = ""
 		}
 		profile.SavePath = strings.TrimSpace(savePathEntry.Text)
 		profile.ServerIpPort = strings.TrimSpace(ipPortEntry.Text)
@@ -911,13 +919,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		optionsStack,
 	))
 
-	filesTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), container.NewVBox(
-		sectionTitle("Advanced Folder Management"),
-		widget.NewLabel("You can manually specify an override here, though the Launch Mode tab is usually preferred."),
-		savePathEntry, // Still allow manual editing if needed
-	))
-
-	tabs := container.NewAppTabs(generalTab, launchTab, filesTab)
+	tabs := container.NewAppTabs(generalTab, launchTab)
 	tabs.SetTabLocation(container.TabLocationTop)
 
 	form := container.NewVBox(
