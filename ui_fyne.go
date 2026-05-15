@@ -227,7 +227,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	selectedConfig := widget.NewLabel("")
 	selectedConfig.Wrapping = fyne.TextWrapWord
 
-	selectionHint := widget.NewLabel("Tip: select a profile, then press Enter, double-click the row, or use Run Selected.")
+	selectionHint := widget.NewLabel("Tip: Press 1-9 to quick launch, or select a profile and press Enter / double-click.")
 	selectionHint.Wrapping = fyne.TextWrapWord
 
 	var profileList *fyneadvancedlist.List
@@ -498,16 +498,23 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	mainContent := container.NewBorder(header, nil, nil, nil, split)
 	um.window.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
-		if um.window.Content() != mainContent {
+		if um.window.Content() != mainContent || um.window.Canvas().Overlays().Top() != nil {
 			return
 		}
 
-		if event.Name != fyne.KeyReturn && event.Name != fyne.KeyEnter {
-			return
+		// Handle number keys 1-9 for quick launch
+		if len(event.Name) == 1 && event.Name[0] >= '1' && event.Name[0] <= '9' {
+			idx := int(event.Name[0] - '1')
+			if idx < len(um.config.Profiles) {
+				um.showLogView(idx)
+				return
+			}
 		}
 
-		if selectedIdx >= 0 {
-			runSelected()
+		if event.Name == fyne.KeyReturn || event.Name == fyne.KeyEnter {
+			if selectedIdx >= 0 {
+				runSelected()
+			}
 		}
 	})
 
