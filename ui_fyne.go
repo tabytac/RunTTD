@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dweymouth/fyne-advanced-list"
 	"os"
 	"path/filepath"
 )
@@ -229,7 +230,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	selectionHint := widget.NewLabel("Tip: select a profile, then press Enter, double-click the row, or use Run Selected.")
 	selectionHint.Wrapping = fyne.TextWrapWord
 
-	var profileList *widget.List
+	var profileList *fyneadvancedlist.List
 	var refreshDetails func()
 
 	runSelected := func() {
@@ -294,7 +295,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		))
 	}
 
-	profileList = widget.NewList(
+	profileList = fyneadvancedlist.NewList(
 		func() int { return len(um.config.Profiles) },
 		func() fyne.CanvasObject {
 			btn := widget.NewButton("", nil)
@@ -303,8 +304,13 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			nameLabel := widget.NewLabel("")
 			versionLabel := widget.NewLabel("")
 			versionLabel.Alignment = fyne.TextAlignTrailing
+			versionLabel.TextStyle = fyne.TextStyle{Italic: true}
 
-			layout := container.NewBorder(nil, nil, nameLabel, versionLabel, nil)
+			dragIcon := widget.NewIcon(theme.MenuIcon())
+
+			// Border layout: name on left, [version + drag] on right
+			rightSide := container.NewHBox(versionLabel, dragIcon)
+			layout := container.NewBorder(nil, nil, nameLabel, rightSide, nil)
 			return container.NewStack(btn, container.NewPadded(layout))
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
@@ -313,7 +319,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			padding := stack.Objects[1].(*fyne.Container)
 			layout := padding.Objects[0].(*fyne.Container)
 			nameLabel := layout.Objects[0].(*widget.Label)
-			versionLabel := layout.Objects[1].(*widget.Label)
+			rightSide := layout.Objects[1].(*fyne.Container)
+			versionLabel := rightSide.Objects[0].(*widget.Label)
 
 			if i < len(um.config.Profiles) {
 				profile := um.config.Profiles[i]
@@ -330,6 +337,39 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			}
 		},
 	)
+
+	profileList.EnableDragging = true
+	profileList.OnDragEnd = func(draggedFrom, draggedTo widget.ListItemID) {
+		from := int(draggedFrom)
+		to := int(draggedTo)
+
+		if from == to {
+			return
+		}
+
+		// Adjust 'to' because advanced-list provides the insertion index
+		if to > from {
+			to--
+		}
+
+		profile := um.config.Profiles[from]
+		// Remove from old position
+		um.config.Profiles = append(um.config.Profiles[:from], um.config.Profiles[from+1:]...)
+		// Insert into new position
+		newProfiles := make([]Profile, 0, len(um.config.Profiles)+1)
+		newProfiles = append(newProfiles, um.config.Profiles[:to]...)
+		newProfiles = append(newProfiles, profile)
+		newProfiles = append(newProfiles, um.config.Profiles[to:]...)
+		um.config.Profiles = newProfiles
+
+		_ = SaveConfig(um.configPath, um.config)
+		profileList.Refresh()
+
+		// Re-select if the dragged profile was selected
+		if from == selectedIdx {
+			profileList.Select(widget.ListItemID(to))
+		}
+	}
 	profileList.OnSelected = func(id widget.ListItemID) {
 		selectProfile(int(id))
 	}
