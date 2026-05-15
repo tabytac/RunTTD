@@ -14,10 +14,11 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dweymouth/fyne-advanced-list"
+	"github.com/ncruces/zenity"
 	"os"
 	"path/filepath"
 )
@@ -47,7 +48,7 @@ func NewUIManager(config *Config, configPath string) *UIManager {
 	fyneApp.SetIcon(appIcon)
 	window := fyneApp.NewWindow("JGRPP Launcher")
 	window.SetIcon(appIcon)
-	window.Resize(fyne.NewSize(960, 720))
+	window.Resize(fyne.NewSize(1024, 768))
 
 	um := &UIManager{
 		app:              fyneApp,
@@ -97,18 +98,16 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	parentDirEntry.SetPlaceHolder("Folder where OpenTTD game files / executables will be automatically installed")
 
 	parentDirBtn := widget.NewButton("Browse...", func() {
-		dlg := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
-			if err != nil || lu == nil {
-				return
+		go func() {
+			directory, err := zenity.SelectFile(
+				zenity.Directory(),
+				zenity.Title("Select Parent Directory"),
+				zenity.Attach(um.window),
+			)
+			if err == nil && directory != "" {
+				parentDirEntry.SetText(directory)
 			}
-			parentDirEntry.SetText(lu.Path())
-		}, um.window)
-		if startURI := storage.NewFileURI(parentDirEntry.Text); startURI != nil {
-			if lister, err := storage.ListerForURI(startURI); err == nil {
-				dlg.SetLocation(lister)
-			}
-		}
-		dlg.Show()
+		}()
 	})
 
 	docsBasePathEntry := widget.NewEntry()
@@ -119,18 +118,16 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	validationIcon.Hide()
 
 	docsBasePathBtn := widget.NewButton("Browse...", func() {
-		dlg := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
-			if err != nil || lu == nil {
-				return
+		go func() {
+			directory, err := zenity.SelectFile(
+				zenity.Directory(),
+				zenity.Title("Select Docs Base Path"),
+				zenity.Attach(um.window),
+			)
+			if err == nil && directory != "" {
+				docsBasePathEntry.SetText(directory)
 			}
-			docsBasePathEntry.SetText(lu.Path())
-		}, um.window)
-		if startURI := storage.NewFileURI(docsBasePathEntry.Text); startURI != nil {
-			if lister, err := storage.ListerForURI(startURI); err == nil {
-				dlg.SetLocation(lister)
-			}
-		}
-		dlg.Show()
+		}()
 	})
 
 	statusLabel := widget.NewLabel("")
@@ -456,15 +453,17 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	)
 	leftPanel := newThemedBox(colorNameSidebar, leftPanelObj)
 
-	detailsSection := container.NewVBox(
-		widget.NewCard("Profile Details", "", container.NewVBox(selectedLabel, selectedSummary, widget.NewSeparator(), selectedConfig)),
-		widget.NewSeparator(),
-		widget.NewCard("Actions", "", actionsContent),
-		container.NewPadded(selectionHint),
-	)
+	detailsContent := container.NewVScroll(container.NewPadded(
+		container.NewVBox(selectedLabel, selectedSummary, widget.NewSeparator(), selectedConfig),
+	))
 
-	rightPanelObj := container.NewVScroll(detailsSection)
-	rightPanelObj.SetMinSize(fyne.NewSize(320, 0))
+	rightPanelObj := container.NewBorder(
+		nil,
+		container.NewVBox(widget.NewSeparator(), actionsContent, container.NewPadded(selectionHint)),
+		nil,
+		nil,
+		detailsContent,
+	)
 	rightPanel := newThemedBox(colorNameContent, rightPanelObj)
 
 	if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
@@ -473,7 +472,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	refreshDetails()
 
 	split := container.NewHSplit(leftPanel, rightPanel)
-	split.Offset = 0.42
+	split.Offset = 0.35
 
 	headerLabel := widget.NewLabel("JGRPP Launcher")
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
@@ -582,38 +581,25 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	}
 	versionEntry.PlaceHolder = "latest or 0.71.2"
 
-	savePathEntry := widget.NewEntry()
-	savePathEntry.SetText(profile.SavePath)
-	savePathEntry.SetPlaceHolder("Optional save folder")
+	// Launch Mode selection
+	modeMap := map[string]string{
+		"Normal":             "",
+		"Single File":        "file",
+		"Auto-Latest Folder": "folder",
+		"Multiplayer":        "multiplayer",
+	}
+	revModeMap := map[string]string{
+		"":            "Normal",
+		"file":        "Single File",
+		"folder":      "Auto-Latest Folder",
+		"multiplayer": "Multiplayer",
+	}
 
-	savePathBtn := widget.NewButton("Browse...", func() {
-		dlg := dialog.NewFileOpen(func(rc fyne.URIReadCloser, err error) {
-			if err != nil || rc == nil {
-				return
-			}
-			path := rc.URI().Path()
-			// attempt to make relative to DocsBasePath
-			if um.config.DocsBasePath != "" {
-				rel, err := filepath.Rel(um.config.DocsBasePath, path)
-				if err == nil && !strings.HasPrefix(rel, "..") {
-					path = rel
-				}
-			}
-			savePathEntry.SetText(path)
-		}, um.window)
+	modeSelect := widget.NewRadioGroup([]string{"Normal", "Single File", "Auto-Latest Folder", "Multiplayer"}, nil)
+	modeSelect.Horizontal = true
+	modeSelect.SetSelected(revModeMap[profile.LaunchMode])
 
-		startPath := um.config.DocsBasePath
-		if startPath != "" {
-			startPath = filepath.Join(startPath, "save")
-			if startURI := storage.NewFileURI(startPath); startURI != nil {
-				if lister, err := storage.ListerForURI(startURI); err == nil {
-					dlg.SetLocation(lister)
-				}
-			}
-		}
-		dlg.Show()
-	})
-
+	// Multiplayer fields
 	ipPortEntry := widget.NewEntry()
 	ipPortEntry.SetText(profile.ServerIpPort)
 	ipPortEntry.SetPlaceHolder("host:port")
@@ -632,9 +618,52 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	companyPassEntry.Password = true
 	companyPassEntry.SetPlaceHolder("Optional company password")
 
-	statusLabel := widget.NewLabel("")
-	statusLabel.Wrapping = fyne.TextWrapWord
-	var editDialog dialog.Dialog
+	// Save fields
+	savePathEntry := widget.NewEntry()
+	savePathEntry.SetText(profile.SavePath)
+	savePathEntry.SetPlaceHolder("Path to file or folder")
+
+	browseFileBtn := widget.NewButtonWithIcon("Browse File...", theme.FileIcon(), func() {
+		go func() {
+			file, err := zenity.SelectFile(
+				zenity.Title("Select Save or Scenario"),
+				zenity.FileFilters{
+					{Name: "OpenTTD Saves/Scenarios", Patterns: []string{"*.sav", "*.scn"}},
+				},
+				zenity.Attach(um.window),
+			)
+			if err == nil && file != "" {
+				path := file
+				if um.config.DocsBasePath != "" {
+					rel, err := filepath.Rel(um.config.DocsBasePath, path)
+					if err == nil && !strings.HasPrefix(rel, "..") {
+						path = rel
+					}
+				}
+				savePathEntry.SetText(path)
+			}
+		}()
+	})
+
+	browseFolderBtn := widget.NewButtonWithIcon("Browse Folder...", theme.FolderIcon(), func() {
+		go func() {
+			directory, err := zenity.SelectFile(
+				zenity.Directory(),
+				zenity.Title("Select Save Folder"),
+				zenity.Attach(um.window),
+			)
+			if err == nil && directory != "" {
+				path := directory
+				if um.config.DocsBasePath != "" {
+					rel, err := filepath.Rel(um.config.DocsBasePath, path)
+					if err == nil && !strings.HasPrefix(rel, "..") {
+						path = rel
+					}
+				}
+				savePathEntry.SetText(path)
+			}
+		}()
+	})
 
 	sectionTitle := func(title string) *widget.Label {
 		label := widget.NewLabel(title)
@@ -642,12 +671,56 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		return label
 	}
 
-	makeSection := func(title string, objects ...fyne.CanvasObject) fyne.CanvasObject {
-		content := make([]fyne.CanvasObject, 0, len(objects)+1)
-		content = append(content, sectionTitle(title))
-		content = append(content, objects...)
-		return container.NewVBox(content...)
+	// Visibility Containers
+	fileOption := container.NewVBox(
+		widget.NewLabel("Select a specific save or scenario file to load:"),
+		container.NewBorder(nil, nil, nil, browseFileBtn, savePathEntry),
+	)
+	folderOption := container.NewVBox(
+		widget.NewLabel("Select a folder; the launcher will auto-load the most recent save inside it:"),
+		container.NewBorder(nil, nil, nil, browseFolderBtn, savePathEntry),
+	)
+	multiplayerOption := container.NewVBox(
+		sectionTitle("Server Connection"),
+		widget.NewLabel("Server IP:Port"), ipPortEntry,
+		widget.NewLabel("Server Password"), serverPassEntry,
+		widget.NewSeparator(),
+		sectionTitle("Company Details"),
+		container.NewGridWithColumns(2,
+			container.NewVBox(widget.NewLabel("Company Number"), companyNumEntry),
+			container.NewVBox(widget.NewLabel("Company Password"), companyPassEntry),
+		),
+	)
+	normalOption := widget.NewLabel("The game will launch normally to the main menu.")
+
+	optionsStack := container.NewStack(normalOption, fileOption, folderOption, multiplayerOption)
+
+	updateVisibility := func(mode string) {
+		normalOption.Hide()
+		fileOption.Hide()
+		folderOption.Hide()
+		multiplayerOption.Hide()
+		switch mode {
+		case "Normal":
+			normalOption.Show()
+		case "Single File":
+			fileOption.Show()
+		case "Auto-Latest Folder":
+			folderOption.Show()
+		case "Multiplayer":
+			multiplayerOption.Show()
+		}
+		optionsStack.Refresh()
 	}
+
+	modeSelect.OnChanged = updateVisibility
+	updateVisibility(modeSelect.Selected)
+
+	statusLabel := widget.NewLabel("")
+	statusLabel.Wrapping = fyne.TextWrapWord
+	var editDialog dialog.Dialog
+
+
 
 	validate := func() (bool, string) {
 		if strings.TrimSpace(nameEntry.Text) == "" {
@@ -698,6 +771,15 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		profile.ServerPassword = serverPassEntry.Text
 		profile.ServerCompanyNumber = strings.TrimSpace(companyNumEntry.Text)
 		profile.ServerCompanyPassword = companyPassEntry.Text
+		profile.LaunchMode = modeMap[modeSelect.Selected]
+		if profile.LaunchMode == "" {
+			profile.SavePath = ""
+			profile.ServerIpPort = ""
+		} else if profile.LaunchMode == "multiplayer" {
+			profile.SavePath = ""
+		} else {
+			profile.ServerIpPort = ""
+		}
 
 		savedIdx := profileIdx
 		if isNew {
@@ -716,36 +798,31 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 	}
 
-	identitySection := makeSection(
-		"Identity and Version",
+	generalTab := container.NewTabItemWithIcon("General", theme.SettingsIcon(), container.NewVBox(
+		sectionTitle("Identity"),
 		widget.NewLabel("Name"), nameEntry,
 		widget.NewLabel("JGRPP Version"), versionEntry,
-	)
-	storageSection := makeSection(
-		"Save Path",
-		widget.NewLabel("Save folder"),
-		container.NewBorder(nil, nil, nil, savePathBtn, savePathEntry),
-	)
-	multiplayerSection := makeSection(
-		"Multiplayer",
-		widget.NewLabel("Server IP:Port"), ipPortEntry,
-		widget.NewLabel("Server Password"), serverPassEntry,
-		widget.NewLabel("Company Number"), companyNumEntry,
-		widget.NewLabel("Company Password"), companyPassEntry,
-	)
+	))
 
-	leftColumn := container.NewVBox(
-		identitySection,
-		storageSection,
-	)
-	rightColumn := container.NewVBox(
-		multiplayerSection,
-	)
-	columns := container.NewGridWithColumns(2, leftColumn, rightColumn)
+	launchTab := container.NewTabItemWithIcon("Launch Mode", theme.MediaPlayIcon(), container.NewVBox(
+		sectionTitle("How should the game start?"),
+		modeSelect,
+		widget.NewSeparator(),
+		optionsStack,
+	))
+
+	filesTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), container.NewVBox(
+		sectionTitle("Advanced Folder Management"),
+		widget.NewLabel("You can manually specify an override here, though the Launch Mode tab is usually preferred."),
+		savePathEntry, // Still allow manual editing if needed
+	))
+
+	tabs := container.NewAppTabs(generalTab, launchTab, filesTab)
+	tabs.SetTabLocation(container.TabLocationTop)
 
 	form := container.NewVBox(
 		statusLabel,
-		columns,
+		tabs,
 	)
 
 	saveBtn = widget.NewButton("Save", func() { saveProfile(false) })
@@ -757,9 +834,8 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		editDialog.Hide()
 	})
 
-	toolbar := container.NewHBox(cancelBtn, saveBtn, saveAndRunBtn)
-	top := widget.NewCard("Edit Profile", "Sectioned profile setup", form)
-	content := container.NewBorder(nil, toolbar, nil, nil, top)
+	toolbar := container.NewHBox(cancelBtn, layout.NewSpacer(), saveBtn, saveAndRunBtn)
+	content := container.NewBorder(nil, container.NewPadded(toolbar), nil, nil, container.NewPadded(form))
 
 	updateState := func() {
 		ok, _ := validate()
@@ -783,7 +859,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	updateState()
 
 	editDialog = dialog.NewCustom("Edit Profile", "Close", content, um.window)
-	editDialog.Resize(fyne.NewSize(750, 450))
+	editDialog.Resize(fyne.NewSize(850, 600))
 	editDialog.Show()
 }
 
@@ -803,18 +879,16 @@ func (um *UIManager) showSettingsView() {
 	parentDirEntry.SetPlaceHolder("Folder where game files / executables will be automatically installed")
 
 	parentDirBtn := widget.NewButton("Browse...", func() {
-		dlg := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
-			if err != nil || lu == nil {
-				return
+		go func() {
+			directory, err := zenity.SelectFile(
+				zenity.Directory(),
+				zenity.Title("Select Parent Directory"),
+				zenity.Attach(um.window),
+			)
+			if err == nil && directory != "" {
+				parentDirEntry.SetText(directory)
 			}
-			parentDirEntry.SetText(lu.Path())
-		}, um.window)
-		if startURI := storage.NewFileURI(parentDirEntry.Text); startURI != nil {
-			if lister, err := storage.ListerForURI(startURI); err == nil {
-				dlg.SetLocation(lister)
-			}
-		}
-		dlg.Show()
+		}()
 	})
 
 	docsBasePathEntry := newScrollForwardingEntry(forwardScroll)
@@ -825,18 +899,16 @@ func (um *UIManager) showSettingsView() {
 	validationIcon.Hide()
 
 	docsBasePathBtn := widget.NewButton("Browse...", func() {
-		dlg := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
-			if err != nil || lu == nil {
-				return
+		go func() {
+			directory, err := zenity.SelectFile(
+				zenity.Directory(),
+				zenity.Title("Select Docs Base Path"),
+				zenity.Attach(um.window),
+			)
+			if err == nil && directory != "" {
+				docsBasePathEntry.SetText(directory)
 			}
-			docsBasePathEntry.SetText(lu.Path())
-		}, um.window)
-		if startURI := storage.NewFileURI(docsBasePathEntry.Text); startURI != nil {
-			if lister, err := storage.ListerForURI(startURI); err == nil {
-				dlg.SetLocation(lister)
-			}
-		}
-		dlg.Show()
+		}()
 	})
 
 	updateDocsValidation := func(path string) {
@@ -877,34 +949,27 @@ func (um *UIManager) showSettingsView() {
 		return label
 	}
 
-	basicSection := widget.NewCard(
-		"Basic",
-		"Commonly changed settings",
-		container.NewVBox(
-			sectionTitle("Install Paths"),
-			widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
-			container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
-			widget.NewLabel("Docs Base Path (Saves & config)"),
-			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
-		),
-	)
+	pathsTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), container.NewVBox(
+		sectionTitle("Install Locations"),
+		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
+		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
+		widget.NewLabel("Docs Base Path (Saves & config)"),
+		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
+	))
 
-	behaviorSection := widget.NewCard(
-		"Behavior",
-		"Launch behavior and UI logging",
-		container.NewVBox(autoCloseCheck, verboseCheck),
-	)
+	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), container.NewVBox(
+		sectionTitle("Launch Behavior"),
+		container.NewGridWithColumns(2, autoCloseCheck, verboseCheck),
+	))
 
-	advancedSection := widget.NewCard(
-		"Advanced",
-		"Only change if you know what you are doing",
-		container.NewVBox(
-			widget.NewLabel("GitHub API URL"), githubApiUrlEntry,
-			widget.NewLabel("OS Type"), osTypeEntry,
-		),
-	)
+	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), container.NewVBox(
+		sectionTitle("System Settings"),
+		widget.NewLabel("GitHub API URL"), githubApiUrlEntry,
+		widget.NewLabel("OS Type (detected automatically)"), osTypeEntry,
+	))
 
-	form := container.NewVBox(basicSection, behaviorSection, advancedSection)
+	tabs := container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
+	tabs.SetTabLocation(container.TabLocationTop)
 
 	var settingsDialog dialog.Dialog
 
@@ -922,18 +987,18 @@ func (um *UIManager) showSettingsView() {
 		}
 	})
 
-	scrollBox = container.NewVScroll(form)
+
 
 	content := container.NewBorder(
 		nil,
-		saveBtn,
+		container.NewPadded(saveBtn),
 		nil,
 		nil,
-		scrollBox,
+		container.NewPadded(tabs),
 	)
 
 	settingsDialog = dialog.NewCustom("Settings", "Close", content, um.window)
-	settingsDialog.Resize(fyne.NewSize(750, 450))
+	settingsDialog.Resize(fyne.NewSize(850, 600))
 	settingsDialog.Show()
 }
 
@@ -1048,7 +1113,7 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 			if updateStatus != nil {
 				updateStatus("Starting OpenTTD from latest local installation")
 			}
-			ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, um.logger, um)
+			ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, um.logger, um)
 			if updateStatus != nil {
 				updateStatus("Launch command sent")
 			}
@@ -1095,7 +1160,7 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 	if updateStatus != nil {
 		updateStatus("Starting OpenTTD")
 	}
-	ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, um.logger, um)
+	ExecuteOpenTTD(versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, um.logger, um)
 	if updateStatus != nil {
 		updateStatus("Launch command sent")
 	}
