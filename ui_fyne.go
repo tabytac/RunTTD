@@ -14,8 +14,11 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"os"
+	"path/filepath"
 )
 
 //go:embed app_icon.png
@@ -32,6 +35,7 @@ type UIManager struct {
 	lastListSelectID    int
 	lastListSelectAt    time.Time
 	themeOverride       *fyne.ThemeVariant
+	cachedVersions      []string
 }
 
 // NewUIManager creates a new UI manager
@@ -91,9 +95,42 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	parentDirEntry.SetText(um.config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where OpenTTD game files / executables will be automatically installed")
 
+	parentDirBtn := widget.NewButton("Browse...", func() {
+		dlg := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
+			if err != nil || lu == nil {
+				return
+			}
+			parentDirEntry.SetText(lu.Path())
+		}, um.window)
+		if startURI := storage.NewFileURI(parentDirEntry.Text); startURI != nil {
+			if lister, err := storage.ListerForURI(startURI); err == nil {
+				dlg.SetLocation(lister)
+			}
+		}
+		dlg.Show()
+	})
+
 	docsBasePathEntry := widget.NewEntry()
 	docsBasePathEntry.SetText(um.config.DocsBasePath)
 	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
+
+	validationIcon := widget.NewIcon(theme.CancelIcon())
+	validationIcon.Hide()
+
+	docsBasePathBtn := widget.NewButton("Browse...", func() {
+		dlg := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
+			if err != nil || lu == nil {
+				return
+			}
+			docsBasePathEntry.SetText(lu.Path())
+		}, um.window)
+		if startURI := storage.NewFileURI(docsBasePathEntry.Text); startURI != nil {
+			if lister, err := storage.ListerForURI(startURI); err == nil {
+				dlg.SetLocation(lister)
+			}
+		}
+		dlg.Show()
+	})
 
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
@@ -127,6 +164,21 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	})
 	continueBtn.Importance = widget.HighImportance
 
+	updateDocsValidation := func(path string) {
+		if path == "" {
+			validationIcon.Hide()
+			return
+		}
+		cfgPath := filepath.Join(path, "openttd.cfg")
+		if _, err := os.Stat(cfgPath); err == nil {
+			validationIcon.SetResource(theme.ConfirmIcon())
+			validationIcon.Show()
+		} else {
+			validationIcon.SetResource(theme.CancelIcon())
+			validationIcon.Show()
+		}
+	}
+
 	updateState := func(_ string) {
 		if strings.TrimSpace(parentDirEntry.Text) != "" && strings.TrimSpace(docsBasePathEntry.Text) != "" {
 			continueBtn.Enable()
@@ -135,15 +187,21 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		}
 	}
 	parentDirEntry.OnChanged = updateState
-	docsBasePathEntry.OnChanged = updateState
+	docsBasePathEntry.OnChanged = func(s string) {
+		updateState(s)
+		updateDocsValidation(s)
+	}
+	updateDocsValidation(docsBasePathEntry.Text)
 
 	form := container.NewVBox(
 		welcomeLabel,
 		widget.NewSeparator(),
 		instructions,
 		widget.NewSeparator(),
-		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"), parentDirEntry,
-		widget.NewLabel("Docs Base Path (Saves & config)"), docsBasePathEntry,
+		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
+		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
+		widget.NewLabel("Docs Base Path (Saves & config)"),
+		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
 		statusLabel,
 	)
 
@@ -445,13 +503,57 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	nameEntry.SetText(profile.Name)
 	nameEntry.SetPlaceHolder("Profile name")
 
-	versionEntry := widget.NewEntry()
-	versionEntry.SetText(profile.Version)
-	versionEntry.SetPlaceHolder("latest or 0.71.2")
+	versionEntry := widget.NewSelect(um.cachedVersions, nil)
+	if len(um.cachedVersions) == 0 {
+		versionEntry.Options = []string{"latest"}
+		go func() {
+			versions, err := FetchAvailableVersions(um.config)
+			if err == nil && len(versions) > 0 {
+				um.cachedVersions = versions
+				versionEntry.Options = versions
+				versionEntry.Refresh()
+			}
+		}()
+	}
+	// Fallback if the profile's version isn't in the options yet
+	if profile.Version != "" {
+		versionEntry.SetSelected(profile.Version)
+	} else {
+		versionEntry.SetSelected("latest")
+	}
+	versionEntry.PlaceHolder = "latest or 0.71.2"
 
 	savePathEntry := widget.NewEntry()
 	savePathEntry.SetText(profile.SavePath)
 	savePathEntry.SetPlaceHolder("Optional save folder")
+
+	savePathBtn := widget.NewButton("Browse...", func() {
+		dlg := dialog.NewFileOpen(func(rc fyne.URIReadCloser, err error) {
+			if err != nil || rc == nil {
+				return
+			}
+			path := rc.URI().Path()
+			// attempt to make relative to DocsBasePath
+			if um.config.DocsBasePath != "" {
+				rel, err := filepath.Rel(um.config.DocsBasePath, path)
+				if err == nil && !strings.HasPrefix(rel, "..") {
+					path = rel
+				}
+			}
+			savePathEntry.SetText(path)
+		}, um.window)
+		
+		startPath := um.config.DocsBasePath
+		if startPath != "" {
+			startPath = filepath.Join(startPath, "save")
+			if startURI := storage.NewFileURI(startPath); startURI != nil {
+				if lister, err := storage.ListerForURI(startURI); err == nil {
+					dlg.SetLocation(lister)
+				}
+			}
+		}
+		dlg.Show()
+	})
 
 	ipPortEntry := widget.NewEntry()
 	ipPortEntry.SetText(profile.ServerIpPort)
@@ -493,7 +595,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			return false, "Profile name is required."
 		}
 
-		if strings.TrimSpace(versionEntry.Text) == "" {
+		if strings.TrimSpace(versionEntry.Selected) == "" {
 			return false, "JGRPP version is required or use latest."
 		}
 
@@ -528,7 +630,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 
 		profile.Name = strings.TrimSpace(nameEntry.Text)
-		profile.Version = strings.TrimSpace(versionEntry.Text)
+		profile.Version = strings.TrimSpace(versionEntry.Selected)
 		if profile.Version == "" {
 			profile.Version = "latest"
 		}
@@ -562,7 +664,8 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	)
 	storageSection := makeSection(
 		"Save Path",
-		widget.NewLabel("Save folder"), savePathEntry,
+		widget.NewLabel("Save folder"),
+		container.NewBorder(nil, nil, nil, savePathBtn, savePathEntry),
 	)
 	multiplayerSection := makeSection(
 		"Multiplayer",
@@ -610,10 +713,13 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 		setStatus()
 	}
-	for _, entry := range []*widget.Entry{nameEntry, versionEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry} {
+	for _, entry := range []*widget.Entry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry} {
 		entry.OnChanged = func(string) {
 			updateState()
 		}
+	}
+	versionEntry.OnChanged = func(string) {
+		updateState()
 	}
 	updateState()
 
@@ -637,9 +743,62 @@ func (um *UIManager) showSettingsView() {
 	parentDirEntry.SetText(um.config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where game files / executables will be automatically installed")
 
+	parentDirBtn := widget.NewButton("Browse...", func() {
+		dlg := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
+			if err != nil || lu == nil {
+				return
+			}
+			parentDirEntry.SetText(lu.Path())
+		}, um.window)
+		if startURI := storage.NewFileURI(parentDirEntry.Text); startURI != nil {
+			if lister, err := storage.ListerForURI(startURI); err == nil {
+				dlg.SetLocation(lister)
+			}
+		}
+		dlg.Show()
+	})
+
 	docsBasePathEntry := newScrollForwardingEntry(forwardScroll)
 	docsBasePathEntry.SetText(um.config.DocsBasePath)
 	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
+
+	validationIcon := widget.NewIcon(theme.CancelIcon())
+	validationIcon.Hide()
+
+	docsBasePathBtn := widget.NewButton("Browse...", func() {
+		dlg := dialog.NewFolderOpen(func(lu fyne.ListableURI, err error) {
+			if err != nil || lu == nil {
+				return
+			}
+			docsBasePathEntry.SetText(lu.Path())
+		}, um.window)
+		if startURI := storage.NewFileURI(docsBasePathEntry.Text); startURI != nil {
+			if lister, err := storage.ListerForURI(startURI); err == nil {
+				dlg.SetLocation(lister)
+			}
+		}
+		dlg.Show()
+	})
+
+	updateDocsValidation := func(path string) {
+		if path == "" {
+			validationIcon.Hide()
+			return
+		}
+		cfgPath := filepath.Join(path, "openttd.cfg")
+		if _, err := os.Stat(cfgPath); err == nil {
+			validationIcon.SetResource(theme.ConfirmIcon())
+			validationIcon.Show()
+		} else {
+			validationIcon.SetResource(theme.CancelIcon())
+			validationIcon.Show()
+		}
+	}
+
+	docsBasePathEntry.OnChanged = func(s string) {
+		updateDocsValidation(s)
+	}
+	updateDocsValidation(docsBasePathEntry.Text)
 
 	githubApiUrlEntry := newScrollForwardingEntry(forwardScroll)
 	githubApiUrlEntry.SetText(um.config.GithubApiUrl)
@@ -664,8 +823,10 @@ func (um *UIManager) showSettingsView() {
 		"Commonly changed settings",
 		container.NewVBox(
 			sectionTitle("Install Paths"),
-			widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"), parentDirEntry,
-			widget.NewLabel("Docs Base Path (Saves & config)"), docsBasePathEntry,
+			widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
+			container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
+			widget.NewLabel("Docs Base Path (Saves & config)"),
+			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
 		),
 	)
 

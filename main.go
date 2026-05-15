@@ -511,6 +511,34 @@ func CheckForNewVersion(config *Config) string {
 	return ""
 }
 
+func FetchAvailableVersions(config *Config) ([]string, error) {
+	repoURL := fmt.Sprintf("%s/releases?per_page=20", config.GithubApiUrl)
+
+	resp, err := http.Get(repoURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get release info: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get release info: HTTP %d", resp.StatusCode)
+	}
+
+	var releases []ReleaseInfo
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return nil, fmt.Errorf("failed to parse release info: %w", err)
+	}
+
+	versions := []string{"latest"}
+	for _, release := range releases {
+		tag := release.TagName
+		if strings.HasPrefix(tag, "jgrpp-") {
+			tag = strings.TrimPrefix(tag, "jgrpp-")
+		}
+		versions = append(versions, tag)
+	}
+	return versions, nil
+}
+
 func main() {
 	configPath := resolveConfigPath()
 	logPath := resolveLogPath(configPath)
