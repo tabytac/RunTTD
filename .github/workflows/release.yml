@@ -1,0 +1,129 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build for ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+            goos: linux
+            goarch: amd64
+            output_name: jgrpp-launcher-linux
+          - os: windows-latest
+            platform: windows-amd64
+            goos: windows
+            goarch: amd64
+            output_name: JGRPP_Launcher.exe
+          - os: macos-latest
+            platform: macos-universal
+            goos: darwin
+            output_name: jgrpp-launcher-macos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+
+      - name: Build binary (Windows)
+        if: runner.os == 'Windows'
+        run: go build -ldflags "-H=windowsgui" -o "dist/${{ matrix.output_name }}" .
+
+      - name: Build binary (Linux)
+        if: matrix.platform == 'linux-amd64'
+        env:
+          CGO_ENABLED: 1
+        run: |
+          mkdir -p dist
+          go build -o dist/${{ matrix.output_name }} .
+
+      - name: Build binary (macOS Universal)
+        if: matrix.platform == 'macos-universal'
+        env:
+          CGO_ENABLED: 1
+        run: |
+          mkdir -p dist
+          # Build for Intel
+          GOARCH=amd64 go build -o dist/launcher-amd64 .
+          # Build for Apple Silicon
+          GOARCH=arm64 go build -o dist/launcher-arm64 .
+          # Merge into universal binary
+          lipo -create -output "dist/${{ matrix.output_name }}" dist/launcher-amd64 dist/launcher-arm64
+          # Cleanup temporary binaries
+          rm dist/launcher-amd64 dist/launcher-arm64
+
+      - name: Prepare release artifact
+        shell: bash
+        run: |
+          cd dist
+          TAG=${{ github.ref_name }}
+          PLATFORM=${{ matrix.platform }}
+          BINARY=${{ matrix.output_name }}
+          
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            RELEASE_FILE="JGRPP_Launcher_${TAG}_${PLATFORM}.exe"
+            cp "$BINARY" "$RELEASE_FILE"
+          elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            RELEASE_FILE="JGRPP_Launcher_${TAG}_${PLATFORM}.tar.gz"
+            tar -czf "$RELEASE_FILE" "$BINARY"
+          else
+            # macOS Universal
+            RELEASE_FILE="JGRPP_Launcher_${TAG}_${PLATFORM}.zip"
+            zip "$RELEASE_FILE" "$BINARY"
+          fi
+          
+          echo "RELEASE_FILE=$RELEASE_FILE" >> $GITHUB_ENV
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/${{ env.RELEASE_FILE }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/**/*
