@@ -183,11 +183,14 @@ func FindVersionFolderEngine(parentDir, version, engine string, cfg *Config) str
 		name := entry.Name()
 		switch engine {
 		case "jgrpp":
-			if strings.Contains(name, fmt.Sprintf("jgrpp-%s", version)) || strings.Contains(name, version) && strings.Contains(strings.ToLower(name), "jgrpp") {
+			// Match jgrpp-<version> or folders containing both version and 'jgrpp'
+			if strings.Contains(name, fmt.Sprintf("jgrpp-%s", version)) || (strings.Contains(name, version) && strings.Contains(strings.ToLower(name), "jgrpp")) {
 				return filepath.Join(parentDir, name)
 			}
 		case "vanilla", "vanilla-nightly":
-			if strings.Contains(strings.ToLower(name), "openttd") && strings.Contains(name, version) {
+			// Accept names that contain 'openttd' and the version, or names that explicitly include the version
+			lname := strings.ToLower(name)
+			if (strings.Contains(lname, "openttd") && strings.Contains(name, version)) || strings.HasPrefix(name, version) || strings.Contains(name, "-"+version+"-") || strings.HasSuffix(name, "-"+version) {
 				return filepath.Join(parentDir, name)
 			}
 		default:
