@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -547,6 +547,30 @@ func DownloadAndExtractVersionForEngine(version, engine string, cfg *Config) boo
 		file.Close()
 		resp.Body.Close()
 
+		// Attempt optional checksum verification from the mirror
+		checksumCandidates := []string{url + ".sha256", url + ".sha256sum"}
+		verified := false
+		for _, churl := range checksumCandidates {
+			ok, verr := verifyRemoteSHA256(archivePath, churl)
+			if verr != nil {
+				// not found or other error; try next
+				continue
+			}
+			if ok {
+				verified = true
+				break
+			} else {
+				// checksum present but mismatch — discard this file
+				os.Remove(archivePath)
+				verified = false
+				break
+			}
+		}
+		if !verified {
+			// proceed even when no checksum available; if a checksum was present and failed,
+			// the archive has been removed above and we continue to next candidate.
+		}
+
 		if err := extractArchive(archivePath, downloadDir); err != nil {
 			os.Remove(archivePath)
 			continue
@@ -730,6 +754,42 @@ func CheckForNewVersionForEngine(engine string, cfg *Config) string {
 	}
 }
 
+// parseCDNVersionsFromHTML extracts openttd-<tag> tokens from an HTML index.
+// It prefers anchor hrefs but falls back to a broader regexp if needed.
+func parseCDNVersionsFromHTML(html string) []string {
+	set := map[string]bool{}
+	versions := []string{}
+
+	hrefRe := regexp.MustCompile(`href="([^"]*openttd-([0-9A-Za-z._-]+)[^"]*)"`)
+	matches := hrefRe.FindAllStringSubmatch(html, -1)
+	for _, m := range matches {
+		if len(m) < 3 {
+			continue
+		}
+		tag := m[2]
+		if !set[tag] {
+			set[tag] = true
+			versions = append(versions, tag)
+		}
+	}
+
+	if len(versions) == 0 {
+		broadRe := regexp.MustCompile(`openttd-([0-9A-Za-z._-]+)`)
+		matches := broadRe.FindAllStringSubmatch(html, -1)
+		for _, m := range matches {
+			if len(m) < 2 {
+				continue
+			}
+			tag := m[1]
+			if !set[tag] {
+				set[tag] = true
+				versions = append(versions, tag)
+			}
+		}
+	}
+	return versions
+}
+
 func FetchAvailableVersions(config *Config) ([]string, error) {
 	repoURL := fmt.Sprintf("%s/releases?per_page=20", config.GithubApiUrl)
 
@@ -781,21 +841,7 @@ func FetchAvailableVersionsForEngine(engine string, cfg *Config) ([]string, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to read vanilla index: %w", err)
 		}
-		text := string(body)
-		// naive parsing: find occurrences of "openttd-<tag>"
-		re := regexp.MustCompile(`openttd-([0-9A-Za-z._-]+)`) 
-		matches := re.FindAllStringSubmatch(text, -1)
-		set := map[string]bool{}
-		versions := []string{}
-		for _, m := range matches {
-			if len(m) < 2 { continue }
-			tag := m[1]
-			if !set[tag] {
-				set[tag] = true
-				versions = append(versions, tag)
-			}
-		}
-		// prefer putting "latest" first
+		versions := parseCDNVersionsFromHTML(string(body))
 		out := []string{"latest"}
 		out = append(out, versions...)
 		return out, nil
