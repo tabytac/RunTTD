@@ -760,13 +760,14 @@ func parseCDNVersionsFromHTML(html string) []string {
 	set := map[string]bool{}
 	versions := []string{}
 
-	hrefRe := regexp.MustCompile(`href="([^"]*openttd-([0-9A-Za-z._-]+)[^"]*)"`)
+	// Capture the version token after openttd- stopping at the next hyphen or dot
+	hrefRe := regexp.MustCompile(`href="[^"]*openttd-([0-9A-Za-z._]+)(?:[-\.][^"]*)?"`)
 	matches := hrefRe.FindAllStringSubmatch(html, -1)
 	for _, m := range matches {
-		if len(m) < 3 {
+		if len(m) < 2 {
 			continue
 		}
-		tag := m[2]
+		tag := m[1]
 		if !set[tag] {
 			set[tag] = true
 			versions = append(versions, tag)
