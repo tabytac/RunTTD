@@ -38,6 +38,7 @@ type Profile struct {
 	LaunchMode            string `json:"launchMode"` // "", "file", "folder", "multiplayer"
 	AutoLatestFilter      string `json:"autoLatestFilter"`
 	ExtraArgs             string `json:"extraArgs"`
+	Engine                string `json:"engine"` // "jgrpp", "vanilla", "vanilla-nightly"
 }
 
 type Config struct {
@@ -52,6 +53,9 @@ type Config struct {
 	LogToFile        bool   `json:"logToFile"`
 	ThemeVariant     string `json:"themeVariant"`
 	AccentPreset     int    `json:"accentPreset"`
+	DefaultEngine    string `json:"defaultEngine"`
+	VanillaMirror    string `json:"vanillaMirror"`
+	NightlyMirror    string `json:"nightlyMirror"`
 
 	Profiles []Profile `json:"profiles"`
 }
@@ -77,6 +81,19 @@ func LoadConfig(filename string) (*Config, error) {
 
 	if len(config.Profiles) == 0 {
 		config.Profiles = []Profile{{Name: "Default", Version: "latest"}}
+	}
+
+	// Migration: ensure legacy configs have an engine set (default to jgrpp)
+	migrated := false
+	for i := range config.Profiles {
+		if strings.TrimSpace(config.Profiles[i].Engine) == "" {
+			config.Profiles[i].Engine = "jgrpp"
+			migrated = true
+		}
+	}
+	if migrated {
+		// best-effort persist migration back to disk
+		_ = SaveConfig(filename, &config)
 	}
 
 	return &config, nil
@@ -635,6 +652,9 @@ func main() {
 				AutoCloseOnStart: false,
 				Verbose:          false,
 				LogToFile:        false,
+				DefaultEngine:    "",
+				VanillaMirror:    "https://cdn.openttd.org/openttd-releases/",
+				NightlyMirror:    "https://cdn.openttd.org/openttd-nightlies/",
 				Profiles:         []Profile{{Name: "Default", Version: "latest"}},
 			}
 

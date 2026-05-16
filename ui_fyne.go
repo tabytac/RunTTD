@@ -67,7 +67,7 @@ func NewUIManager(config *Config, configPath string) *UIManager {
 	// theme is set later
 	appIcon := fyne.NewStaticResource("app_icon.png", appIconBytes)
 	fyneApp.SetIcon(appIcon)
-	window := fyneApp.NewWindow("JGRPP Launcher")
+	window := fyneApp.NewWindow("OpenTTD Launcher")
 	window.SetIcon(appIcon)
 	window.Resize(fyne.NewSize(1024, 768))
 
@@ -133,7 +133,7 @@ func (um *UIManager) Show() {
 
 // makeOnboardingView creates the first-run configuration screen
 func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
-	welcomeLabel := widget.NewLabel("Welcome to JGRPP Launcher!")
+	welcomeLabel := widget.NewLabel("Welcome to OpenTTD Launcher!")
 	welcomeLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: false}
 	welcomeLabel.Alignment = fyne.TextAlignCenter
 
@@ -829,6 +829,29 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	}
 	versionEntry.PlaceHolder = "latest or 0.71.2"
 
+	// Engine selection (OpenTTD Stable, OpenTTD Nightly, JGRPP)
+	engineOptions := []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
+	engineMap := map[string]string{
+		"OpenTTD (Stable)": "vanilla",
+		"OpenTTD (Nightly)": "vanilla-nightly",
+		"JGRPP":              "jgrpp",
+	}
+	revEngineMap := map[string]string{
+		"vanilla":         "OpenTTD (Stable)",
+		"vanilla-nightly": "OpenTTD (Nightly)",
+		"jgrpp":           "JGRPP",
+	}
+	engineSelect := widget.NewSelect(engineOptions, func(s string) {
+		// when engine changes, clear version so user refreshes or re-fetches
+		versionEntry.SetText("")
+		versionEntry.SetOptions([]string{"latest"})
+		versionEntry.Refresh()
+	})
+	// preselect if profile has an engine
+	if sel, ok := revEngineMap[profile.Engine]; ok {
+		engineSelect.SetSelected(sel)
+	}
+
 	// Auto-detect mode for legacy configs or unsaved changes
 	if profile.LaunchMode == "" {
 		if profile.ServerIpPort != "" {
@@ -1099,8 +1122,12 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			}
 		}
 
+		if strings.TrimSpace(engineSelect.Selected) == "" {
+			return false, "Engine selection is required."
+		}
+
 		if strings.TrimSpace(versionEntry.Text) == "" {
-			return false, "JGRPP version is required or use latest."
+			return false, "Version is required or use latest."
 		}
 
 		if strings.TrimSpace(ipPortEntry.Text) != "" && !strings.Contains(ipPortEntry.Text, ":") {
@@ -1159,6 +1186,13 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		profile.LaunchMode = modeMap[modeSelect.Selected()]
 		profile.AutoLatestFilter = revFilterLabelMap[autoLatestFilterRadio.Selected()]
 
+		// Persist engine choice
+		if en := engineSelect.Selected; en != "" {
+			if mapped, ok := engineMap[en]; ok {
+				profile.Engine = mapped
+			}
+		}
+
 		profile.ExtraArgs = strings.TrimSpace(extraArgsEntry.Text)
 		switch profile.LaunchMode {
 		case "":
@@ -1190,7 +1224,8 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	generalTab := container.NewTabItemWithIcon("General Options", theme.InfoIcon(), container.NewVBox(
 		sectionTitle("Identity"),
 		widget.NewLabel("Name"), nameEntry,
-		widget.NewLabel("JGRPP Version"), versionEntry,
+		widget.NewLabel("Engine"), engineSelect,
+		widget.NewLabel("Version"), versionEntry,
 	))
 
 	launchTab := container.NewTabItemWithIcon("Launch Options", theme.MediaPlayIcon(), container.NewVBox(
@@ -1231,13 +1266,13 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	})
 
 	toolbar := container.NewCenter(container.NewHBox(
-		container.NewPadded(cancelBtn), 
-		container.NewPadded(saveBtn), 
+		container.NewPadded(cancelBtn),
+		container.NewPadded(saveBtn),
 		container.NewPadded(saveAndRunBtn),
 	))
 
 
-	
+
 	title := widget.NewLabel("Edit Profile")
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -1267,6 +1302,9 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 	}
 	versionEntry.OnChanged = func(string) {
+		updateState()
+	}
+	engineSelect.OnChanged = func(string) {
 		updateState()
 	}
 	updateState()
@@ -1369,6 +1407,23 @@ func (um *UIManager) showSettingsView() {
 	osTypeEntry := newScrollForwardingEntry(forwardScroll)
 	osTypeEntry.SetText(um.config.OSType)
 
+	vanillaMirrorEntry := newScrollForwardingEntry(forwardScroll)
+	vanillaMirrorEntry.SetText(um.config.VanillaMirror)
+	vanillaMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-releases/")
+
+	nightlyMirrorEntry := newScrollForwardingEntry(forwardScroll)
+	nightlyMirrorEntry.SetText(um.config.NightlyMirror)
+	nightlyMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-nightlies/")
+
+	// Default engine selector: empty means no default
+	defaultEngineOptions := []string{"(none)", "OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
+	defaultEngineMap := map[string]string{"(none)": "", "OpenTTD (Stable)": "vanilla", "OpenTTD (Nightly)": "vanilla-nightly", "JGRPP": "jgrpp"}
+	revDefaultEngineMap := map[string]string{"": "(none)", "vanilla": "OpenTTD (Stable)", "vanilla-nightly": "OpenTTD (Nightly)", "jgrpp": "JGRPP"}
+	defaultEngineSelect := widget.NewSelect(defaultEngineOptions, func(string) {})
+	if label, ok := revDefaultEngineMap[um.config.DefaultEngine]; ok {
+		defaultEngineSelect.SetSelected(label)
+	}
+
 	autoCloseCheck := widget.NewCheck("Auto-close launcher when OpenTTD starts", nil)
 	autoCloseCheck.SetChecked(um.config.AutoCloseOnStart)
 
@@ -1401,6 +1456,10 @@ func (um *UIManager) showSettingsView() {
 		sectionTitle("System Settings"),
 		widget.NewLabel("GitHub API URL"), githubApiUrlEntry,
 		widget.NewLabel("OS Type (detected automatically)"), osTypeEntry,
+		widget.NewSeparator(),
+		widget.NewLabel("Vanilla CDN (stable) base URL"), vanillaMirrorEntry,
+		widget.NewLabel("Vanilla Nightly CDN base URL"), nightlyMirrorEntry,
+		widget.NewLabel("Default Engine (new profiles)"), defaultEngineSelect,
 	))
 
 	tabs := container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
@@ -1424,6 +1483,14 @@ func (um *UIManager) showSettingsView() {
 		}
 	})
 
+			um.config.VanillaMirror = vanillaMirrorEntry.Text
+			um.config.NightlyMirror = nightlyMirrorEntry.Text
+			// map selected label back to engine id
+			if sel := defaultEngineSelect.Selected; sel != "" {
+				if mapped, ok := defaultEngineMap[sel]; ok {
+					um.config.DefaultEngine = mapped
+				}
+			}
 	cancelBtn := widget.NewButton("Cancel", func() {
 		settingsDialog.Hide()
 	})
@@ -1432,7 +1499,7 @@ func (um *UIManager) showSettingsView() {
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	toolbar := container.NewCenter(container.NewHBox(
-		container.NewPadded(cancelBtn), 
+		container.NewPadded(cancelBtn),
 		container.NewPadded(saveBtn),
 	))
 
