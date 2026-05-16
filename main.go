@@ -523,60 +523,67 @@ func DownloadAndExtractVersionForEngine(version, engine string, cfg *Config) boo
 		return false
 	}
 
+	baseTrimmed := strings.TrimRight(base, "/")
 	for _, name := range candidates {
-		url := strings.TrimRight(base, "/") + "/" + name
-		resp, err := http.Get(url)
-		if err != nil || resp.StatusCode != 200 {
-			if resp != nil {
-				resp.Body.Close()
-			}
-			continue
+		// Stable/nightly mirrors commonly store assets under a version subfolder
+		urlCandidates := []string{
+			baseTrimmed + "/" + version + "/" + name,
+			baseTrimmed + "/" + name,
 		}
-		archivePath := filepath.Join(downloadDir, name)
-		file, err := os.Create(archivePath)
-		if err != nil {
-			resp.Body.Close()
-			continue
-		}
-		if _, err = io.Copy(file, resp.Body); err != nil {
-			file.Close()
-			resp.Body.Close()
-			os.Remove(archivePath)
-			continue
-		}
-		file.Close()
-		resp.Body.Close()
 
-		// Attempt optional checksum verification from the mirror
-		checksumCandidates := []string{url + ".sha256", url + ".sha256sum"}
-		verified := false
-		for _, churl := range checksumCandidates {
-			ok, verr := verifyRemoteSHA256(archivePath, churl)
-			if verr != nil {
-				// not found or other error; try next
+		for _, url := range urlCandidates {
+			resp, err := http.Get(url)
+			if err != nil || resp.StatusCode != 200 {
+				if resp != nil {
+					resp.Body.Close()
+				}
 				continue
 			}
-			if ok {
-				verified = true
-				break
-			} else {
-				// checksum present but mismatch — discard this file
+
+			archivePath := filepath.Join(downloadDir, name)
+			file, err := os.Create(archivePath)
+			if err != nil {
+				resp.Body.Close()
+				continue
+			}
+			if _, err = io.Copy(file, resp.Body); err != nil {
+				file.Close()
+				resp.Body.Close()
 				os.Remove(archivePath)
-				verified = false
+				continue
+			}
+			file.Close()
+			resp.Body.Close()
+
+			// Attempt optional checksum verification from the mirror
+			checksumCandidates := []string{url + ".sha256", url + ".sha256sum"}
+			checksumPresent := false
+			checksumOK := false
+			for _, churl := range checksumCandidates {
+				ok, verr := verifyRemoteSHA256(archivePath, churl)
+				if verr != nil {
+					// not found or other error; try next checksum URL
+					continue
+				}
+				checksumPresent = true
+				if ok {
+					checksumOK = true
+				}
 				break
 			}
-		}
-		if !verified {
-			// proceed even when no checksum available; if a checksum was present and failed,
-			// the archive has been removed above and we continue to next candidate.
-		}
+			if checksumPresent && !checksumOK {
+				// checksum exists but failed; discard and try the next URL candidate
+				os.Remove(archivePath)
+				continue
+			}
 
-		if err := extractArchive(archivePath, downloadDir); err != nil {
+			if err := extractArchive(archivePath, downloadDir); err != nil {
+				os.Remove(archivePath)
+				continue
+			}
 			os.Remove(archivePath)
-			continue
+			return true
 		}
-		os.Remove(archivePath)
-		return true
 	}
 
 	return false
