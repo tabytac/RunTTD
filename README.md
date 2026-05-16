@@ -4,19 +4,22 @@ A desktop launcher for [JGR's Patchpack](https://github.com/JGRennison/OpenTTD-p
 
 ## Features
 
-- **Profile system** — Set up separate profiles for different saves, servers, or JGRPP versions. Switch between them with a click.
-- **Auto-download** — If the JGRPP version you need isn't installed locally, the launcher grabs it from GitHub and extracts it for you.
+- **Profile system** — Set up separate profiles for different saves, servers, or JGRPP versions. Easily switch between them.
+- **Auto-download** — If the JGRPP version isn't installed locally, the launcher downloads it from GitHub.
 - **Version pinning** — Lock a profile to a specific JGRPP version (e.g. `0.71.1`) or just use `latest` to always grab the newest release.
+- **Custom Themes** — Select from 8 color presets and toggle between Light and Dark modes.
 - **Multiplayer quick-join** — Store server address, passwords, and company info per profile. The launcher passes the right arguments so you connect directly.
 - **Save path loading** — Point a profile at a save folder and the launcher will load the most recent `.sav` file automatically.
+
 
 ## Getting Started
 
 1. **Download** the latest release for your OS from the [Releases](../../releases) page.
 2. **Run the executable** — no installer needed.
    - **Windows**: `JGRPP_Launcher.exe`
-   - **Linux**: `JGRPP_Launcher_linux` (you may need to `chmod +x` it first)
-   - **macOS**: `JGRPP_Launcher_macos` (right-click → Open to bypass Gatekeeper on first run)
+   - **Linux**: `.tar.gz` archive containing the binary.
+   - **macOS**: `.zip` archive containing a Universal Binary (supports both Intel and Apple Silicon).
+
 3. On first launch you'll be asked to confirm your install paths. The defaults are usually fine.
 4. Create a profile, pick a version, and hit **Run Selected**.
 
@@ -43,8 +46,9 @@ Click **Settings** at the bottom of the profile list to configure:
 - **Parent Directory** — Where JGRPP versions are downloaded and extracted to.
 - **Docs Base Path** — Your OpenTTD documents folder (where `save/` and `openttd.cfg` live).
 - **Auto-close** — Optionally close the launcher once OpenTTD starts.
+- **Theming** — Pick from 8 preset accent colors and toggle Light/Dark mode.
 - **Verbose logging** — Show detailed log messages during launch.
-- **GitHub API URL** / **OS Type** — Advanced settings, they're auto-detected..
+- **GitHub API URL** / **Detected OS** — Advanced settings, they're auto-detected.
 
 ## Config File
 
