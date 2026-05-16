@@ -289,17 +289,39 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	var profileList *fyneadvancedlist.List
 	var refreshDetails func()
 
-	var runBtn, editBtn, duplicateBtn, deleteBtn *widget.Button
+	var runBtn, editBtn, duplicateBtn, deleteBtn, seeLogsBtn *widget.Button
+	var updateButtonStates func()
 
 	runSelected := func() {
 		if selectedIdx >= 0 && selectedIdx < len(um.config.Profiles) {
-			um.showLogView(selectedIdx)
+			if um.config.AutoOpenLog {
+				um.showLogView(selectedIdx)
+			} else {
+				// Background launch with feedback
+				oldText := runBtn.Text
+				runBtn.SetText("Launching...")
+				runBtn.Disable()
+
+				profile := um.config.Profiles[selectedIdx]
+				um.showToast(fmt.Sprintf("Starting %s...", profile.Name))
+
+				go func() {
+					um.launchProfile(profile, nil, func() {
+						// On Error: Auto-open logs
+						um.showLogView(selectedIdx)
+					})
+
+					time.Sleep(1500 * time.Millisecond)
+					runBtn.SetText(oldText)
+					updateButtonStates() // Re-enables if still selected
+				}()
+			}
 			return
 		}
 		dialog.ShowError(fmt.Errorf("select a profile to launch"), um.window)
 	}
 
-	updateButtonStates := func() {
+	updateButtonStates = func() {
 		if selectedIdx >= 0 {
 			runBtn.Enable()
 			editBtn.Enable()
@@ -310,6 +332,14 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			editBtn.Disable()
 			duplicateBtn.Disable()
 			deleteBtn.Disable()
+		}
+
+		if seeLogsBtn != nil {
+			if len(um.logger.GetAll()) > 0 {
+				seeLogsBtn.Enable()
+			} else {
+				seeLogsBtn.Disable()
+			}
 		}
 	}
 
@@ -535,9 +565,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		refreshDetails()
 	}
 
-	newBtn := widget.NewButton("New Profile", func() {
+	newBtn := widget.NewButtonWithIcon("New Profile", theme.ContentAddIcon(), func() {
 		um.showProfileEditor(-1)
 	})
+	newBtn.Importance = widget.HighImportance
+
 	editBtn = widget.NewButton("Edit", func() {
 		if selectedIdx >= 0 {
 			um.showProfileEditor(selectedIdx)
@@ -588,6 +620,10 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	runBtn = widget.NewButton("Run Selected", runSelected)
 	runBtn.Importance = widget.HighImportance
 
+	seeLogsBtn = widget.NewButton("See Logs", func() {
+		um.showLogView(-1)
+	})
+
 	settingsBtn := widget.NewButton("Settings", func() {
 		um.showSettingsView()
 	})
@@ -599,7 +635,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	leftPanelObj := container.NewBorder(
 		widget.NewCard("Profiles", "", widget.NewLabel("Select a profile to edit or run it.")),
-		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, settingsBtn)),
+		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, widget.NewSeparator(), seeLogsBtn, settingsBtn)),
+
+
 		nil,
 		nil,
 		profileList,
@@ -653,6 +691,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				um.showLogView(idx)
 				return
 			}
+
 		}
 
 		if event.Name == fyne.KeyReturn || event.Name == fyne.KeyEnter {
@@ -1099,7 +1138,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		if profile.Version == "latest" {
 			profile.Version = ""
 		}
-		
+
 		rawSavePath := strings.TrimSpace(savePathEntry.Text)
 		// Strip leading "save/" or "save\" (case-insensitive)
 		for {
@@ -1315,6 +1354,9 @@ func (um *UIManager) showSettingsView() {
 	autoCloseCheck := widget.NewCheck("Auto-close launcher when OpenTTD starts", nil)
 	autoCloseCheck.SetChecked(um.config.AutoCloseOnStart)
 
+	autoOpenLogCheck := widget.NewCheck("Auto-open log panel when game starts", nil)
+	autoOpenLogCheck.SetChecked(um.config.AutoOpenLog)
+
 	verboseCheck := widget.NewCheck("Verbose logging (show all messages)", nil)
 	verboseCheck.SetChecked(um.config.Verbose)
 
@@ -1334,7 +1376,7 @@ func (um *UIManager) showSettingsView() {
 
 	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), container.NewVBox(
 		sectionTitle("Launch Behavior"),
-		container.NewGridWithColumns(2, autoCloseCheck, verboseCheck),
+		container.NewGridWithColumns(1, autoCloseCheck, autoOpenLogCheck, verboseCheck),
 	))
 
 	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), container.NewVBox(
@@ -1354,6 +1396,7 @@ func (um *UIManager) showSettingsView() {
 		um.config.GithubApiUrl = githubApiUrlEntry.Text
 		um.config.OSType = osTypeEntry.Text
 		um.config.AutoCloseOnStart = autoCloseCheck.Checked
+		um.config.AutoOpenLog = autoOpenLogCheck.Checked
 		um.config.Verbose = verboseCheck.Checked
 
 		_ = SaveConfig(um.configPath, um.config)
@@ -1377,14 +1420,28 @@ func (um *UIManager) showSettingsView() {
 
 // showLogView shows a window with logs while launching a profile
 func (um *UIManager) showLogView(profileIdx int) {
-	profile := um.config.Profiles[profileIdx]
+	var profile Profile
+	isLaunch := profileIdx >= 0
+	if isLaunch {
+		profile = um.config.Profiles[profileIdx]
+	}
+
 	statusBinding := binding.NewString()
 	_ = statusBinding.Set("Preparing launch")
 
-	summary := widget.NewLabel(fmt.Sprintf("Profile: %s\nVersion: %s\nSave path: %s\nServer: %s", profile.Name, valueOrDefault(profile.Version, "latest"), valueOrDefault(profile.SavePath, "(none)"), valueOrDefault(profile.ServerIpPort, "(none)")))
-	summary.Wrapping = fyne.TextWrapWord
+	var summaryObj fyne.CanvasObject
+	if isLaunch {
+		summary := widget.NewLabel(fmt.Sprintf("Profile: %s\nVersion: %s\nSave path: %s\nServer: %s", profile.Name, valueOrDefault(profile.Version, "latest"), valueOrDefault(profile.SavePath, "(none)"), valueOrDefault(profile.ServerIpPort, "(none)")))
+		summary.Wrapping = fyne.TextWrapWord
+		summaryObj = widget.NewCard("Launching", "Current launch context", summary)
+	}
+
 	statusLabel := widget.NewLabelWithData(statusBinding)
 	statusLabel.Wrapping = fyne.TextWrapWord
+	statusObj := widget.NewCard("Status", "Background operations", statusLabel)
+	if !isLaunch {
+		statusObj.Hide()
+	}
 
 	// Create log text widget using data binding (thread-safe)
 	logBinding := binding.NewString()
@@ -1416,6 +1473,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 			case <-done:
 				return
 			}
+
 		}
 	}()
 
@@ -1428,18 +1486,25 @@ func (um *UIManager) showLogView(profileIdx int) {
 		um.window.SetContent(um.makeMainView())
 	})
 
-	refreshBtn := widget.NewButton("Refresh Logs", func() {
-		updateLogDisplay()
+	copyBtn := widget.NewButtonWithIcon("Copy to Clipboard", theme.ContentCopyIcon(), func() {
+		logs := um.logger.GetAll()
+		text := ""
+		for _, line := range logs {
+			text += line + "\n"
+		}
+		um.window.Clipboard().SetContent(text)
+		um.showToast("Logs copied to clipboard!")
 	})
 
-	top := container.NewVBox(
-		widget.NewCard("Launching", "Current launch context", summary),
-		widget.NewCard("Status", "Background operations", statusLabel),
-	)
+	top := container.NewVBox()
+	if isLaunch {
+		top.Add(summaryObj)
+		top.Add(statusObj)
+	}
 
 	content := container.NewBorder(
 		top,
-		container.NewHBox(closeBtn, refreshBtn),
+		container.NewHBox(closeBtn, copyBtn),
 		nil,
 		nil,
 		logBox,
@@ -1447,14 +1512,37 @@ func (um *UIManager) showLogView(profileIdx int) {
 
 	um.window.SetContent(content)
 
-	// Launch OpenTTD in background
-	go um.launchProfile(profile, func(status string) {
-		_ = statusBinding.Set(status)
-	})
+	// Launch OpenTTD in background if requested
+	if isLaunch {
+		go um.launchProfile(profile, func(status string) {
+			_ = statusBinding.Set(status)
+		}, nil)
+	}
+}
+
+// showToast shows a temporary notification at the bottom of the window
+func (um *UIManager) showToast(message string) {
+	toast := widget.NewLabel(message)
+	toast.Alignment = fyne.TextAlignCenter
+
+	// Use a popup or a dedicated area? For simplicity, we'll use a short-lived dialog-like overlay
+	// but Fyne's dialogs are modal. We'll use a custom PopUp.
+	content := container.NewPadded(toast)
+	pop := widget.NewPopUp(content, um.window.Canvas())
+
+	// Position at bottom center
+	size := um.window.Content().Size()
+	pop.ShowAtPosition(fyne.NewPos(size.Width/2-100, size.Height-60))
+
+	go func() {
+		time.Sleep(3 * time.Second)
+		pop.Hide()
+	}()
 }
 
 // launchProfile launches OpenTTD with the specified profile
-func (um *UIManager) launchProfile(profile Profile, updateStatus func(status string)) {
+func (um *UIManager) launchProfile(profile Profile, updateStatus func(status string), onError func()) {
+
 	if updateStatus != nil {
 		updateStatus("Resolving profile and version")
 	}
@@ -1480,7 +1568,11 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 					updateStatus("Failed: no local JGRPP installation found")
 				}
 				um.LogImportant("No local JGRPP installation found.")
+				if onError != nil {
+					onError()
+				}
 				return
+
 			}
 			um.LogVerbose(fmt.Sprintf("Using latest local version folder: %s", versionFolder))
 			if updateStatus != nil {

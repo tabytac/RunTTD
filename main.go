@@ -46,6 +46,7 @@ type Config struct {
 	DocsBasePath     string `json:"docsBasePath"`
 	GithubApiUrl     string `json:"githubApiUrl"`
 	OSType           string `json:"osType"`
+	AutoOpenLog      bool   `json:"autoOpenLog"`
 	AutoCloseOnStart bool   `json:"autoCloseOnStart"`
 	Verbose          bool   `json:"verbose"`
 	LogToFile        bool   `json:"logToFile"`
