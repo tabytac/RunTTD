@@ -18,7 +18,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	fyneadvancedlist "github.com/dweymouth/fyne-advanced-list"
@@ -1085,7 +1084,8 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
-	var editDialog dialog.Dialog
+	var editDialog *widget.PopUp
+
 
 	validate := func() (bool, string) {
 		name := strings.TrimSpace(nameEntry.Text)
@@ -1230,8 +1230,25 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		editDialog.Hide()
 	})
 
-	toolbar := container.NewHBox(cancelBtn, layout.NewSpacer(), saveBtn, saveAndRunBtn)
-	content := container.NewBorder(nil, container.NewPadded(toolbar), nil, nil, container.NewPadded(form))
+	toolbar := container.NewCenter(container.NewHBox(
+		container.NewPadded(cancelBtn), 
+		container.NewPadded(saveBtn), 
+		container.NewPadded(saveAndRunBtn),
+	))
+
+
+	
+	title := widget.NewLabel("Edit Profile")
+	title.TextStyle = fyne.TextStyle{Bold: true}
+
+	content := container.NewBorder(
+		container.NewPadded(title),
+		container.NewPadded(toolbar),
+		nil,
+		nil,
+		container.NewPadded(form),
+	)
+
 
 	updateState := func() {
 		ok, _ := validate()
@@ -1254,9 +1271,10 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	}
 	updateState()
 
-	editDialog = dialog.NewCustom("Edit Profile", "Close", content, um.window)
+	editDialog = widget.NewModalPopUp(content, um.window.Canvas())
 	editDialog.Resize(fyne.NewSize(850, 600))
 	editDialog.Show()
+
 }
 
 // showSettingsView shows a dialog to edit global settings
@@ -1388,7 +1406,8 @@ func (um *UIManager) showSettingsView() {
 	tabs := container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
 	tabs.SetTabLocation(container.TabLocationTop)
 
-	var settingsDialog dialog.Dialog
+	var settingsDialog *widget.PopUp
+
 
 	saveBtn := widget.NewButton("Save Settings", func() {
 		um.config.ParentDir = parentDirEntry.Text
@@ -1405,17 +1424,32 @@ func (um *UIManager) showSettingsView() {
 		}
 	})
 
-	content := container.NewBorder(
-		nil,
+	cancelBtn := widget.NewButton("Cancel", func() {
+		settingsDialog.Hide()
+	})
+
+	title := widget.NewLabel("Global Settings")
+	title.TextStyle = fyne.TextStyle{Bold: true}
+
+	toolbar := container.NewCenter(container.NewHBox(
+		container.NewPadded(cancelBtn), 
 		container.NewPadded(saveBtn),
+	))
+
+
+
+	content := container.NewBorder(
+		container.NewPadded(title),
+		container.NewPadded(toolbar),
 		nil,
 		nil,
 		container.NewPadded(tabs),
 	)
 
-	settingsDialog = dialog.NewCustom("Settings", "Close", content, um.window)
+	settingsDialog = widget.NewModalPopUp(content, um.window.Canvas())
 	settingsDialog.Resize(fyne.NewSize(850, 600))
 	settingsDialog.Show()
+
 }
 
 // showLogView shows a window with logs while launching a profile
