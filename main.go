@@ -36,6 +36,7 @@ type Profile struct {
 	ServerCompanyNumber   string `json:"serverCompanyNumber"`
 	ServerCompanyPassword string `json:"serverCompanyPassword"`
 	LaunchMode            string `json:"launchMode"` // "", "file", "folder", "multiplayer"
+	AutoLatestFilter      string `json:"autoLatestFilter"`
 	ExtraArgs             string `json:"extraArgs"`
 }
 
@@ -162,7 +163,7 @@ func FindLatestFolder(parentDir string) string {
 	return latestFolder
 }
 
-func FindLatestSaveFile(gamePath string) string {
+func FindLatestSaveFile(gamePath string, filter string) string {
 	entries, err := os.ReadDir(gamePath)
 	if err != nil {
 		return ""
@@ -172,8 +173,22 @@ func FindLatestSaveFile(gamePath string) string {
 	var latestTime time.Time
 
 	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		if !entry.IsDir() && (ext == ".sav" || ext == ".scn") {
+
+		match := false
+		switch filter {
+		case "sav":
+			match = ext == ".sav"
+		case "scn":
+			match = ext == ".scn"
+		default: // "both" or empty
+			match = ext == ".sav" || ext == ".scn"
+		}
+
+		if match {
 			info, err := entry.Info()
 			if err != nil {
 				continue
@@ -204,7 +219,7 @@ func ExecuteOpenTTD(versionFolder string, ipPort, companyNumber, serverPassword,
 			info, err := os.Stat(gamePath)
 			if err == nil {
 				if info.IsDir() {
-					saveFile = FindLatestSaveFile(gamePath)
+					saveFile = FindLatestSaveFile(gamePath, um.config.Profiles[indexOfProfileByName(um.config.Profiles, um.selectedProfileName)].AutoLatestFilter)
 				} else {
 					saveFile = gamePath
 				}

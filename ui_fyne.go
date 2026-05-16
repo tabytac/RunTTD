@@ -659,23 +659,72 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 	}
 
+
+	// Dynamic visibility functions defined early to avoid 'undefined' errors
+	folderInstructions := widget.NewLabel("")
+	folderInstructions.Wrapping = fyne.TextWrapWord
+	updateFolderInstructions := func(filterLabel string) {
+		switch filterLabel {
+		case "Saves Only":
+			folderInstructions.SetText("Select a folder; the launcher will auto-load the most recent save inside it:")
+		case "Scenarios Only":
+			folderInstructions.SetText("Select a folder; the launcher will auto-load the most recent scenario inside it:")
+		default: // Saves & Scenarios
+			folderInstructions.SetText("Select a folder; the launcher will auto-load the most recent save or scenario inside it:")
+		}
+	}
+
+	// Option visibility logic
+	fileOption := container.NewVBox()
+	folderOption := container.NewVBox()
+	multiplayerOption := container.NewVBox()
+	pathManualOption := container.NewVBox()
+	folderFilterOption := container.NewVBox()
+	normalOption := widget.NewLabel("The game will launch normally to the main menu.")
+	optionsStack := container.NewVBox(normalOption, fileOption, folderOption, multiplayerOption, pathManualOption, folderFilterOption)
+
+	updateVisibility := func(mode string) {
+		normalOption.Hide()
+		fileOption.Hide()
+		folderOption.Hide()
+		multiplayerOption.Hide()
+		pathManualOption.Hide()
+		folderFilterOption.Hide()
+		switch mode {
+		case "Main Menu":
+			normalOption.Show()
+		case "Load File":
+			fileOption.Show()
+			pathManualOption.Show()
+		case "Latest in Folder":
+			folderOption.Show()
+			pathManualOption.Show()
+			folderFilterOption.Show()
+		case "Multiplayer":
+			multiplayerOption.Show()
+		}
+		optionsStack.Refresh()
+	}
+
 	// Launch Mode selection
 	modeMap := map[string]string{
-		"Normal":             "",
-		"Single File":        "file",
-		"Auto-Latest Folder": "folder",
-		"Multiplayer":        "multiplayer",
+		"Main Menu":        "",
+		"Load File":        "file",
+		"Latest in Folder": "folder",
+		"Multiplayer":      "multiplayer",
 	}
 	revModeMap := map[string]string{
-		"":            "Normal",
-		"file":        "Single File",
-		"folder":      "Auto-Latest Folder",
+		"":            "Main Menu",
+		"file":        "Load File",
+		"folder":      "Latest in Folder",
 		"multiplayer": "Multiplayer",
 	}
 
-	modeSelect := widget.NewRadioGroup([]string{"Normal", "Single File", "Auto-Latest Folder", "Multiplayer"}, nil)
-	modeSelect.Horizontal = true
-	modeSelect.SetSelected(revModeMap[profile.LaunchMode])
+	modeSelect := um.newSegmentedRadio([]string{"Main Menu", "Load File", "Latest in Folder", "Multiplayer"}, revModeMap[profile.LaunchMode], func(s string) {
+		updateVisibility(s)
+	})
+
+
 
 	// Multiplayer fields
 	ipPortEntry := widget.NewEntry()
@@ -701,8 +750,35 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 
 	extraArgsEntry := widget.NewMultiLineEntry()
 	extraArgsEntry.SetText(profile.ExtraArgs)
-	extraArgsEntry.SetPlaceHolder("Example: -mainmenu -v null")
+	extraArgsEntry.SetPlaceHolder("Example: -d 3 -r 1920x1080")
 	extraArgsEntry.Wrapping = fyne.TextWrapWord
+
+	// Auto-Latest Filter selection
+	filterLabelMap := map[string]string{
+		"both": "Saves & Scenarios",
+		"sav":  "Saves Only",
+		"scn":  "Scenarios Only",
+	}
+	revFilterLabelMap := map[string]string{
+		"Saves & Scenarios": "both",
+		"Saves Only":        "sav",
+		"Scenarios Only":    "scn",
+	}
+
+	initialFilter := profile.AutoLatestFilter
+	if initialFilter == "" {
+		initialFilter = "both"
+	}
+
+	autoLatestFilterRadio := um.newSegmentedRadio([]string{"Saves & Scenarios", "Saves Only", "Scenarios Only"}, filterLabelMap[initialFilter], func(s string) {
+		updateFolderInstructions(s)
+	})
+	updateFolderInstructions(autoLatestFilterRadio.Selected())
+
+
+
+	// Functions moved up to avoid scope issues
+
 
 	browseFileBtn := widget.NewButtonWithIcon("Browse File...", theme.FileIcon(), func() {
 		go func() {
@@ -776,21 +852,26 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		return label
 	}
 
-	// Visibility Containers
-	fileOption := container.NewVBox(
+	// Initialize containers with contents
+	fileOption.Objects = []fyne.CanvasObject{
 		widget.NewLabel("Select a specific save or scenario file to load:"),
 		browseFileBtn,
-	)
-	folderOption := container.NewVBox(
-		widget.NewLabel("Select a folder; the launcher will auto-load the most recent save inside it:"),
+	}
+	folderOption.Objects = []fyne.CanvasObject{
+		folderInstructions,
 		browseFolderBtn,
-	)
-	pathManualOption := container.NewVBox(
+	}
+	folderFilterOption.Objects = []fyne.CanvasObject{
+		widget.NewSeparator(),
+		widget.NewLabel("File Type Filter"),
+		container.NewHBox(autoLatestFilterRadio.container),
+	}
+	pathManualOption.Objects = []fyne.CanvasObject{
 		widget.NewSeparator(),
 		widget.NewLabel("Path (Relative or Absolute)"),
 		savePathEntry,
-	)
-	multiplayerOption := container.NewVBox(
+	}
+	multiplayerOption.Objects = []fyne.CanvasObject{
 		sectionTitle("Server Connection"),
 		widget.NewLabel("Server IP:Port"), ipPortEntry,
 		widget.NewLabel("Server Password"), serverPassEntry,
@@ -800,34 +881,9 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			container.NewVBox(widget.NewLabel("Company Number"), companyNumEntry),
 			container.NewVBox(widget.NewLabel("Company Password"), companyPassEntry),
 		),
-	)
-	normalOption := widget.NewLabel("The game will launch normally to the main menu.")
-
-	optionsStack := container.NewVBox(normalOption, fileOption, folderOption, multiplayerOption, pathManualOption)
-
-	updateVisibility := func(mode string) {
-		normalOption.Hide()
-		fileOption.Hide()
-		folderOption.Hide()
-		multiplayerOption.Hide()
-		pathManualOption.Hide()
-		switch mode {
-		case "Normal":
-			normalOption.Show()
-		case "Single File":
-			fileOption.Show()
-			pathManualOption.Show()
-		case "Auto-Latest Folder":
-			folderOption.Show()
-			pathManualOption.Show()
-		case "Multiplayer":
-			multiplayerOption.Show()
-		}
-		optionsStack.Refresh()
 	}
 
-	modeSelect.OnChanged = updateVisibility
-	updateVisibility(modeSelect.Selected)
+	updateVisibility(revModeMap[profile.LaunchMode])
 
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
@@ -845,7 +901,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 				return false, "A profile with this name already exists."
 			}
 		}
-
 
 		if strings.TrimSpace(versionEntry.Text) == "" {
 			return false, "JGRPP version is required or use latest."
@@ -891,7 +946,9 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		profile.ServerPassword = serverPassEntry.Text
 		profile.ServerCompanyNumber = strings.TrimSpace(companyNumEntry.Text)
 		profile.ServerCompanyPassword = companyPassEntry.Text
-		profile.LaunchMode = modeMap[modeSelect.Selected]
+		profile.LaunchMode = modeMap[modeSelect.Selected()]
+		profile.AutoLatestFilter = revFilterLabelMap[autoLatestFilterRadio.Selected()]
+
 		profile.ExtraArgs = strings.TrimSpace(extraArgsEntry.Text)
 		switch profile.LaunchMode {
 		case "":
@@ -928,7 +985,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 
 	launchTab := container.NewTabItemWithIcon("Launch Options", theme.MediaPlayIcon(), container.NewVBox(
 		sectionTitle("How should the game start?"),
-		modeSelect,
+		modeSelect.container,
 		widget.NewSeparator(),
 		optionsStack,
 	))
@@ -946,6 +1003,14 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		statusLabel,
 		tabs,
 	)
+
+	launchTab.Content = container.NewVBox(
+		sectionTitle("How should the game start?"),
+		modeSelect.container,
+		widget.NewSeparator(),
+		optionsStack,
+	)
+
 
 	saveBtn = widget.NewButton("Save", func() { saveProfile(false) })
 	saveAndRunBtn = widget.NewButton("Save & Run", func() { saveProfile(true) })
@@ -1420,3 +1485,75 @@ func (r *themedBoxRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (r *themedBoxRenderer) Destroy() {}
+
+// --- Segmented Radio Button Group ---
+
+type segmentedRadio struct {
+	container *fyne.Container
+	selected  string
+	options   []string
+	buttons   []*widget.Button
+	onChanged func(string)
+}
+
+func (um *UIManager) newSegmentedRadio(options []string, initial string, onChanged func(string)) *segmentedRadio {
+	s := &segmentedRadio{
+		options:   options,
+		selected:  initial,
+		onChanged: onChanged,
+		buttons:   make([]*widget.Button, len(options)),
+	}
+
+	for i, opt := range options {
+		label := opt
+		btn := widget.NewButton(label, func() {
+			s.SetSelected(label)
+			if s.onChanged != nil {
+				s.onChanged(label)
+			}
+		})
+		if label == initial {
+			btn.Importance = widget.HighImportance
+		} else {
+			btn.Importance = widget.LowImportance
+		}
+		s.buttons[i] = btn
+	}
+
+	// Create a grid so all blocks are equal width
+	s.container = container.NewGridWithColumns(len(options))
+	for _, b := range s.buttons {
+		s.container.Add(b)
+	}
+
+	return s
+}
+
+func (s *segmentedRadio) SetSelected(label string) {
+	s.selected = label
+	for _, b := range s.buttons {
+		if b.Text == label {
+			b.Importance = widget.HighImportance
+		} else {
+			b.Importance = widget.LowImportance
+		}
+		b.Refresh()
+	}
+}
+
+func (s *segmentedRadio) Selected() string {
+	return s.selected
+}
+
+func (s *segmentedRadio) Hide() {
+	s.container.Hide()
+}
+
+func (s *segmentedRadio) Show() {
+	s.container.Show()
+}
+
+func (s *segmentedRadio) Refresh() {
+	s.container.Refresh()
+}
+
