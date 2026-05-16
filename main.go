@@ -13,9 +13,20 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+)
+
+var cdnClient = &http.Client{
+	Timeout: 15 * time.Second,
+}
+
+var (
+	cdnVersionFolderRe = regexp.MustCompile(`href="(?:https?://[^"]*/)?([0-9][0-9A-Za-z.\-]*)/"`)
+	cdnYearFolderRe    = regexp.MustCompile(`href="(?:https?://[^"]*/)?((?:19|20)\d{2})/"`)
+	cdnNightlyBuildRe  = regexp.MustCompile(`href="(?:https?://[^"]*/)?([0-9]{8}-[^"]+)/"`)
 )
 
 func setupGuiOutput() {
@@ -176,6 +187,8 @@ func FindVersionFolderEngine(parentDir, version, engine string, cfg *Config) str
 		return ""
 	}
 
+	platformAliases := enginePlatformAliases(cfg)
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -188,11 +201,17 @@ func FindVersionFolderEngine(parentDir, version, engine string, cfg *Config) str
 				return filepath.Join(parentDir, name)
 			}
 		case "vanilla", "vanilla-nightly":
-			// Accept names that contain 'openttd' and the version, or names that explicitly include the version
 			lname := strings.ToLower(name)
-			if (strings.Contains(lname, "openttd") && strings.Contains(name, version)) || strings.HasPrefix(name, version) || strings.Contains(name, "-"+version+"-") || strings.HasSuffix(name, "-"+version) {
-				return filepath.Join(parentDir, name)
+			if !strings.Contains(lname, "openttd") {
+				continue
 			}
+			if !versionMatchesFolder(name, version) {
+				continue
+			}
+			if len(platformAliases) > 0 && !folderMatchesAnyAlias(lname, platformAliases) {
+				continue
+			}
+			return filepath.Join(parentDir, name)
 		default:
 			if strings.Contains(name, version) {
 				return filepath.Join(parentDir, name)
@@ -228,6 +247,10 @@ func FindLatestFolder(parentDir string) string {
 
 // engine-aware latest folder finder
 func FindLatestFolderEngine(parentDir, engine string) string {
+	return FindLatestFolderEngineWithConfig(parentDir, engine, nil)
+}
+
+func FindLatestFolderEngineWithConfig(parentDir, engine string, cfg *Config) string {
 	entries, err := os.ReadDir(parentDir)
 	if err != nil {
 		return ""
@@ -235,6 +258,7 @@ func FindLatestFolderEngine(parentDir, engine string) string {
 
 	var latestFolder string
 	var latestTime time.Time
+	platformAliases := enginePlatformAliases(cfg)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -248,6 +272,9 @@ func FindLatestFolderEngine(parentDir, engine string) string {
 			}
 		case "vanilla", "vanilla-nightly":
 			if !strings.Contains(name, "openttd") {
+				continue
+			}
+			if len(platformAliases) > 0 && !folderMatchesAnyAlias(name, platformAliases) {
 				continue
 			}
 		}
@@ -418,7 +445,7 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	repoURL := fmt.Sprintf("%s/releases/tags/jgrpp-%s", config.GithubApiUrl, version)
 	downloadDir := config.ParentDir
 
-	resp, err := http.Get(repoURL)
+	resp, err := cdnClient.Get(repoURL)
 	if err != nil {
 		return false
 	}
@@ -462,7 +489,7 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 		return false
 	}
 
-	resp, err = http.Get(downloadURL)
+	resp, err = cdnClient.Get(downloadURL)
 	if err != nil {
 		fmt.Printf("Failed to download file: %v\n", err)
 		return false
@@ -493,30 +520,49 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	return true
 }
 
-// DownloadAndExtractVersionForEngine downloads and extracts an engine-specific release
+// DownloadAndExtractVersionForEngine downloads and extracts an engine-specific release.
 func DownloadAndExtractVersionForEngine(version, engine string, cfg *Config) bool {
+	return DownloadAndExtractVersionForEngineWithLogger(version, engine, cfg, nil)
+}
+
+// DownloadAndExtractVersionForEngineWithLogger downloads a release and optionally logs diagnostics.
+func DownloadAndExtractVersionForEngineWithLogger(version, engine string, cfg *Config, logger *Logger) bool {
+	logf := func(format string, args ...any) {
+		if logger != nil {
+			logger.Append(fmt.Sprintf(format, args...))
+		}
+	}
 	if engine == "jgrpp" {
 		return DownloadAndExtractVersion(version, cfg)
 	}
 
 	// vanilla engines: attempt to download from CDN mirrors
 	base := cfg.VanillaMirror
-	if engine == "vanilla-nightly" && cfg.NightlyMirror != "" {
+	if engine == "vanilla-nightly" {
 		base = cfg.NightlyMirror
+		if base == "" {
+			base = "https://cdn.openttd.org/openttd-nightlies/"
+		}
 	}
 	if base == "" {
 		base = "https://cdn.openttd.org/openttd-releases/"
 	}
 
 	// Candidate filenames: openttd-<tag>-<os>.(zip|tar.xz|dmg)
-	candidates := []string{
-		fmt.Sprintf("openttd-%s-%s.zip", version, cfg.OSType),
-		fmt.Sprintf("openttd-%s-%s.tar.xz", version, cfg.OSType),
-		fmt.Sprintf("openttd-%s-%s.dmg", version, cfg.OSType),
+	platformAliases := nightlyPlatformAliases(cfg)
+	candidates := []string{}
+	for _, plat := range platformAliases {
+		candidates = append(candidates,
+			fmt.Sprintf("openttd-%s-%s.zip", version, plat),
+			fmt.Sprintf("openttd-%s-%s.tar.xz", version, plat),
+			fmt.Sprintf("openttd-%s-%s.dmg", version, plat),
+		)
+	}
+	candidates = append(candidates,
 		fmt.Sprintf("openttd-%s.zip", version),
 		fmt.Sprintf("openttd-%s.tar.xz", version),
 		fmt.Sprintf("openttd-%s.dmg", version),
-	}
+	)
 
 	downloadDir := cfg.ParentDir
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
@@ -524,22 +570,86 @@ func DownloadAndExtractVersionForEngine(version, engine string, cfg *Config) boo
 	}
 
 	baseTrimmed := strings.TrimRight(base, "/")
-	for _, name := range candidates {
-		// Stable/nightly mirrors commonly store assets under a version subfolder
-		urlCandidates := []string{
-			baseTrimmed + "/" + version + "/" + name,
-			baseTrimmed + "/" + name,
+	nightlyYear := ""
+	if engine == "vanilla-nightly" {
+		if len(version) >= 4 {
+			nightlyYear = version[:4]
 		}
-
-		for _, url := range urlCandidates {
-			resp, err := http.Get(url)
-			if err != nil || resp.StatusCode != 200 {
-				if resp != nil {
-					resp.Body.Close()
+	}
+	if engine == "vanilla-nightly" && nightlyYear != "" {
+		manifest, err := fetchNightlyManifest(baseTrimmed, nightlyYear, version)
+		if err != nil {
+			logf("Nightly manifest fetch failed: %v", err)
+		} else {
+			targetExt := ".zip"
+			lowerOS := strings.ToLower(strings.TrimSpace(cfg.OSType))
+			switch {
+			case strings.Contains(lowerOS, "linux"):
+				targetExt = ".tar.xz"
+			case strings.Contains(lowerOS, "mac") || strings.Contains(lowerOS, "darwin"):
+				targetExt = ".dmg"
+			}
+			for _, id := range manifest.FileIDs {
+				if !nightlyIDMatchesPlatform(id, platformAliases) {
+					continue
 				}
+				if !strings.HasSuffix(strings.ToLower(id), targetExt) {
+					continue
+				}
+				url := fmt.Sprintf("%s/%s/%s/%s", baseTrimmed, nightlyYear, version, id)
+				logf("Nightly selected asset: %s", url)
+				archivePath := filepath.Join(downloadDir, id)
+				resp, err := cdnClient.Get(url)
+				if err != nil {
+					logf("Nightly asset download failed: %v", err)
+					continue
+				}
+				if resp.StatusCode != 200 {
+					resp.Body.Close()
+					logf("Nightly asset download returned HTTP %d: %s", resp.StatusCode, url)
+					continue
+				}
+				file, err := os.Create(archivePath)
+				if err != nil {
+					resp.Body.Close()
+					logf("Nightly asset create failed: %v", err)
+					continue
+				}
+				if _, err = io.Copy(file, resp.Body); err != nil {
+					file.Close()
+					resp.Body.Close()
+					os.Remove(archivePath)
+					logf("Nightly asset copy failed: %v", err)
+					continue
+				}
+				file.Close()
+				resp.Body.Close()
+				if err := extractArchive(archivePath, downloadDir); err != nil {
+					os.Remove(archivePath)
+					logf("Nightly extract failed: %v", err)
+					continue
+				}
+				os.Remove(archivePath)
+				return true
+			}
+		}
+	}
+
+	for _, name := range candidates {
+		urlCandidates := []string{}
+		if nightlyYear != "" {
+			urlCandidates = append(urlCandidates, baseTrimmed+"/"+nightlyYear+"/"+version+"/"+name)
+		}
+		urlCandidates = append(urlCandidates, baseTrimmed+"/"+version+"/"+name, baseTrimmed+"/"+name)
+		for _, url := range urlCandidates {
+			resp, err := cdnClient.Get(url)
+			if err != nil {
 				continue
 			}
-
+			if resp.StatusCode != 200 {
+				resp.Body.Close()
+				continue
+			}
 			archivePath := filepath.Join(downloadDir, name)
 			file, err := os.Create(archivePath)
 			if err != nil {
@@ -554,29 +664,6 @@ func DownloadAndExtractVersionForEngine(version, engine string, cfg *Config) boo
 			}
 			file.Close()
 			resp.Body.Close()
-
-			// Attempt optional checksum verification from the mirror
-			checksumCandidates := []string{url + ".sha256", url + ".sha256sum"}
-			checksumPresent := false
-			checksumOK := false
-			for _, churl := range checksumCandidates {
-				ok, verr := verifyRemoteSHA256(archivePath, churl)
-				if verr != nil {
-					// not found or other error; try next checksum URL
-					continue
-				}
-				checksumPresent = true
-				if ok {
-					checksumOK = true
-				}
-				break
-			}
-			if checksumPresent && !checksumOK {
-				// checksum exists but failed; discard and try the next URL candidate
-				os.Remove(archivePath)
-				continue
-			}
-
 			if err := extractArchive(archivePath, downloadDir); err != nil {
 				os.Remove(archivePath)
 				continue
@@ -717,7 +804,7 @@ func defaultOSType() string {
 func CheckForNewVersion(config *Config) string {
 	repoURL := fmt.Sprintf("%s/releases/latest", config.GithubApiUrl)
 
-	resp, err := http.Get(repoURL)
+	resp, err := cdnClient.Get(repoURL)
 	if err != nil {
 		fmt.Printf("Failed to get latest release info: %v\n", err)
 		return ""
@@ -743,6 +830,13 @@ func CheckForNewVersion(config *Config) string {
 
 // CheckForNewVersionForEngine returns the latest version tag for a given engine.
 func CheckForNewVersionForEngine(engine string, cfg *Config) string {
+	return CheckForNewVersionForEngineTrack(engine, cfg, "stable")
+}
+
+// CheckForNewVersionForEngineTrack resolves latest by track:
+// - "stable": skips RC/beta versions for vanilla engines
+// - "testing": includes RC/beta versions for vanilla engines
+func CheckForNewVersionForEngineTrack(engine string, cfg *Config, track string) string {
 	switch engine {
 	case "jgrpp":
 		return CheckForNewVersion(cfg)
@@ -751,57 +845,229 @@ func CheckForNewVersionForEngine(engine string, cfg *Config) string {
 		if err != nil || len(versions) == 0 {
 			return ""
 		}
-		// first entry is latest marker
-		if versions[0] == "latest" && len(versions) > 1 {
-			return versions[1]
+		for _, v := range versions {
+			vv := strings.TrimSpace(v)
+			if vv == "" {
+				continue
+			}
+			lower := strings.ToLower(vv)
+			if lower == "latest (stable)" || lower == "latest (testing)" || lower == "latest" {
+				continue
+			}
+			if track == "stable" && (strings.Contains(lower, "-rc") || strings.Contains(lower, "beta")) {
+				continue
+			}
+			return vv
 		}
-		return versions[0]
+		return ""
 	default:
 		return ""
 	}
 }
 
-// parseCDNVersionsFromHTML extracts openttd-<tag> tokens from an HTML index.
-// It prefers anchor hrefs but falls back to a broader regexp if needed.
-func parseCDNVersionsFromHTML(html string) []string {
+// parseCDNVersionFoldersFromHTML extracts version folder names from a CDN index.
+// Example matches: 15.3/, 15.0-RC4/, 15.0-beta2/
+func parseCDNVersionFoldersFromHTML(html string) []string {
 	set := map[string]bool{}
 	versions := []string{}
 
-	// Capture the version token after openttd- stopping at the next hyphen or dot
-	hrefRe := regexp.MustCompile(`href="[^"]*openttd-([0-9A-Za-z._]+)(?:[-\.][^"]*)?"`)
-	matches := hrefRe.FindAllStringSubmatch(html, -1)
+	matches := cdnVersionFolderRe.FindAllStringSubmatch(html, -1)
 	for _, m := range matches {
 		if len(m) < 2 {
 			continue
 		}
-		tag := m[1]
+		tag := strings.TrimSpace(m[1])
+		if tag == "" {
+			continue
+		}
 		if !set[tag] {
 			set[tag] = true
 			versions = append(versions, tag)
 		}
 	}
+	return versions
+}
 
-	if len(versions) == 0 {
-		broadRe := regexp.MustCompile(`openttd-([0-9A-Za-z._-]+)`)
-		matches := broadRe.FindAllStringSubmatch(html, -1)
-		for _, m := range matches {
-			if len(m) < 2 {
-				continue
-			}
-			tag := m[1]
-			if !set[tag] {
-				set[tag] = true
-				versions = append(versions, tag)
+func parseCDNYearFoldersFromHTML(html string) []string {
+	set := map[string]bool{}
+	years := []string{}
+	matches := cdnYearFolderRe.FindAllStringSubmatch(html, -1)
+	for _, m := range matches {
+		if len(m) < 2 {
+			continue
+		}
+		y := m[1]
+		if !set[y] {
+			set[y] = true
+			years = append(years, y)
+		}
+	}
+	return years
+}
+
+func parseNightlyBuildFoldersFromHTML(html string) []string {
+	set := map[string]bool{}
+	builds := []string{}
+	matches := cdnNightlyBuildRe.FindAllStringSubmatch(html, -1)
+	for _, m := range matches {
+		if len(m) < 2 {
+			continue
+		}
+		b := strings.TrimSpace(m[1])
+		if b == "" {
+			continue
+		}
+		if !set[b] {
+			set[b] = true
+			builds = append(builds, b)
+		}
+	}
+	return builds
+}
+
+type nightlyManifestData struct {
+	FileIDs []string
+}
+
+func parseNightlyManifest(text string) nightlyManifestData {
+	out := nightlyManifestData{FileIDs: []string{}}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "- id:") {
+			id := strings.TrimSpace(strings.TrimPrefix(line, "- id:"))
+			if id != "" {
+				out.FileIDs = append(out.FileIDs, id)
 			}
 		}
 	}
-	return versions
+	return out
+}
+
+func nightlyPlatformAliases(cfg *Config) []string {
+	return enginePlatformAliases(cfg)
+}
+
+func enginePlatformAliases(cfg *Config) []string {
+	if cfg == nil {
+		return []string{defaultOSType()}
+	}
+	osType := strings.TrimSpace(cfg.OSType)
+	if osType == "" {
+		osType = defaultOSType()
+	}
+	return []string{strings.ToLower(osType)}
+}
+
+func folderMatchesAnyAlias(name string, aliases []string) bool {
+	for _, alias := range aliases {
+		alias = strings.ToLower(strings.TrimSpace(alias))
+		if alias == "" {
+			continue
+		}
+		if strings.Contains(name, alias) {
+			return true
+		}
+	}
+	return false
+}
+
+func versionMatchesFolder(name, version string) bool {
+	return strings.Contains(name, version) || strings.HasPrefix(name, version) || strings.Contains(name, "-"+version+"-") || strings.HasSuffix(name, "-"+version)
+}
+
+func nightlyIDMatchesPlatform(id string, aliases []string) bool {
+	lower := strings.ToLower(id)
+	for _, a := range aliases {
+		a = strings.ToLower(strings.TrimSpace(a))
+		if a != "" && strings.Contains(lower, a) {
+			return true
+		}
+	}
+	return false
+}
+
+func fetchNightlyManifest(base, year, version string) (nightlyManifestData, error) {
+	url := fmt.Sprintf("%s/%s/%s/manifest.yaml", strings.TrimRight(base, "/"), year, version)
+	resp, err := cdnClient.Get(url)
+	if err != nil {
+		return nightlyManifestData{}, fmt.Errorf("failed to fetch nightly manifest: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nightlyManifestData{}, fmt.Errorf("failed to fetch nightly manifest: HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nightlyManifestData{}, fmt.Errorf("failed to read nightly manifest: %w", err)
+	}
+	return parseNightlyManifest(string(body)), nil
+}
+
+func fetchRecentNightlyVersions(base string, limit int) ([]string, error) {
+	if limit <= 0 {
+		return []string{}, nil
+	}
+	baseTrimmed := strings.TrimRight(base, "/")
+
+	resp, err := cdnClient.Get(baseTrimmed + "/")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch nightly root index: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to fetch nightly root index: HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read nightly root index: %w", err)
+	}
+
+	years := parseCDNYearFoldersFromHTML(string(body))
+	if len(years) == 0 {
+		return []string{}, nil
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(years)))
+
+	all := []string{}
+	seen := map[string]bool{}
+	for _, year := range years {
+		yearURL := fmt.Sprintf("%s/%s/", baseTrimmed, year)
+		yResp, err := cdnClient.Get(yearURL)
+		if err != nil {
+			continue
+		}
+		if yResp.StatusCode != 200 {
+			yResp.Body.Close()
+			continue
+		}
+		yBody, err := io.ReadAll(yResp.Body)
+		yResp.Body.Close()
+		if err != nil {
+			continue
+		}
+		builds := parseNightlyBuildFoldersFromHTML(string(yBody))
+		sort.Sort(sort.Reverse(sort.StringSlice(builds)))
+		for _, b := range builds {
+			if !seen[b] {
+				seen[b] = true
+				all = append(all, b)
+				if len(all) >= limit {
+					return all, nil
+				}
+			}
+		}
+	}
+
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	return all, nil
 }
 
 func FetchAvailableVersions(config *Config) ([]string, error) {
 	repoURL := fmt.Sprintf("%s/releases?per_page=20", config.GithubApiUrl)
 
-	resp, err := http.Get(repoURL)
+	resp, err := cdnClient.Get(repoURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get release info: %w", err)
 	}
@@ -829,15 +1095,26 @@ func FetchAvailableVersionsForEngine(engine string, cfg *Config) ([]string, erro
 	case "jgrpp":
 		return FetchAvailableVersions(cfg)
 	case "vanilla", "vanilla-nightly":
-		// Try to scrape the CDN index for versions
-		base := cfg.VanillaMirror
-		if engine == "vanilla-nightly" && cfg.NightlyMirror != "" {
-			base = cfg.NightlyMirror
+		if engine == "vanilla-nightly" {
+			base := cfg.NightlyMirror
+			if base == "" {
+				base = "https://cdn.openttd.org/openttd-nightlies/"
+			}
+			recent, err := fetchRecentNightlyVersions(base, 10)
+			if err != nil {
+				return nil, err
+			}
+			out := []string{"latest"}
+			out = append(out, recent...)
+			return out, nil
 		}
+
+		// Scrape stable CDN version folders from index
+		base := cfg.VanillaMirror
 		if base == "" {
 			base = "https://cdn.openttd.org/openttd-releases/"
 		}
-		resp, err := http.Get(base)
+		resp, err := cdnClient.Get(base)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch vanilla index: %w", err)
 		}
@@ -849,8 +1126,8 @@ func FetchAvailableVersionsForEngine(engine string, cfg *Config) ([]string, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to read vanilla index: %w", err)
 		}
-		versions := parseCDNVersionsFromHTML(string(body))
-		out := []string{"latest"}
+		versions := parseCDNVersionFoldersFromHTML(string(body))
+		out := []string{"latest (Stable)", "latest (Testing)"}
 		out = append(out, versions...)
 		return out, nil
 	default:

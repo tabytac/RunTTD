@@ -1,15 +1,5 @@
 package main
 
-import (
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strings"
-)
-
 // Engine defines a pluggable engine adapter
 type Engine interface {
 	ID() string
@@ -76,39 +66,6 @@ func (v *vanillaEngine) FindInstalled(parentDir, version string, cfg *Config) st
 	return FindVersionFolderEngine(parentDir, version, v.ID(), cfg)
 }
 
-// helper: try to fetch a remote sha256 checksum and compare it with a local file
-func verifyRemoteSHA256(localPath, remoteURL string) (bool, error) {
-	resp, err := http.Get(remoteURL)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return false, fmt.Errorf("checksum not found: %s (http %d)", remoteURL, resp.StatusCode)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, err
-	}
-	// checksum may be in form "<sha>  filename" or just the hex
-	fields := strings.Fields(string(body))
-	if len(fields) == 0 {
-		return false, fmt.Errorf("empty checksum")
-	}
-	hexsum := fields[0]
-
-	f, err := os.Open(localPath)
-	if err != nil {
-		return false, err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return false, err
-	}
-	ours := hex.EncodeToString(h.Sum(nil))
-	return strings.EqualFold(ours, hexsum), nil
-}
 
 // initialize built-in engines
 func init() {

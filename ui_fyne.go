@@ -37,7 +37,6 @@ type UIManager struct {
 	selectedProfileName string
 	lastListSelectID    int
 	lastListSelectAt    time.Time
-	themeOverride       *fyne.ThemeVariant
 	cachedVersions      []string
 }
 
@@ -211,8 +210,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		return true
 	}
 
-	var continueBtn *widget.Button
-	continueBtn = widget.NewButton("Continue", func() {
+	continueBtn := widget.NewButton("Continue", func() {
 		if !validate() {
 			return
 		}
@@ -712,7 +710,14 @@ func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 		_ = SaveConfig(um.configPath, um.config)
 	}
 
-	modeSelect := um.newSegmentedRadio([]string{"Light", "Dark"}, strings.Title(um.config.ThemeVariant), func(s string) {
+	var currentMode string
+	if um.config.ThemeVariant == "light" {
+		currentMode = "Light"
+	} else {
+		currentMode = "Dark"
+	}
+
+	modeSelect := um.newSegmentedRadio([]string{"Light", "Dark"}, currentMode, func(s string) {
 		apply(strings.ToLower(s), um.config.AccentPreset)
 	})
 
@@ -722,7 +727,7 @@ func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 	updateButtons := func() {
 		for i, rect := range colorButtons {
 			if i == um.config.AccentPreset {
-				rect.StrokeColor = theme.PrimaryColor()
+				rect.StrokeColor = theme.Color(theme.ColorNamePrimary)
 				rect.StrokeWidth = 3
 			} else {
 				rect.StrokeColor = color.Transparent
@@ -774,13 +779,6 @@ func valueOrDefault(value, fallback string) string {
 	return value
 }
 
-func maskedOrEmpty(value string) string {
-	if strings.TrimSpace(value) == "" {
-		return "(none)"
-	}
-	return "set"
-}
-
 func indexOfProfileByName(profiles []Profile, name string) int {
 	needle := strings.TrimSpace(name)
 	if needle == "" {
@@ -809,14 +807,8 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	nameEntry.SetPlaceHolder("Profile name")
 
 	versionEntry := widget.NewSelectEntry(um.cachedVersions)
-	versionEntry.SetOptions([]string{"latest"})
-	// Fallback if the profile's version isn't in the options yet
-	if profile.Version != "" {
-		versionEntry.SetText(profile.Version)
-	} else {
-		versionEntry.SetText("latest")
-	}
-	versionEntry.PlaceHolder = "latest or 0.71.2"
+	versionEntry.SetOptions([]string{"latest (Stable)", "latest (Testing)"})
+	versionEntry.PlaceHolder = "latest (Stable), latest (Testing), or 15.3"
 
 	// Engine selection (OpenTTD Stable, OpenTTD Nightly, JGRPP)
 	engineOptions := []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
@@ -830,25 +822,102 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		"vanilla-nightly": "OpenTTD (Nightly)",
 		"jgrpp":           "JGRPP",
 	}
-	engineSelect := widget.NewSelect(engineOptions, func(s string) {
-		// when engine changes, clear version then fetch versions for that engine
-		versionEntry.SetText("")
-		versionEntry.SetOptions([]string{"latest"})
-		versionEntry.Refresh()
+	defaultVersionOptions := func(engineID string) []string {
+		switch engineID {
+		case "vanilla":
+			return []string{"latest (Stable)", "latest (Testing)"}
+		case "vanilla-nightly":
+			return []string{"latest"}
+		default:
+			return []string{"latest"}
+		}
+	}
+	displayVersion := func(engineID, stored string) string {
+		s := strings.TrimSpace(stored)
+		lower := strings.ToLower(s)
+		switch engineID {
+		case "vanilla", "vanilla-nightly":
+			if engineID == "vanilla-nightly" {
+				switch lower {
+				case "", "latest", "latest-stable", "latest-testing", "latest (stable)", "latest (testing)":
+					return "latest"
+				default:
+					return s
+				}
+			}
+			switch lower {
+			case "", "latest", "latest-stable", "latest (stable)":
+				return "latest (Stable)"
+			case "latest-testing", "latest (testing)":
+				return "latest (Testing)"
+			default:
+				return s
+			}
+		default:
+			if s == "" {
+				return "latest"
+			}
+			return s
+		}
+	}
+	storedVersion := func(engineID, entered string) string {
+		s := strings.TrimSpace(entered)
+		lower := strings.ToLower(s)
+		switch engineID {
+		case "vanilla", "vanilla-nightly":
+			if engineID == "vanilla-nightly" {
+				if lower == "" || lower == "latest" || lower == "latest-stable" || lower == "latest-testing" || lower == "latest (stable)" || lower == "latest (testing)" {
+					return ""
+				}
+				return s
+			}
+			switch lower {
+			case "", "latest", "latest-stable", "latest (stable)":
+				return "latest-stable"
+			case "latest-testing", "latest (testing)":
+				return "latest-testing"
+			default:
+				return s
+			}
+		default:
+			if lower == "" || lower == "latest" {
+				return ""
+			}
+			return s
+		}
+	}
+	fetchVersionsForEngine := func(engineID string) {
 		go func() {
-			eng := engineMap[s]
-			versions, err := FetchAvailableVersionsForEngine(eng, um.config)
+			versions, err := FetchAvailableVersionsForEngine(engineID, um.config)
 			if err == nil && len(versions) > 0 {
 				um.cachedVersions = versions
 				versionEntry.SetOptions(versions)
 				versionEntry.Refresh()
 			}
 		}()
+	}
+	engineSelect := widget.NewSelect(engineOptions, func(s string) {
+		// when engine changes, clear version then fetch versions for that engine
+		eng := engineMap[s]
+		versionEntry.SetText(displayVersion(eng, ""))
+		versionEntry.SetOptions(defaultVersionOptions(eng))
+		versionEntry.Refresh()
+		fetchVersionsForEngine(eng)
 	})
-	// preselect if profile has an engine
-	if sel, ok := revEngineMap[profile.Engine]; ok {
+	// Preselect engine and version display for new and existing profiles.
+	currentEngine := strings.TrimSpace(profile.Engine)
+	if currentEngine == "" {
+		currentEngine = strings.TrimSpace(um.config.DefaultEngine)
+		if currentEngine == "" {
+			currentEngine = "jgrpp"
+		}
+	}
+	versionEntry.SetOptions(defaultVersionOptions(currentEngine))
+	versionEntry.SetText(displayVersion(currentEngine, profile.Version))
+	if sel, ok := revEngineMap[currentEngine]; ok {
 		engineSelect.SetSelected(sel)
 	}
+	fetchVersionsForEngine(currentEngine)
 
 	// Auto-detect mode for legacy configs or unsaved changes
 	if profile.LaunchMode == "" {
@@ -1158,10 +1227,16 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 
 		profile.Name = strings.TrimSpace(nameEntry.Text)
-		profile.Version = strings.TrimSpace(versionEntry.Text)
-		if profile.Version == "latest" {
-			profile.Version = ""
+
+		// Persist engine choice first, then normalize version token per engine
+		selectedEngine := "jgrpp"
+		if en := strings.TrimSpace(engineSelect.Selected); en != "" {
+			if mapped, ok := engineMap[en]; ok {
+				selectedEngine = mapped
+			}
 		}
+		profile.Engine = selectedEngine
+		profile.Version = storedVersion(selectedEngine, versionEntry.Text)
 
 		rawSavePath := strings.TrimSpace(savePathEntry.Text)
 		// Strip leading "save/" or "save\" (case-insensitive)
@@ -1182,13 +1257,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		profile.ServerCompanyPassword = companyPassEntry.Text
 		profile.LaunchMode = modeMap[modeSelect.Selected()]
 		profile.AutoLatestFilter = revFilterLabelMap[autoLatestFilterRadio.Selected()]
-
-		// Persist engine choice
-		if en := engineSelect.Selected; en != "" {
-			if mapped, ok := engineMap[en]; ok {
-				profile.Engine = mapped
-			}
-		}
 
 		profile.ExtraArgs = strings.TrimSpace(extraArgsEntry.Text)
 		switch profile.LaunchMode {
@@ -1584,7 +1652,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 		for _, line := range logs {
 			text += line + "\n"
 		}
-		um.window.Clipboard().SetContent(text)
+		um.app.Clipboard().SetContent(text)
 		um.showToast("Logs copied to clipboard!")
 	})
 
@@ -1643,6 +1711,7 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 
 	requested := strings.TrimSpace(profile.Version)
 	version := requested
+	requestedLower := strings.ToLower(requested)
 	engine := profile.Engine
 	if strings.TrimSpace(engine) == "" {
 		engine = um.config.DefaultEngine
@@ -1651,18 +1720,32 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 		}
 	}
 
-	if requested == "" || strings.EqualFold(requested, "latest") {
+	isLatestRequest := false
+	latestTrack := "stable"
+	switch requestedLower {
+	case "", "latest", "latest-stable", "latest (stable)":
+		isLatestRequest = true
+		latestTrack = "stable"
+	case "latest-testing", "latest (testing)":
+		isLatestRequest = true
+		latestTrack = "testing"
+	}
+	if engine == "vanilla-nightly" && isLatestRequest {
+		latestTrack = "testing"
+	}
+
+	if isLatestRequest {
 		if updateStatus != nil {
-			updateStatus(fmt.Sprintf("Resolving latest %s version", engine))
+			updateStatus(fmt.Sprintf("Resolving latest %s version (%s)", engine, latestTrack))
 		}
-		um.LogImportant(fmt.Sprintf("Resolving latest %s version", engine))
-		version = CheckForNewVersionForEngine(engine, um.config)
+		um.LogImportant(fmt.Sprintf("Resolving latest %s version (%s)", engine, latestTrack))
+		version = CheckForNewVersionForEngineTrack(engine, um.config, latestTrack)
 		if version == "" {
 			um.LogImportant("Could not determine latest version from remote; trying latest local install.")
 			if updateStatus != nil {
 				updateStatus("Latest version lookup failed, using latest local install")
 			}
-			versionFolder := FindLatestFolderEngine(um.config.ParentDir, engine)
+			versionFolder := FindLatestFolderEngineWithConfig(um.config.ParentDir, engine, um.config)
 			if versionFolder == "" {
 				if updateStatus != nil {
 					updateStatus("Failed: no local installation found for engine")
@@ -1684,7 +1767,7 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 			return
 		}
 	}
-	if requested != "" && !strings.EqualFold(requested, "latest") {
+	if requested != "" && !isLatestRequest {
 		if updateStatus != nil {
 			updateStatus(fmt.Sprintf("Using requested %s version %s", engine, version))
 		}
@@ -1700,7 +1783,7 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 			updateStatus("Version not found locally, downloading")
 		}
 		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download for engine %s.", version, engine))
-		if !DownloadAndExtractVersionForEngine(version, engine, um.config) {
+		if !DownloadAndExtractVersionForEngineWithLogger(version, engine, um.config, um.logger) {
 			if updateStatus != nil {
 				updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
 			}
