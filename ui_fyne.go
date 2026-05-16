@@ -636,7 +636,6 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		widget.NewCard("Profiles", "", widget.NewLabel("Select a profile to edit or run it.")),
 		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, widget.NewSeparator(), seeLogsBtn, settingsBtn)),
 
-
 		nil,
 		nil,
 		profileList,
@@ -822,9 +821,9 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	// Engine selection (OpenTTD Stable, OpenTTD Nightly, JGRPP)
 	engineOptions := []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
 	engineMap := map[string]string{
-		"OpenTTD (Stable)": "vanilla",
+		"OpenTTD (Stable)":  "vanilla",
 		"OpenTTD (Nightly)": "vanilla-nightly",
-		"JGRPP":              "jgrpp",
+		"JGRPP":             "jgrpp",
 	}
 	revEngineMap := map[string]string{
 		"vanilla":         "OpenTTD (Stable)",
@@ -1108,7 +1107,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	statusLabel.Wrapping = fyne.TextWrapWord
 	var editDialog *widget.PopUp
 
-
 	validate := func() (bool, string) {
 		name := strings.TrimSpace(nameEntry.Text)
 		if name == "" {
@@ -1270,8 +1268,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		container.NewPadded(saveAndRunBtn),
 	))
 
-
-
 	title := widget.NewLabel("Edit Profile")
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -1282,7 +1278,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		nil,
 		container.NewPadded(form),
 	)
-
 
 	updateState := func() {
 		ok, _ := validate()
@@ -1466,7 +1461,6 @@ func (um *UIManager) showSettingsView() {
 
 	var settingsDialog *widget.PopUp
 
-
 	saveBtn := widget.NewButton("Save Settings", func() {
 		um.config.ParentDir = parentDirEntry.Text
 		um.config.DocsBasePath = docsBasePathEntry.Text
@@ -1482,14 +1476,14 @@ func (um *UIManager) showSettingsView() {
 		}
 	})
 
-			um.config.VanillaMirror = vanillaMirrorEntry.Text
-			um.config.NightlyMirror = nightlyMirrorEntry.Text
-			// map selected label back to engine id
-			if sel := defaultEngineSelect.Selected; sel != "" {
-				if mapped, ok := defaultEngineMap[sel]; ok {
-					um.config.DefaultEngine = mapped
-				}
-			}
+	um.config.VanillaMirror = vanillaMirrorEntry.Text
+	um.config.NightlyMirror = nightlyMirrorEntry.Text
+	// map selected label back to engine id
+	if sel := defaultEngineSelect.Selected; sel != "" {
+		if mapped, ok := defaultEngineMap[sel]; ok {
+			um.config.DefaultEngine = mapped
+		}
+	}
 	cancelBtn := widget.NewButton("Cancel", func() {
 		settingsDialog.Hide()
 	})
@@ -1501,8 +1495,6 @@ func (um *UIManager) showSettingsView() {
 		container.NewPadded(cancelBtn),
 		container.NewPadded(saveBtn),
 	))
-
-
 
 	content := container.NewBorder(
 		container.NewPadded(title),
