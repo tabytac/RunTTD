@@ -946,13 +946,22 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			if err == nil && file != "" {
 				path := file
 				if um.config.DocsBasePath != "" {
-					rel, err := filepath.Rel(um.config.DocsBasePath, path)
+					// 1. Try relative to Docs/save (preferred)
+					saveBase := filepath.Join(um.config.DocsBasePath, "save")
+					rel, err := filepath.Rel(saveBase, path)
 					if err == nil && !strings.HasPrefix(rel, "..") {
 						path = rel
+					} else {
+						// 2. Fallback: try relative to Docs Base (e.g. if file is in another subfolder)
+						rel, err := filepath.Rel(um.config.DocsBasePath, path)
+						if err == nil && !strings.HasPrefix(rel, "..") {
+							path = rel
+						}
 					}
 				}
 				savePathEntry.SetText(path)
 			}
+
 		}()
 	})
 
@@ -978,13 +987,22 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			if err == nil && directory != "" {
 				path := directory
 				if um.config.DocsBasePath != "" {
-					rel, err := filepath.Rel(um.config.DocsBasePath, path)
+					// 1. Try relative to Docs/save (preferred)
+					saveBase := filepath.Join(um.config.DocsBasePath, "save")
+					rel, err := filepath.Rel(saveBase, path)
 					if err == nil && !strings.HasPrefix(rel, "..") {
 						path = rel
+					} else {
+						// 2. Fallback: try relative to Docs Base
+						rel, err := filepath.Rel(um.config.DocsBasePath, path)
+						if err == nil && !strings.HasPrefix(rel, "..") {
+							path = rel
+						}
 					}
 				}
 				savePathEntry.SetText(path)
 			}
+
 		}()
 	})
 
@@ -1081,8 +1099,21 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		if profile.Version == "latest" {
 			profile.Version = ""
 		}
-		profile.SavePath = strings.TrimSpace(savePathEntry.Text)
+		
+		rawSavePath := strings.TrimSpace(savePathEntry.Text)
+		// Strip leading "save/" or "save\" (case-insensitive)
+		for {
+			lowered := strings.ToLower(rawSavePath)
+			if strings.HasPrefix(lowered, "save/") || strings.HasPrefix(lowered, "save\\") {
+				rawSavePath = rawSavePath[5:]
+				continue
+			}
+			break
+		}
+		profile.SavePath = rawSavePath
+
 		profile.ServerIpPort = strings.TrimSpace(ipPortEntry.Text)
+
 		profile.ServerPassword = serverPassEntry.Text
 		profile.ServerCompanyNumber = strings.TrimSpace(companyNumEntry.Text)
 		profile.ServerCompanyPassword = companyPassEntry.Text
