@@ -281,14 +281,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 // makeMainView creates the main profile selection view
 func (um *UIManager) makeMainView() fyne.CanvasObject {
 	selectedIdx := indexOfProfileByName(um.config.Profiles, um.selectedProfileName)
-	selectedLabel := widget.NewLabel("No profile selected")
-	selectedLabel.TextStyle = fyne.TextStyle{Bold: true}
-
-	selectedSummary := widget.NewLabel("Choose a profile to see its version, save path, and multiplayer settings.")
-	selectedSummary.Wrapping = fyne.TextWrapWord
-
-	selectedConfig := widget.NewLabel("")
-	selectedConfig.Wrapping = fyne.TextWrapWord
+	detailsContainer := container.NewVBox()
 
 	selectionHint := widget.NewLabel("Tip: Press 1-9 to quick launch, or select a profile and press Enter / double-click.")
 	selectionHint.Wrapping = fyne.TextWrapWord
@@ -330,9 +323,6 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		selectedIdx = idx
 		um.selectedProfileName = um.config.Profiles[selectedIdx].Name
 		refreshDetails()
-		selectedSummary.Refresh()
-		selectedConfig.Refresh()
-		selectedLabel.Refresh()
 	}
 
 	handleRowTap := func(idx int) {
@@ -348,31 +338,116 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		profileList.Select(widget.ListItemID(idx))
 	}
 
+	addDetail := func(c *fyne.Container, icon fyne.Resource, label, value string, mono bool) {
+		if value == "" {
+			return
+		}
+
+		title := widget.NewLabel(label)
+		title.TextStyle = fyne.TextStyle{Bold: true}
+
+		val := widget.NewLabel(value)
+		val.Wrapping = fyne.TextWrapWord
+		if mono {
+			val.TextStyle = fyne.TextStyle{Monospace: true}
+		}
+
+		iconObj := widget.NewIcon(icon)
+
+		// Use a border layout to keep the icon fixed on the left
+		row := container.NewBorder(nil, nil, iconObj, nil, container.NewVBox(title, val))
+		c.Add(container.NewPadded(row))
+	}
+
 	refreshDetails = func() {
 		updateButtonStates()
+		detailsContainer.Objects = nil
+
 		if selectedIdx < 0 || selectedIdx >= len(um.config.Profiles) {
-			selectedLabel.SetText("Welcome to JGRPP Launcher")
-			selectedSummary.SetText("Select a profile on the left to see its details and launch the game.")
-			selectedConfig.SetText("")
+			welcomeTitle := widget.NewLabel("Welcome to JGRPP Launcher")
+			welcomeTitle.TextStyle = fyne.TextStyle{Bold: true}
+			welcomeTitle.Alignment = fyne.TextAlignCenter
+
+			welcomeBody := widget.NewLabel("Select a profile on the left to see its details and launch the game.")
+			welcomeBody.Wrapping = fyne.TextWrapWord
+			welcomeBody.Alignment = fyne.TextAlignCenter
+
+			detailsContainer.Add(welcomeTitle)
+			detailsContainer.Add(welcomeBody)
+			detailsContainer.Refresh()
 			return
 		}
 
 		profile := um.config.Profiles[selectedIdx]
-		selectedLabel.SetText(profile.Name)
 
+		// 1. Header: Profile Name
+		nameLabel := widget.NewLabel(profile.Name)
+		nameLabel.TextStyle = fyne.TextStyle{Bold: true}
+		detailsContainer.Add(nameLabel)
+
+		// 2. Action Intent Badge
+		intent := "Launch into Main Menu"
+		if profile.LaunchMode == "file" {
+			intent = fmt.Sprintf("Launch into save: %s", filepath.Base(profile.SavePath))
+		} else if profile.LaunchMode == "folder" {
+			intent = fmt.Sprintf("Launch newest in: %s", filepath.Base(profile.SavePath))
+		} else if profile.LaunchMode == "multiplayer" {
+			intent = fmt.Sprintf("Launch and join: %s", valueOrDefault(profile.ServerIpPort, "Server"))
+		}
+
+		intentLabel := widget.NewLabel(intent)
+		intentLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
+		// Add a slight background or styling if possible, otherwise just distinct text
+		detailsContainer.Add(container.NewPadded(intentLabel))
+		detailsContainer.Add(widget.NewSeparator())
+
+		// 3. Version
 		versionText := profile.Version
 		if versionText == "" {
 			versionText = "latest"
 		}
+		addDetail(detailsContainer, theme.SettingsIcon(), "JGRPP Version", versionText, false)
 
-		selectedSummary.SetText(fmt.Sprintf("Version: %s\nSave path: %s", versionText, valueOrDefault(profile.SavePath, "(none)")))
-		selectedConfig.SetText(fmt.Sprintf(
-			"Server: %s\nCompany: %s\nServer password: %s\nCompany password: %s",
-			valueOrDefault(profile.ServerIpPort, "(none)"),
-			valueOrDefault(profile.ServerCompanyNumber, "(spectator)"),
-			maskedOrEmpty(profile.ServerPassword),
-			maskedOrEmpty(profile.ServerCompanyPassword),
-		))
+		// 4. Situational: Paths and Filters
+		if profile.LaunchMode == "file" || profile.LaunchMode == "folder" {
+			icon := theme.FolderOpenIcon()
+			label := "Folder Path"
+			if profile.LaunchMode == "file" {
+				icon = theme.FileIcon()
+				label = "File Path"
+			}
+			addDetail(detailsContainer, icon, label, profile.SavePath, false)
+
+			if profile.LaunchMode == "folder" && profile.AutoLatestFilter != "" {
+				addDetail(detailsContainer, theme.SearchIcon(), "File Filter", profile.AutoLatestFilter, true)
+			}
+		}
+
+		// 5. Situational: Multiplayer
+		if profile.LaunchMode == "multiplayer" || profile.ServerIpPort != "" {
+			addDetail(detailsContainer, theme.ComputerIcon(), "Server Address", profile.ServerIpPort, false)
+
+			if profile.ServerCompanyNumber != "" {
+				addDetail(detailsContainer, theme.LoginIcon(), "Company Slot", profile.ServerCompanyNumber, false)
+			}
+			if profile.ServerPassword != "" || profile.ServerCompanyPassword != "" {
+				authInfo := ""
+				if profile.ServerPassword != "" {
+					authInfo += "Server password set. "
+				}
+				if profile.ServerCompanyPassword != "" {
+					authInfo += "Company password set."
+				}
+				addDetail(detailsContainer, theme.ConfirmIcon(), "Authentication", authInfo, false)
+			}
+		}
+
+		// 6. Advanced: Extra Args
+		if profile.ExtraArgs != "" {
+			addDetail(detailsContainer, theme.InfoIcon(), "Advanced Arguments", profile.ExtraArgs, true)
+		}
+
+		detailsContainer.Refresh()
 	}
 
 	profileList = fyneadvancedlist.NewList(
@@ -458,9 +533,6 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	profileList.OnUnselected = func(_ widget.ListItemID) {
 		selectProfile(-1)
 		refreshDetails()
-		selectedSummary.Refresh()
-		selectedConfig.Refresh()
-		selectedLabel.Refresh()
 	}
 
 	newBtn := widget.NewButton("New Profile", func() {
@@ -485,10 +557,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			profileList.Refresh()
 			profileList.Select(widget.ListItemID(selectedIdx))
 			refreshDetails()
-			selectedSummary.Refresh()
-			selectedConfig.Refresh()
-			selectedLabel.Refresh()
 		} else {
+
 			dialog.ShowError(fmt.Errorf("select a profile to duplicate"), um.window)
 		}
 	})
@@ -508,12 +578,10 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				profileList.Refresh()
 				profileList.Select(widget.ListItemID(selectedIdx))
 				refreshDetails()
-				selectedSummary.Refresh()
-				selectedConfig.Refresh()
-				selectedLabel.Refresh()
 			} else {
 				dialog.ShowError(fmt.Errorf("cannot delete the last profile"), um.window)
 			}
+
 		}
 	})
 
@@ -538,9 +606,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	)
 	leftPanel := newThemedBox(colorNameSidebar, leftPanelObj)
 
-	detailsContent := container.NewVScroll(container.NewPadded(
-		container.NewVBox(selectedLabel, selectedSummary, widget.NewSeparator(), selectedConfig),
-	))
+	detailsContent := container.NewVScroll(container.NewPadded(detailsContainer))
 
 	rightPanelObj := container.NewBorder(
 		nil,
