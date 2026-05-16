@@ -116,3 +116,34 @@ func init() {
 	RegisterEngine(&vanillaEngine{nightly: false})
 	RegisterEngine(&vanillaEngine{nightly: true})
 }
+
+// Convenience wrappers that prefer registered engines but fall back to legacy helpers.
+func EngineFetchVersions(engineID string, cfg *Config) ([]string, error) {
+	if e := GetEngine(engineID); e != nil {
+		return e.FetchVersions(cfg)
+	}
+	return FetchAvailableVersionsForEngine(engineID, cfg)
+}
+
+func EngineLatest(engineID string, cfg *Config) (string, error) {
+	if e := GetEngine(engineID); e != nil {
+		return e.Latest(cfg)
+	}
+	return CheckForNewVersionForEngine(engineID, cfg), nil
+}
+
+func EngineDownloadAndExtract(engineID, version string, cfg *Config) (bool, error) {
+	if e := GetEngine(engineID); e != nil {
+		ok, err := e.DownloadAndExtract(version, cfg)
+		return ok, err
+	}
+	ok := DownloadAndExtractVersionForEngine(version, engineID, cfg)
+	return ok, nil
+}
+
+func EngineFindInstalled(engineID, parentDir, version string, cfg *Config) string {
+	if e := GetEngine(engineID); e != nil {
+		return e.FindInstalled(parentDir, version, cfg)
+	}
+	return FindVersionFolderEngine(parentDir, version, engineID, cfg)
+}
