@@ -435,7 +435,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		if versionText == "" {
 			versionText = "latest"
 		}
-		addDetail(detailsContainer, theme.SettingsIcon(), "JGRPP Version", versionText, false)
+		addDetail(detailsContainer, theme.SettingsIcon(), "Version", versionText, false)
 
 		// 4. Situational: Paths and Filters
 		if profile.LaunchMode == "file" || profile.LaunchMode == "folder" {

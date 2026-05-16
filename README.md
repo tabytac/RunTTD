@@ -57,7 +57,7 @@ The launcher stores all settings and profiles in a single `config.json` file. It
 ## Troubleshooting
 
 - **Launcher exits immediately** — Enable `logToFile` manually in `config.json` and check `log.txt` in the same folder.
-- **"Executable not found"** — Make sure your Parent Directory path is correct and contains extracted JGRPP folders.
+- **"Executable not found"** — Make sure your Parent Directory path is correct and contains extracted engine folders (e.g., `openttd-...` or `jgrpp-...`).
 - **Save not loading** — Check that the Save Path in your profile matches an actual folder under your OpenTTD `save/` directory. The launcher picks the newest `.sav` file in that folder.
 - **Download fails** — The launcher needs internet access to reach the API. Check your connection and firewall settings.
 - **macOS: "app is damaged"** — This is Gatekeeper blocking an unsigned binary. Right-click the file → Open → Open to allow it.
