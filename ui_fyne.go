@@ -80,7 +80,33 @@ func NewUIManager(config *Config, configPath string) *UIManager {
 		configPath:       configPath,
 		lastListSelectID: -1,
 	}
-	fyneApp.Settings().SetTheme(&premiumTheme{Theme: theme.DefaultTheme(), overrideVariant: um.themeOverride})
+
+	if um.config.ThemeVariant == "" {
+		um.config.ThemeVariant = "dark"
+	}
+	if um.config.AccentPreset < 0 || um.config.AccentPreset >= len(themePresets) {
+		um.config.AccentPreset = 0
+	}
+
+	preset := themePresets[um.config.AccentPreset]
+	light, _ := parseHexColor(preset.lightHex)
+	dark, _ := parseHexColor(preset.darkHex)
+
+	pt := &launcherTheme{
+		Theme:       theme.DefaultTheme(),
+		accentDark:  dark,
+		accentLight: light,
+	}
+	if um.config.ThemeVariant == "light" {
+		v := theme.VariantLight
+		pt.overrideVariant = &v
+	} else if um.config.ThemeVariant == "dark" {
+		v := theme.VariantDark
+		pt.overrideVariant = &v
+	}
+
+	um.app.Settings().SetTheme(pt)
+
 	return um
 }
 
@@ -536,20 +562,13 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	headerLabel := widget.NewLabel("JGRPP Launcher")
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
-	themeToggleBtn := widget.NewButtonWithIcon("", theme.ColorPaletteIcon(), func() {
-		current := fyne.CurrentApp().Settings().ThemeVariant()
-		if um.themeOverride != nil {
-			current = *um.themeOverride
-		}
-		var next fyne.ThemeVariant
-		if current == theme.VariantDark {
-			next = theme.VariantLight
-		} else {
-			next = theme.VariantDark
-		}
-		um.themeOverride = &next
-		fyne.CurrentApp().Settings().SetTheme(&premiumTheme{Theme: theme.DefaultTheme(), overrideVariant: um.themeOverride})
+	var themeToggleBtn *widget.Button
+	themeToggleBtn = widget.NewButtonWithIcon("", theme.ColorPaletteIcon(), func() {
+		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(themeToggleBtn)
+		pos.Y += themeToggleBtn.Size().Height
+		um.showThemeCustomizer(pos)
 	})
+
 	themeToggleBtn.Importance = widget.LowImportance
 
 	headerContent := container.NewBorder(nil, nil, nil, themeToggleBtn, headerLabel)
@@ -578,6 +597,71 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	})
 
 	return mainContent
+}
+
+func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
+	apply := func(v string, presetIdx int) {
+		um.config.ThemeVariant = v
+		um.config.AccentPreset = presetIdx
+		if pt, ok := um.app.Settings().Theme().(*launcherTheme); ok {
+			pt.UpdateAccent(presetIdx, v)
+		}
+		_ = SaveConfig(um.configPath, um.config)
+	}
+
+	modeSelect := um.newSegmentedRadio([]string{"Light", "Dark"}, strings.Title(um.config.ThemeVariant), func(s string) {
+		apply(strings.ToLower(s), um.config.AccentPreset)
+	})
+
+	colorGrid := container.NewGridWithColumns(4)
+	colorButtons := make([]*canvas.Rectangle, len(themePresets))
+
+	updateButtons := func() {
+		for i, rect := range colorButtons {
+			if i == um.config.AccentPreset {
+				rect.StrokeColor = theme.PrimaryColor()
+				rect.StrokeWidth = 3
+			} else {
+				rect.StrokeColor = color.Transparent
+				rect.StrokeWidth = 0
+			}
+			rect.Refresh()
+		}
+	}
+
+	for i, p := range themePresets {
+		idx := i
+		// Show the color corresponding to the current theme variant in the preview circle
+		hex := p.darkHex
+		if um.config.ThemeVariant == "light" {
+			hex = p.lightHex
+		}
+		c, _ := parseHexColor(hex)
+
+		rect := canvas.NewRectangle(c)
+		rect.SetMinSize(fyne.NewSize(36, 36))
+		rect.CornerRadius = 4
+		colorButtons[idx] = rect
+
+		btn := widget.NewButton("", func() {
+			apply(um.config.ThemeVariant, idx)
+			updateButtons()
+		})
+		btn.Importance = widget.LowImportance
+
+		colorGrid.Add(container.NewStack(rect, btn))
+	}
+
+	updateButtons()
+
+	content := container.NewVBox(
+		widget.NewLabel("Mode"),
+		modeSelect.container,
+		widget.NewLabel("Accent Color"),
+		colorGrid,
+	)
+
+	widget.NewPopUp(container.NewPadded(content), um.window.Canvas()).ShowAtPosition(pos)
 }
 
 func valueOrDefault(value, fallback string) string {
@@ -659,7 +743,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		}
 	}
 
-
 	// Dynamic visibility functions defined early to avoid 'undefined' errors
 	folderInstructions := widget.NewLabel("")
 	folderInstructions.Wrapping = fyne.TextWrapWord
@@ -724,8 +807,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		updateVisibility(s)
 	})
 
-
-
 	// Multiplayer fields
 	ipPortEntry := widget.NewEntry()
 	ipPortEntry.SetText(profile.ServerIpPort)
@@ -774,11 +855,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		updateFolderInstructions(s)
 	})
 	updateFolderInstructions(autoLatestFilterRadio.Selected())
-
-
-
-	// Functions moved up to avoid scope issues
-
 
 	browseFileBtn := widget.NewButtonWithIcon("Browse File...", theme.FileIcon(), func() {
 		go func() {
@@ -852,7 +928,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		return label
 	}
 
-	// Initialize containers with contents
 	fileOption.Objects = []fyne.CanvasObject{
 		widget.NewLabel("Select a specific save or scenario file to load:"),
 		browseFileBtn,
@@ -895,7 +970,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			return false, "Profile name is required."
 		}
 
-		// Check for duplicate names
 		for i, p := range um.config.Profiles {
 			if i != profileIdx && strings.EqualFold(strings.TrimSpace(p.Name), name) {
 				return false, "A profile with this name already exists."
@@ -1010,7 +1084,6 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		widget.NewSeparator(),
 		optionsStack,
 	)
-
 
 	saveBtn = widget.NewButton("Save", func() { saveProfile(false) })
 	saveAndRunBtn = widget.NewButton("Save & Run", func() { saveProfile(true) })
@@ -1395,51 +1468,114 @@ func (e *scrollForwardingEntry) Scrolled(ev *fyne.ScrollEvent) {
 	}
 }
 
-// --- Custom Premium Theming ---
+// --- Custom Launcher Theming ---
 
 const (
-	colorNameSidebar fyne.ThemeColorName = "premiumSidebar"
-	colorNameContent fyne.ThemeColorName = "premiumContent"
-	colorNameHeader  fyne.ThemeColorName = "premiumHeader"
+	colorNameSidebar fyne.ThemeColorName = "launcherSidebar"
+	colorNameContent fyne.ThemeColorName = "launcherContent"
+	colorNameHeader  fyne.ThemeColorName = "launcherHeader"
 )
 
-type premiumTheme struct {
-	fyne.Theme
-	overrideVariant *fyne.ThemeVariant
+var themePresets = []struct {
+	name     string
+	lightHex string
+	darkHex  string
+}{
+	{"Green", "#2D912D", "#3D993D"},
+	{"Orange", "#E67300", "#FF8000"},
+	{"Red", "#B71C1C", "#D32F2F"},
+	{"Blue", "#1565C0", "#1976D2"},
+	{"Purple", "#6A1B9A", "#7B1FA2"},
+	{"Teal", "#00695C", "#00796B"},
+	{"Gold", "#F9A825", "#E6A700"},
+	{"Slate", "#37474F", "#455A64"},
 }
 
-func (p *premiumTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+type launcherTheme struct {
+	fyne.Theme
+	overrideVariant *fyne.ThemeVariant
+	accentDark      color.NRGBA
+	accentLight     color.NRGBA
+}
+
+func (p *launcherTheme) UpdateAccent(presetIdx int, variant string) {
+	preset := themePresets[presetIdx]
+	light, _ := parseHexColor(preset.lightHex)
+	dark, _ := parseHexColor(preset.darkHex)
+	p.accentLight = light
+	p.accentDark = dark
+
+	if variant == "light" {
+		v := theme.VariantLight
+		p.overrideVariant = &v
+	} else if variant == "dark" {
+		v := theme.VariantDark
+		p.overrideVariant = &v
+	} else {
+		p.overrideVariant = nil
+	}
+	fyne.CurrentApp().Settings().SetTheme(p)
+}
+
+func (p *launcherTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
 	if p.overrideVariant != nil {
 		variant = *p.overrideVariant
 	}
+
+	accent := p.accentLight
+	if variant == theme.VariantDark {
+		accent = p.accentDark
+	}
+
 	if variant == theme.VariantDark {
 		switch name {
-		case theme.ColorNameBackground:
-			return color.NRGBA{R: 26, G: 26, B: 29, A: 255} // Base app bg
+		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
+			return color.NRGBA{R: 25, G: 25, B: 25, A: 255} // Neutral Dark BG
+		case theme.ColorNameInputBackground:
+			return color.NRGBA{R: 32, G: 32, B: 32, A: 255} // Neutral Dark Input
 		case colorNameSidebar:
-			return color.NRGBA{R: 20, G: 20, B: 22, A: 255} // Deep dark sidebar
+			return color.NRGBA{R: 19, G: 19, B: 19, A: 255} // Neutral Dark Sidebar
 		case colorNameContent:
-			return color.NRGBA{R: 30, G: 30, B: 34, A: 255} // Slightly elevated main content
+			return color.NRGBA{R: 29, G: 29, B: 29, A: 255} // Neutral Dark Content
 		case colorNameHeader:
-			return color.NRGBA{R: 36, G: 36, B: 42, A: 255} // Distinct header
+			return color.NRGBA{R: 35, G: 35, B: 35, A: 255} // Neutral Dark Header
+
+		case theme.ColorNameSelection:
+			return withAlpha(accent, 115) // 45% Opacity
+		case theme.ColorNameHover:
+			return withAlpha(accent, 51) // 20% Opacity
 		case theme.ColorNamePrimary:
-			return color.NRGBA{R: 98, G: 114, B: 164, A: 255} // Premium indigo
+			return accent
 		}
 	} else {
 		switch name {
-		case theme.ColorNameBackground:
-			return color.NRGBA{R: 245, G: 245, B: 247, A: 255}
+		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
+			return color.NRGBA{R: 246, G: 246, B: 246, A: 255}
+		case theme.ColorNameInputBackground:
+			return color.NRGBA{R: 238, G: 238, B: 238, A: 255}
 		case colorNameSidebar:
-			return color.NRGBA{R: 235, G: 235, B: 238, A: 255} // Slightly darker gray for contrast
+			return color.NRGBA{R: 236, G: 236, B: 236, A: 255}
 		case colorNameContent:
-			return color.NRGBA{R: 250, G: 250, B: 252, A: 255} // Bright clean content
+			return color.NRGBA{R: 250, G: 250, B: 250, A: 255}
 		case colorNameHeader:
-			return color.NRGBA{R: 220, G: 220, B: 225, A: 255} // Sleek gray header
+			return color.NRGBA{R: 224, G: 224, B: 224, A: 255}
+		case theme.ColorNameSelection:
+			return withAlpha(accent, 115) // 45% Opacity
+		case theme.ColorNameHover:
+			return withAlpha(accent, 51) // 20% Opacity
 		case theme.ColorNamePrimary:
-			return color.NRGBA{R: 65, G: 88, B: 208, A: 255} // Vibrant blue
+			return accent
 		}
 	}
 	return p.Theme.Color(name, variant)
+}
+
+func withAlpha(c color.Color, alpha uint8) color.Color {
+	if c == nil {
+		return color.Transparent
+	}
+	r, g, b, _ := c.RGBA()
+	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: alpha}
 }
 
 type themedBox struct {
@@ -1557,3 +1693,24 @@ func (s *segmentedRadio) Refresh() {
 	s.container.Refresh()
 }
 
+// --- Color Helpers ---
+
+func parseHexColor(s string) (color.NRGBA, error) {
+	s = strings.TrimPrefix(s, "#")
+	if len(s) != 6 {
+		return color.NRGBA{}, fmt.Errorf("invalid hex length")
+	}
+	r, err := strconv.ParseUint(s[0:2], 16, 8)
+	if err != nil {
+		return color.NRGBA{}, err
+	}
+	g, err := strconv.ParseUint(s[2:4], 16, 8)
+	if err != nil {
+		return color.NRGBA{}, err
+	}
+	b, err := strconv.ParseUint(s[4:6], 16, 8)
+	if err != nil {
+		return color.NRGBA{}, err
+	}
+	return color.NRGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}, nil
+}

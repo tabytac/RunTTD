@@ -41,15 +41,18 @@ type Profile struct {
 }
 
 type Config struct {
-	FirstRun         bool      `json:"-"`
-	ParentDir        string    `json:"parentDir"`
-	DocsBasePath     string    `json:"docsBasePath"`
-	GithubApiUrl     string    `json:"githubApiUrl"`
-	OSType           string    `json:"osType"`
-	AutoCloseOnStart bool      `json:"autoCloseOnStart"`
-	Verbose          bool      `json:"verbose"`
-	LogToFile        bool      `json:"logToFile"`
-	Profiles         []Profile `json:"profiles"`
+	FirstRun         bool   `json:"-"`
+	ParentDir        string `json:"parentDir"`
+	DocsBasePath     string `json:"docsBasePath"`
+	GithubApiUrl     string `json:"githubApiUrl"`
+	OSType           string `json:"osType"`
+	AutoCloseOnStart bool   `json:"autoCloseOnStart"`
+	Verbose          bool   `json:"verbose"`
+	LogToFile        bool   `json:"logToFile"`
+	ThemeVariant     string `json:"themeVariant"`
+	AccentPreset     int    `json:"accentPreset"`
+
+	Profiles []Profile `json:"profiles"`
 }
 
 type ReleaseInfo struct {
@@ -83,9 +86,17 @@ func SaveConfig(filename string, config *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	if err := os.WriteFile(filename, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+
+	tmpFile := filename + ".tmp"
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write temp config file: %w", err)
 	}
+
+	if err := os.Rename(tmpFile, filename); err != nil {
+		os.Remove(tmpFile)
+		return fmt.Errorf("failed to rename config file: %w", err)
+	}
+
 	return nil
 }
 
