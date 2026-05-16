@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"net/http"
 	"os"
 	"os/exec"
@@ -168,6 +169,36 @@ func FindVersionFolder(parentDir, version string) string {
 	return ""
 }
 
+// engine-aware version folder finder
+func FindVersionFolderEngine(parentDir, version, engine string, cfg *Config) string {
+	entries, err := os.ReadDir(parentDir)
+	if err != nil {
+		return ""
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		switch engine {
+		case "jgrpp":
+			if strings.Contains(name, fmt.Sprintf("jgrpp-%s", version)) || strings.Contains(name, version) && strings.Contains(strings.ToLower(name), "jgrpp") {
+				return filepath.Join(parentDir, name)
+			}
+		case "vanilla", "vanilla-nightly":
+			if strings.Contains(strings.ToLower(name), "openttd") && strings.Contains(name, version) {
+				return filepath.Join(parentDir, name)
+			}
+		default:
+			if strings.Contains(name, version) {
+				return filepath.Join(parentDir, name)
+			}
+		}
+	}
+	return ""
+}
+
 func FindLatestFolder(parentDir string) string {
 	entries, err := os.ReadDir(parentDir)
 	if err != nil {
@@ -187,6 +218,43 @@ func FindLatestFolder(parentDir string) string {
 				latestTime = info.ModTime()
 				latestFolder = filepath.Join(parentDir, entry.Name())
 			}
+		}
+	}
+	return latestFolder
+}
+
+// engine-aware latest folder finder
+func FindLatestFolderEngine(parentDir, engine string) string {
+	entries, err := os.ReadDir(parentDir)
+	if err != nil {
+		return ""
+	}
+
+	var latestFolder string
+	var latestTime time.Time
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := strings.ToLower(entry.Name())
+		switch engine {
+		case "jgrpp":
+			if !strings.Contains(name, "jgrpp") {
+				continue
+			}
+		case "vanilla", "vanilla-nightly":
+			if !strings.Contains(name, "openttd") {
+				continue
+			}
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(latestTime) {
+			latestTime = info.ModTime()
+			latestFolder = filepath.Join(parentDir, entry.Name())
 		}
 	}
 	return latestFolder
@@ -422,6 +490,71 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	return true
 }
 
+// DownloadAndExtractVersionForEngine downloads and extracts an engine-specific release
+func DownloadAndExtractVersionForEngine(version, engine string, cfg *Config) bool {
+	if engine == "jgrpp" {
+		return DownloadAndExtractVersion(version, cfg)
+	}
+
+	// vanilla engines: attempt to download from CDN mirrors
+	base := cfg.VanillaMirror
+	if engine == "vanilla-nightly" && cfg.NightlyMirror != "" {
+		base = cfg.NightlyMirror
+	}
+	if base == "" {
+		base = "https://cdn.openttd.org/openttd-releases/"
+	}
+
+	// Candidate filenames: openttd-<tag>-<os>.(zip|tar.xz|dmg)
+	candidates := []string{
+		fmt.Sprintf("openttd-%s-%s.zip", version, cfg.OSType),
+		fmt.Sprintf("openttd-%s-%s.tar.xz", version, cfg.OSType),
+		fmt.Sprintf("openttd-%s-%s.dmg", version, cfg.OSType),
+		fmt.Sprintf("openttd-%s.zip", version),
+		fmt.Sprintf("openttd-%s.tar.xz", version),
+		fmt.Sprintf("openttd-%s.dmg", version),
+	}
+
+	downloadDir := cfg.ParentDir
+	if err := os.MkdirAll(downloadDir, 0755); err != nil {
+		return false
+	}
+
+	for _, name := range candidates {
+		url := strings.TrimRight(base, "/") + "/" + name
+		resp, err := http.Get(url)
+		if err != nil || resp.StatusCode != 200 {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			continue
+		}
+		archivePath := filepath.Join(downloadDir, name)
+		file, err := os.Create(archivePath)
+		if err != nil {
+			resp.Body.Close()
+			continue
+		}
+		if _, err = io.Copy(file, resp.Body); err != nil {
+			file.Close()
+			resp.Body.Close()
+			os.Remove(archivePath)
+			continue
+		}
+		file.Close()
+		resp.Body.Close()
+
+		if err := extractArchive(archivePath, downloadDir); err != nil {
+			os.Remove(archivePath)
+			continue
+		}
+		os.Remove(archivePath)
+		return true
+	}
+
+	return false
+}
+
 type Logger struct {
 	mu        sync.Mutex
 	lines     []string
@@ -574,6 +707,26 @@ func CheckForNewVersion(config *Config) string {
 	return ""
 }
 
+// CheckForNewVersionForEngine returns the latest version tag for a given engine.
+func CheckForNewVersionForEngine(engine string, cfg *Config) string {
+	switch engine {
+	case "jgrpp":
+		return CheckForNewVersion(cfg)
+	case "vanilla", "vanilla-nightly":
+		versions, err := FetchAvailableVersionsForEngine(engine, cfg)
+		if err != nil || len(versions) == 0 {
+			return ""
+		}
+		// first entry is latest marker
+		if versions[0] == "latest" && len(versions) > 1 {
+			return versions[1]
+		}
+		return versions[0]
+	default:
+		return ""
+	}
+}
+
 func FetchAvailableVersions(config *Config) ([]string, error) {
 	repoURL := fmt.Sprintf("%s/releases?per_page=20", config.GithubApiUrl)
 
@@ -597,6 +750,55 @@ func FetchAvailableVersions(config *Config) ([]string, error) {
 		versions = append(versions, tag)
 	}
 	return versions, nil
+}
+
+// FetchAvailableVersionsForEngine returns versions for a given engine.
+func FetchAvailableVersionsForEngine(engine string, cfg *Config) ([]string, error) {
+	switch engine {
+	case "jgrpp":
+		return FetchAvailableVersions(cfg)
+	case "vanilla", "vanilla-nightly":
+		// Try to scrape the CDN index for versions
+		base := cfg.VanillaMirror
+		if engine == "vanilla-nightly" && cfg.NightlyMirror != "" {
+			base = cfg.NightlyMirror
+		}
+		if base == "" {
+			base = "https://cdn.openttd.org/openttd-releases/"
+		}
+		resp, err := http.Get(base)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch vanilla index: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("failed to fetch vanilla index: HTTP %d", resp.StatusCode)
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read vanilla index: %w", err)
+		}
+		text := string(body)
+		// naive parsing: find occurrences of "openttd-<tag>"
+		re := regexp.MustCompile(`openttd-([0-9A-Za-z._-]+)`) 
+		matches := re.FindAllStringSubmatch(text, -1)
+		set := map[string]bool{}
+		versions := []string{}
+		for _, m := range matches {
+			if len(m) < 2 { continue }
+			tag := m[1]
+			if !set[tag] {
+				set[tag] = true
+				versions = append(versions, tag)
+			}
+		}
+		// prefer putting "latest" first
+		out := []string{"latest"}
+		out = append(out, versions...)
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unknown engine: %s", engine)
+	}
 }
 
 func main() {

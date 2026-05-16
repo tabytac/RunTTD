@@ -21,16 +21,16 @@ jobs:
             platform: linux-amd64
             goos: linux
             goarch: amd64
-            output_name: jgrpp-launcher-linux
+            output_name: openttd-launcher-linux
           - os: windows-latest
             platform: windows-amd64
             goos: windows
             goarch: amd64
-            output_name: JGRPP_Launcher.exe
+            output_name: OpenTTD_Launcher.exe
           - os: macos-latest
             platform: macos-universal
             goos: darwin
-            output_name: jgrpp-launcher-macos
+            output_name: openttd-launcher-macos
 
     steps:
       - name: Checkout
@@ -84,14 +84,14 @@ jobs:
           BINARY=${{ matrix.output_name }}
           
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            RELEASE_FILE="JGRPP_Launcher_${TAG}_${PLATFORM}.exe"
+            RELEASE_FILE="OpenTTD_Launcher_${TAG}_${PLATFORM}.exe"
             cp "$BINARY" "$RELEASE_FILE"
           elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            RELEASE_FILE="JGRPP_Launcher_${TAG}_${PLATFORM}.tar.gz"
+            RELEASE_FILE="OpenTTD_Launcher_${TAG}_${PLATFORM}.tar.gz"
             tar -czf "$RELEASE_FILE" "$BINARY"
           else
             # macOS Universal
-            RELEASE_FILE="JGRPP_Launcher_${TAG}_${PLATFORM}.zip"
+            RELEASE_FILE="OpenTTD_Launcher_${TAG}_${PLATFORM}.zip"
             zip "$RELEASE_FILE" "$BINARY"
           fi
           

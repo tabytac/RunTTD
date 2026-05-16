@@ -1,12 +1,12 @@
-# JGRPP Launcher
+# OpenTTD Launcher
 
-A desktop launcher for [JGR's Patchpack](https://github.com/JGRennison/OpenTTD-patches) (JGRPP) for OpenTTD. Handles profile management, version downloads, and multiplayer configuration.
+A desktop launcher for OpenTTD and JGR's Patchpack (JGRPP). Supports both vanilla OpenTTD (stable and nightly) and JGRPP releases. Handles profile management, version downloads, and multiplayer configuration.
 
 ## Features
 
 - **Profile system** — Set up separate profiles for different saves, servers, or JGRPP versions. Easily switch between them.
-- **Auto-download** — If the JGRPP version isn't installed locally, the launcher downloads it from GitHub.
-- **Version pinning** — Lock a profile to a specific JGRPP version (e.g. `0.71.1`) or just use `latest` to always grab the newest release.
+- **Auto-download** — If the chosen engine/version isn't installed locally, the launcher will download it (vanilla builds from the OpenTTD CDN; JGRPP builds from GitHub releases).
+- **Version pinning** — Lock a profile to a specific version (e.g. `0.71.1`) or just use `latest` to always grab the newest release.
 - **Custom Themes** — Select from 8 color presets and toggle between Light and Dark modes.
 - **Multiplayer quick-join** — Store server address, passwords, and company info per profile. The launcher passes the right arguments so you connect directly.
 - **Save path loading** — Point a profile at a save folder and the launcher will load the most recent `.sav` file automatically.
@@ -16,7 +16,7 @@ A desktop launcher for [JGR's Patchpack](https://github.com/JGRennison/OpenTTD-p
 
 1. **Download** the latest release for your OS from the [Releases](../../releases) page.
 2. **Run the executable** — no installer needed.
-   - **Windows**: `JGRPP_Launcher.exe`
+   - **Windows**: `OpenTTD_Launcher.exe`
    - **Linux**: `.tar.gz` archive containing the binary.
    - **macOS**: `.zip` archive containing a Universal Binary (supports both Intel and Apple Silicon).
 
@@ -30,7 +30,7 @@ Each profile stores:
 | Field | What it does |
 |---|---|
 | **Name** | Display name in the list |
-| **Version** | JGRPP version to use — `latest` or a specific tag like `0.72.2` |
+| **Version** | Engine version to use — `latest` or a specific tag like `0.72.2` |
 | **Save Path** | Relative path under your OpenTTD `save/` folder (e.g. `My Games/Coastal`). Loads the most recent `.sav` in that folder. Can also be an absolute path or left blank. |
 | **Server IP:Port** | Multiplayer server address, e.g. `play.example.com:3979` |
 | **Server Password** | Server join password (if any) |
@@ -43,7 +43,7 @@ You can **create**, **edit**, **duplicate**, and **delete** profiles from the ma
 
 Click **Settings** at the bottom of the profile list to configure:
 
-- **Parent Directory** — Where JGRPP versions are downloaded and extracted to.
+- **Parent Directory** — Where engine versions are downloaded and extracted to (subfolders per engine).
 - **Docs Base Path** — Your OpenTTD documents folder (where `save/` and `openttd.cfg` live).
 - **Auto-close** — Optionally close the launcher once OpenTTD starts.
 - **Theming** — Pick from 8 preset accent colors and toggle Light/Dark mode.
@@ -68,11 +68,11 @@ Requires Go 1.26+. Linux builds also need `libgl1-mesa-dev` and `xorg-dev`.
 
 ```bash
 # Windows
-go build -ldflags "-H=windowsgui" -o dist/JGRPP_Launcher.exe .
+go build -ldflags "-H=windowsgui" -o dist/OpenTTD_Launcher.exe .
 
 # Linux / macOS
-go build -o dist/JGRPP_Launcher .
-```
+go build -o dist/OpenTTD_Launcher .
+``` 
 
 ## License
 

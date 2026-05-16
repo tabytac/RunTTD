@@ -393,7 +393,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		detailsContainer.Objects = nil
 
 		if selectedIdx < 0 || selectedIdx >= len(um.config.Profiles) {
-			welcomeTitle := widget.NewLabel("Welcome to JGRPP Launcher")
+			welcomeTitle := widget.NewLabel("Welcome to OpenTTD Launcher")
 			welcomeTitle.TextStyle = fyne.TextStyle{Bold: true}
 			welcomeTitle.Alignment = fyne.TextAlignCenter
 
@@ -663,7 +663,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	split := container.NewHSplit(leftPanel, rightPanel)
 	split.Offset = 0.35
 
-	headerLabel := widget.NewLabel("JGRPP Launcher")
+	headerLabel := widget.NewLabel("OpenTTD Launcher")
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
 	var themeToggleBtn *widget.Button
 	themeToggleBtn = widget.NewButtonWithIcon("", theme.ColorPaletteIcon(), func() {
@@ -810,17 +810,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	nameEntry.SetPlaceHolder("Profile name")
 
 	versionEntry := widget.NewSelectEntry(um.cachedVersions)
-	if len(um.cachedVersions) == 0 {
-		versionEntry.SetOptions([]string{"latest"})
-		go func() {
-			versions, err := FetchAvailableVersions(um.config)
-			if err == nil && len(versions) > 0 {
-				um.cachedVersions = versions
-				versionEntry.SetOptions(versions)
-				versionEntry.Refresh()
-			}
-		}()
-	}
+	versionEntry.SetOptions([]string{"latest"})
 	// Fallback if the profile's version isn't in the options yet
 	if profile.Version != "" {
 		versionEntry.SetText(profile.Version)
@@ -842,10 +832,19 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 		"jgrpp":           "JGRPP",
 	}
 	engineSelect := widget.NewSelect(engineOptions, func(s string) {
-		// when engine changes, clear version so user refreshes or re-fetches
+		// when engine changes, clear version then fetch versions for that engine
 		versionEntry.SetText("")
 		versionEntry.SetOptions([]string{"latest"})
 		versionEntry.Refresh()
+		go func() {
+			eng := engineMap[s]
+			versions, err := FetchAvailableVersionsForEngine(eng, um.config)
+			if err == nil && len(versions) > 0 {
+				um.cachedVersions = versions
+				versionEntry.SetOptions(versions)
+				versionEntry.Refresh()
+			}
+		}()
 	})
 	// preselect if profile has an engine
 	if sel, ok := revEngineMap[profile.Engine]; ok {
@@ -1652,28 +1651,35 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 
 	requested := strings.TrimSpace(profile.Version)
 	version := requested
+	engine := profile.Engine
+	if strings.TrimSpace(engine) == "" {
+		engine = um.config.DefaultEngine
+		if engine == "" {
+			engine = "jgrpp"
+		}
+	}
+
 	if requested == "" || strings.EqualFold(requested, "latest") {
 		if updateStatus != nil {
-			updateStatus("Resolving latest JGRPP version")
+			updateStatus(fmt.Sprintf("Resolving latest %s version", engine))
 		}
-		um.LogImportant("Resolving latest JGRPP version")
-		version = CheckForNewVersion(um.config)
+		um.LogImportant(fmt.Sprintf("Resolving latest %s version", engine))
+		version = CheckForNewVersionForEngine(engine, um.config)
 		if version == "" {
-			um.LogImportant("Could not determine latest version from GitHub; trying latest local install.")
+			um.LogImportant("Could not determine latest version from remote; trying latest local install.")
 			if updateStatus != nil {
 				updateStatus("Latest version lookup failed, using latest local install")
 			}
-			versionFolder := FindLatestFolder(um.config.ParentDir)
+			versionFolder := FindLatestFolderEngine(um.config.ParentDir, engine)
 			if versionFolder == "" {
 				if updateStatus != nil {
-					updateStatus("Failed: no local JGRPP installation found")
+					updateStatus("Failed: no local installation found for engine")
 				}
-				um.LogImportant("No local JGRPP installation found.")
+				um.LogImportant("No local installation found for engine.")
 				if onError != nil {
 					onError()
 				}
 				return
-
 			}
 			um.LogVerbose(fmt.Sprintf("Using latest local version folder: %s", versionFolder))
 			if updateStatus != nil {
@@ -1688,31 +1694,31 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 	}
 	if requested != "" && !strings.EqualFold(requested, "latest") {
 		if updateStatus != nil {
-			updateStatus(fmt.Sprintf("Using requested JGRPP version %s", version))
+			updateStatus(fmt.Sprintf("Using requested %s version %s", engine, version))
 		}
-		um.LogImportant(fmt.Sprintf("Using requested JGRPP version %s", version))
+		um.LogImportant(fmt.Sprintf("Using requested %s version %s", engine, version))
 	}
 
 	if updateStatus != nil {
 		updateStatus("Looking for local version folder")
 	}
-	versionFolder := FindVersionFolder(um.config.ParentDir, version)
+	versionFolder := FindVersionFolderEngine(um.config.ParentDir, version, engine, um.config)
 	if versionFolder == "" {
 		if updateStatus != nil {
 			updateStatus("Version not found locally, downloading")
 		}
-		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download.", version))
-		if !DownloadAndExtractVersion(version, um.config) {
+		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download for engine %s.", version, engine))
+		if !DownloadAndExtractVersionForEngine(version, engine, um.config) {
 			if updateStatus != nil {
 				updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
 			}
-			um.LogImportant(fmt.Sprintf("Failed to download version %s.", version))
+			um.LogImportant(fmt.Sprintf("Failed to download version %s for engine %s.", version, engine))
 			return
 		}
 		if updateStatus != nil {
 			updateStatus("Download complete, resolving extracted folder")
 		}
-		versionFolder = FindVersionFolder(um.config.ParentDir, version)
+		versionFolder = FindVersionFolderEngine(um.config.ParentDir, version, engine, um.config)
 		if versionFolder == "" {
 			if updateStatus != nil {
 				updateStatus("Failed: downloaded version folder could not be located")
