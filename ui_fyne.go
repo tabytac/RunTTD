@@ -1366,7 +1366,12 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	versionEntry.OnChanged = func(string) {
 		updateState()
 	}
-	engineSelect.OnChanged = func(string) {
+	engineSelect.OnChanged = func(s string) {
+		eng := engineMap[s]
+		versionEntry.SetText(displayVersion(eng, ""))
+		versionEntry.SetOptions(defaultVersionOptions(eng))
+		versionEntry.Refresh()
+		fetchVersionsForEngine(eng)
 		updateState()
 	}
 	updateState()
