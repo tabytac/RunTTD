@@ -146,6 +146,9 @@ func FindVersionFolderClient(parentDir, version, client string, cfg *domain.Conf
 		name := entry.Name()
 		switch client {
 		case "jgrpp":
+			if len(platformAliases) > 0 && !FolderMatchesAnyAlias(strings.ToLower(name), platformAliases) {
+				continue
+			}
 			if strings.Contains(name, fmt.Sprintf("jgrpp-%s", version)) || (strings.Contains(name, version) && strings.Contains(strings.ToLower(name), "jgrpp")) {
 				return filepath.Join(parentDir, name)
 			}
@@ -219,6 +222,9 @@ func FindLatestFolderClientWithConfig(parentDir, client string, cfg *domain.Conf
 		switch client {
 		case "jgrpp":
 			if !strings.Contains(name, "jgrpp") {
+				continue
+			}
+			if len(platformAliases) > 0 && !FolderMatchesAnyAlias(name, platformAliases) {
 				continue
 			}
 		case "vanilla", "vanilla-nightly":

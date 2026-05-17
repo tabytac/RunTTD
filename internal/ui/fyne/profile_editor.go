@@ -2,6 +2,7 @@ package fyne
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +11,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/ncruces/zenity"
@@ -24,6 +26,48 @@ func valueOrDefault(val, def string) string {
 		return def
 	}
 	return val
+}
+
+func (um *UIManager) browseSavePath(startPath, title string, directory bool) (string, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	var (
+		selected string
+		err      error
+	)
+
+	if directory {
+		selected, err = zenity.SelectFile(
+			zenity.Directory(),
+			zenity.Title(title),
+			zenity.Filename(startPath),
+		)
+	} else {
+		selected, err = zenity.SelectFile(
+			zenity.Title(title),
+			zenity.FileFilters{
+				{Name: "OpenTTD Saves/Scenarios", Patterns: []string{"*.sav", "*.scn"}},
+			},
+			zenity.Filename(startPath),
+		)
+	}
+	if err != nil || selected == "" {
+		return "", err
+	}
+
+	if um.Config.DocsBasePath == "" {
+		return selected, nil
+	}
+
+	saveBase := filepath.Join(um.Config.DocsBasePath, "save")
+	if rel, relErr := filepath.Rel(saveBase, selected); relErr == nil && !strings.HasPrefix(rel, "..") {
+		return rel, nil
+	}
+	if rel, relErr := filepath.Rel(um.Config.DocsBasePath, selected); relErr == nil && !strings.HasPrefix(rel, "..") {
+		return rel, nil
+	}
+	return selected, nil
 }
 
 // showProfileEditor displays the edit modal popup for creating or updating profiles
@@ -122,9 +166,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		go func() {
 			versions, err := app.ClientFetchVersions(context.Background(), clientID, um.Config)
 			if err == nil && len(versions) > 0 {
-				um.CachedVersions = versions
-				versionEntry.SetOptions(versions)
-				versionEntry.Refresh()
+				fyne.Do(func() {
+					um.CachedVersions = versions
+					versionEntry.SetOptions(versions)
+					versionEntry.Refresh()
+				})
 			}
 		}()
 	}
@@ -279,9 +325,6 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 	browseFileBtn := widget.NewButtonWithIcon("Browse File...", theme.FileIcon(), func() {
 		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-
 			startPath := savePathEntry.Text
 			if startPath == "" {
 				if um.Config.DocsBasePath != "" {
@@ -291,37 +334,24 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				startPath = filepath.Join(um.Config.DocsBasePath, "save", startPath)
 			}
 
-			file, err := zenity.SelectFile(
-				zenity.Title("Select Save or Scenario"),
-				zenity.FileFilters{
-					{Name: "OpenTTD Saves/Scenarios", Patterns: []string{"*.sav", "*.scn"}},
-				},
-				zenity.Filename(startPath),
-			)
-			if err == nil && file != "" {
-				path := file
-				if um.Config.DocsBasePath != "" {
-					saveBase := filepath.Join(um.Config.DocsBasePath, "save")
-					rel, err := filepath.Rel(saveBase, path)
-					if err == nil && !strings.HasPrefix(rel, "..") {
-						path = rel
-					} else {
-						rel, err := filepath.Rel(um.Config.DocsBasePath, path)
-						if err == nil && !strings.HasPrefix(rel, "..") {
-							path = rel
-						}
-					}
-				}
-				savePathEntry.SetText(path)
+			path, err := um.browseSavePath(startPath, "Select Save or Scenario", false)
+			if err != nil {
+				fyne.Do(func() {
+					dialog.ShowError(fmt.Errorf("could not open file picker: %w", err), um.Window)
+				})
+				return
 			}
+			if path == "" {
+				return
+			}
+			fyne.Do(func() {
+				savePathEntry.SetText(path)
+			})
 		}()
 	})
 
 	browseFolderBtn := widget.NewButtonWithIcon("Browse Folder...", theme.FolderIcon(), func() {
 		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-
 			startPath := savePathEntry.Text
 			if startPath == "" {
 				if um.Config.DocsBasePath != "" {
@@ -331,27 +361,19 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				startPath = filepath.Join(um.Config.DocsBasePath, "save", startPath)
 			}
 
-			directory, err := zenity.SelectFile(
-				zenity.Directory(),
-				zenity.Title("Select Save Folder"),
-				zenity.Filename(startPath),
-			)
-			if err == nil && directory != "" {
-				path := directory
-				if um.Config.DocsBasePath != "" {
-					saveBase := filepath.Join(um.Config.DocsBasePath, "save")
-					rel, err := filepath.Rel(saveBase, path)
-					if err == nil && !strings.HasPrefix(rel, "..") {
-						path = rel
-					} else {
-						rel, err := filepath.Rel(um.Config.DocsBasePath, path)
-						if err == nil && !strings.HasPrefix(rel, "..") {
-							path = rel
-						}
-					}
-				}
-				savePathEntry.SetText(path)
+			path, err := um.browseSavePath(startPath, "Select Save Folder", true)
+			if err != nil {
+				fyne.Do(func() {
+					dialog.ShowError(fmt.Errorf("could not open folder picker: %w", err), um.Window)
+				})
+				return
 			}
+			if path == "" {
+				return
+			}
+			fyne.Do(func() {
+				savePathEntry.SetText(path)
+			})
 		}()
 	})
 

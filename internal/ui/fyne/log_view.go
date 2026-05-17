@@ -35,7 +35,9 @@ func (um *UIManager) showToast(message string) {
 
 	go func() {
 		time.Sleep(3 * time.Second)
-		pop.Hide()
+		fyne.Do(func() {
+			pop.Hide()
+		})
 	}()
 }
 
@@ -79,8 +81,10 @@ func (um *UIManager) showLogView(profileIdx int) {
 		for _, line := range logs {
 			text += line + "\n"
 		}
-		_ = logBinding.Set(text)
-		logBox.ScrollToBottom()
+		fyne.Do(func() {
+			_ = logBinding.Set(text)
+			logBox.ScrollToBottom()
+		})
 	}
 
 	// Start a goroutine to periodically update the log display
