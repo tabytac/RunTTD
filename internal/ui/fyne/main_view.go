@@ -511,19 +511,31 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	deleteBtn = widget.NewButton("Delete", func() {
 		if selectedIdx >= 0 {
 			if len(um.Config.Profiles) > 1 {
-				um.Config.Profiles = append(um.Config.Profiles[:selectedIdx], um.Config.Profiles[selectedIdx+1:]...)
-				_ = domain.SaveConfig(um.ConfigPath, um.Config)
+				profileName := um.Config.Profiles[selectedIdx].Name
+				dialog.NewConfirm(
+					"Delete Profile",
+					fmt.Sprintf("Are you sure you want to delete profile %q?", profileName),
+					func(confirmed bool) {
+						if !confirmed {
+							return
+						}
 
-				nextIdx := selectedIdx
-				if nextIdx >= len(um.Config.Profiles) {
-					nextIdx = len(um.Config.Profiles) - 1
-				}
+						um.Config.Profiles = append(um.Config.Profiles[:selectedIdx], um.Config.Profiles[selectedIdx+1:]...)
+						_ = domain.SaveConfig(um.ConfigPath, um.Config)
 
-				selectedIdx = nextIdx
-				um.SelectedProfileName = um.Config.Profiles[selectedIdx].Name
-				profileList.Refresh()
-				profileList.Select(widget.ListItemID(selectedIdx))
-				refreshDetails()
+						nextIdx := selectedIdx
+						if nextIdx >= len(um.Config.Profiles) {
+							nextIdx = len(um.Config.Profiles) - 1
+						}
+
+						selectedIdx = nextIdx
+						um.SelectedProfileName = um.Config.Profiles[selectedIdx].Name
+						profileList.Refresh()
+						profileList.Select(widget.ListItemID(selectedIdx))
+						refreshDetails()
+					},
+					um.Window,
+				).Show()
 			} else {
 				dialog.ShowError(fmt.Errorf("cannot delete the last profile"), um.Window)
 			}
