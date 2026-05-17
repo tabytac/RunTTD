@@ -174,8 +174,15 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			}
 		}()
 	}
+	initializingClientSelection := true
 	clientSelect := widget.NewSelect(clientOptions, func(s string) {
 		cli := clientMap[s]
+		if initializingClientSelection {
+			versionEntry.SetOptions(defaultVersionOptions(cli))
+			versionEntry.Refresh()
+			fetchVersionsForClient(cli)
+			return
+		}
 		versionEntry.SetText(displayVersion(cli, ""))
 		versionEntry.SetOptions(defaultVersionOptions(cli))
 		versionEntry.Refresh()
@@ -194,6 +201,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	if sel, ok := revClientMap[currentClient]; ok {
 		clientSelect.SetSelected(sel)
 	}
+	initializingClientSelection = false
 	fetchVersionsForClient(currentClient)
 
 	// Auto-detect mode for legacy configs or unsaved changes
