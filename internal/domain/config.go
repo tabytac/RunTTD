@@ -8,20 +8,20 @@ import (
 
 // Config represents the top-level launcher configuration
 type Config struct {
-	FirstRun         bool      `json:"-"`
-	ParentDir        string    `json:"parentDir"`
-	DocsBasePath     string    `json:"docsBasePath"`
-	GithubApiUrl     string    `json:"githubApiUrl"`
-	OSType           string    `json:"osType"`
-	AutoOpenLog      bool      `json:"autoOpenLog"`
-	AutoCloseOnStart bool      `json:"autoCloseOnStart"`
-	Verbose          bool      `json:"verbose"`
-	LogToFile        bool      `json:"logToFile"`
-	ThemeVariant     string    `json:"themeVariant"`
-	AccentPreset     int       `json:"accentPreset"`
-	DefaultClient    string    `json:"defaultClient"`
-	VanillaMirror    string    `json:"vanillaMirror"`
-	NightlyMirror    string    `json:"nightlyMirror"`
+	FirstRun         bool   `json:"-"`
+	ParentDir        string `json:"parentDir"`
+	DocsBasePath     string `json:"docsBasePath"`
+	GithubApiUrl     string `json:"githubApiUrl"`
+	OSType           string `json:"osType"`
+	AutoOpenLog      bool   `json:"autoOpenLog"`
+	AutoCloseOnStart bool   `json:"autoCloseOnStart"`
+	Verbose          bool   `json:"verbose"`
+	LogToFile        bool   `json:"logToFile"`
+	ThemeVariant     string `json:"themeVariant"`
+	AccentPreset     int    `json:"accentPreset"`
+	DefaultClient    string `json:"defaultClient"`
+	VanillaMirror    string `json:"vanillaMirror"`
+	NightlyMirror    string `json:"nightlyMirror"`
 
 	Profiles []Profile `json:"profiles"`
 }

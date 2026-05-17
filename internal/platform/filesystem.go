@@ -318,4 +318,3 @@ func ResolveConfigPath() string {
 func ResolveLogPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "log.txt")
 }
-

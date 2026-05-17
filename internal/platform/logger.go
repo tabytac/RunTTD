@@ -55,4 +55,3 @@ func (l *Logger) GetAll() []string {
 func AppendToLogFileRaw(path, msg string) {
 	appendToLogFile(path, msg)
 }
-
