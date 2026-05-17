@@ -50,7 +50,7 @@ type Profile struct {
 	LaunchMode            string `json:"launchMode"` // "", "file", "folder", "multiplayer"
 	AutoLatestFilter      string `json:"autoLatestFilter"`
 	ExtraArgs             string `json:"extraArgs"`
-	Engine                string `json:"engine"` // "jgrpp", "vanilla", "vanilla-nightly"
+	Client                string `json:"client"` // "jgrpp", "vanilla", "vanilla-nightly"
 }
 
 type Config struct {
@@ -65,7 +65,7 @@ type Config struct {
 	LogToFile        bool   `json:"logToFile"`
 	ThemeVariant     string `json:"themeVariant"`
 	AccentPreset     int    `json:"accentPreset"`
-	DefaultEngine    string `json:"defaultEngine"`
+	DefaultClient    string `json:"defaultClient"`
 	VanillaMirror    string `json:"vanillaMirror"`
 	NightlyMirror    string `json:"nightlyMirror"`
 
@@ -93,19 +93,6 @@ func LoadConfig(filename string) (*Config, error) {
 
 	if len(config.Profiles) == 0 {
 		config.Profiles = []Profile{{Name: "Default", Version: "latest"}}
-	}
-
-	// Migration: ensure legacy configs have an engine set (default to jgrpp)
-	migrated := false
-	for i := range config.Profiles {
-		if strings.TrimSpace(config.Profiles[i].Engine) == "" {
-			config.Profiles[i].Engine = "jgrpp"
-			migrated = true
-		}
-	}
-	if migrated {
-		// best-effort persist migration back to disk
-		_ = SaveConfig(filename, &config)
 	}
 
 	return &config, nil
@@ -180,21 +167,21 @@ func FindVersionFolder(parentDir, version string) string {
 	return ""
 }
 
-// engine-aware version folder finder
-func FindVersionFolderEngine(parentDir, version, engine string, cfg *Config) string {
+// client-aware version folder finder
+func FindVersionFolderClient(parentDir, version, client string, cfg *Config) string {
 	entries, err := os.ReadDir(parentDir)
 	if err != nil {
 		return ""
 	}
 
-	platformAliases := enginePlatformAliases(cfg)
+	platformAliases := clientPlatformAliases(cfg)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		name := entry.Name()
-		switch engine {
+		switch client {
 		case "jgrpp":
 			// Match jgrpp-<version> or folders containing both version and 'jgrpp'
 			if strings.Contains(name, fmt.Sprintf("jgrpp-%s", version)) || (strings.Contains(name, version) && strings.Contains(strings.ToLower(name), "jgrpp")) {
@@ -245,12 +232,12 @@ func FindLatestFolder(parentDir string) string {
 	return latestFolder
 }
 
-// engine-aware latest folder finder
-func FindLatestFolderEngine(parentDir, engine string) string {
-	return FindLatestFolderEngineWithConfig(parentDir, engine, nil)
+// client-aware latest folder finder
+func FindLatestFolderClient(parentDir, client string) string {
+	return FindLatestFolderClientWithConfig(parentDir, client, nil)
 }
 
-func FindLatestFolderEngineWithConfig(parentDir, engine string, cfg *Config) string {
+func FindLatestFolderClientWithConfig(parentDir, client string, cfg *Config) string {
 	entries, err := os.ReadDir(parentDir)
 	if err != nil {
 		return ""
@@ -258,14 +245,14 @@ func FindLatestFolderEngineWithConfig(parentDir, engine string, cfg *Config) str
 
 	var latestFolder string
 	var latestTime time.Time
-	platformAliases := enginePlatformAliases(cfg)
+	platformAliases := clientPlatformAliases(cfg)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		name := strings.ToLower(entry.Name())
-		switch engine {
+		switch client {
 		case "jgrpp":
 			if !strings.Contains(name, "jgrpp") {
 				continue
@@ -520,25 +507,25 @@ func DownloadAndExtractVersion(version string, config *Config) bool {
 	return true
 }
 
-// DownloadAndExtractVersionForEngine downloads and extracts an engine-specific release.
-func DownloadAndExtractVersionForEngine(version, engine string, cfg *Config) bool {
-	return DownloadAndExtractVersionForEngineWithLogger(version, engine, cfg, nil)
+// DownloadAndExtractVersionForClient downloads and extracts a client-specific release.
+func DownloadAndExtractVersionForClient(version, client string, cfg *Config) bool {
+	return DownloadAndExtractVersionForClientWithLogger(version, client, cfg, nil)
 }
 
-// DownloadAndExtractVersionForEngineWithLogger downloads a release and optionally logs diagnostics.
-func DownloadAndExtractVersionForEngineWithLogger(version, engine string, cfg *Config, logger *Logger) bool {
+// DownloadAndExtractVersionForClientWithLogger downloads a release and optionally logs diagnostics.
+func DownloadAndExtractVersionForClientWithLogger(version, client string, cfg *Config, logger *Logger) bool {
 	logf := func(format string, args ...any) {
 		if logger != nil {
 			logger.Append(fmt.Sprintf(format, args...))
 		}
 	}
-	if engine == "jgrpp" {
+	if client == "jgrpp" {
 		return DownloadAndExtractVersion(version, cfg)
 	}
 
-	// vanilla engines: attempt to download from CDN mirrors
+	// vanilla clients: attempt to download from CDN mirrors
 	base := cfg.VanillaMirror
-	if engine == "vanilla-nightly" {
+	if client == "vanilla-nightly" {
 		base = cfg.NightlyMirror
 		if base == "" {
 			base = "https://cdn.openttd.org/openttd-nightlies/"
@@ -571,12 +558,12 @@ func DownloadAndExtractVersionForEngineWithLogger(version, engine string, cfg *C
 
 	baseTrimmed := strings.TrimRight(base, "/")
 	nightlyYear := ""
-	if engine == "vanilla-nightly" {
+	if client == "vanilla-nightly" {
 		if len(version) >= 4 {
 			nightlyYear = version[:4]
 		}
 	}
-	if engine == "vanilla-nightly" && nightlyYear != "" {
+	if client == "vanilla-nightly" && nightlyYear != "" {
 		manifest, err := fetchNightlyManifest(baseTrimmed, nightlyYear, version)
 		if err != nil {
 			logf("Nightly manifest fetch failed: %v", err)
@@ -828,20 +815,20 @@ func CheckForNewVersion(config *Config) string {
 	return ""
 }
 
-// CheckForNewVersionForEngine returns the latest version tag for a given engine.
-func CheckForNewVersionForEngine(engine string, cfg *Config) string {
-	return CheckForNewVersionForEngineTrack(engine, cfg, "stable")
+// CheckForNewVersionForClient returns the latest version tag for a given client.
+func CheckForNewVersionForClient(client string, cfg *Config) string {
+	return CheckForNewVersionForClientTrack(client, cfg, "stable")
 }
 
-// CheckForNewVersionForEngineTrack resolves latest by track:
-// - "stable": skips RC/beta versions for vanilla engines
-// - "testing": includes RC/beta versions for vanilla engines
-func CheckForNewVersionForEngineTrack(engine string, cfg *Config, track string) string {
-	switch engine {
+// CheckForNewVersionForClientTrack resolves latest by track:
+// - "stable": skips RC/beta versions for vanilla clients
+// - "testing": includes RC/beta versions for vanilla clients
+func CheckForNewVersionForClientTrack(client string, cfg *Config, track string) string {
+	switch client {
 	case "jgrpp":
 		return CheckForNewVersion(cfg)
 	case "vanilla", "vanilla-nightly":
-		versions, err := FetchAvailableVersionsForEngine(engine, cfg)
+		versions, err := FetchAvailableVersionsForClient(client, cfg)
 		if err != nil || len(versions) == 0 {
 			return ""
 		}
@@ -944,10 +931,10 @@ func parseNightlyManifest(text string) nightlyManifestData {
 }
 
 func nightlyPlatformAliases(cfg *Config) []string {
-	return enginePlatformAliases(cfg)
+	return clientPlatformAliases(cfg)
 }
 
-func enginePlatformAliases(cfg *Config) []string {
+func clientPlatformAliases(cfg *Config) []string {
 	if cfg == nil {
 		return []string{defaultOSType()}
 	}
@@ -1089,13 +1076,13 @@ func FetchAvailableVersions(config *Config) ([]string, error) {
 	return versions, nil
 }
 
-// FetchAvailableVersionsForEngine returns versions for a given engine.
-func FetchAvailableVersionsForEngine(engine string, cfg *Config) ([]string, error) {
-	switch engine {
+// FetchAvailableVersionsForClient returns versions for a given client.
+func FetchAvailableVersionsForClient(client string, cfg *Config) ([]string, error) {
+	switch client {
 	case "jgrpp":
 		return FetchAvailableVersions(cfg)
 	case "vanilla", "vanilla-nightly":
-		if engine == "vanilla-nightly" {
+		if client == "vanilla-nightly" {
 			base := cfg.NightlyMirror
 			if base == "" {
 				base = "https://cdn.openttd.org/openttd-nightlies/"
@@ -1114,7 +1101,7 @@ func FetchAvailableVersionsForEngine(engine string, cfg *Config) ([]string, erro
 		if base == "" {
 			base = "https://cdn.openttd.org/openttd-releases/"
 		}
-		resp, err := cdnClient.Get(base)
+		resp, err := http.Get(base)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch vanilla index: %w", err)
 		}
@@ -1131,7 +1118,7 @@ func FetchAvailableVersionsForEngine(engine string, cfg *Config) ([]string, erro
 		out = append(out, versions...)
 		return out, nil
 	default:
-		return nil, fmt.Errorf("unknown engine: %s", engine)
+		return nil, fmt.Errorf("unknown client: %s", client)
 	}
 }
 
@@ -1188,7 +1175,7 @@ func main() {
 				AutoCloseOnStart: false,
 				Verbose:          false,
 				LogToFile:        false,
-				DefaultEngine:    "",
+				DefaultClient:    "",
 				VanillaMirror:    "https://cdn.openttd.org/openttd-releases/",
 				NightlyMirror:    "https://cdn.openttd.org/openttd-nightlies/",
 				Profiles:         []Profile{{Name: "Default", Version: "latest"}},

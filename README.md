@@ -5,7 +5,7 @@ A desktop launcher for OpenTTD and JGR's Patchpack (JGRPP). Supports both vanill
 ## Features
 
 - **Profile system** — Set up separate profiles for different saves, servers, or JGRPP versions. Easily switch between them.
-- **Auto-download** — If the chosen engine/version isn't installed locally, the launcher will download it (vanilla builds from the OpenTTD CDN; JGRPP builds from GitHub releases).
+- **Auto-download** — If the chosen client/version isn't installed locally, the launcher will download it (vanilla builds from the OpenTTD CDN; JGRPP builds from GitHub releases).
 - **Version pinning** — Lock a profile to a specific version (e.g. `0.71.1`) or just use `latest` to always grab the newest release.
 - **Custom Themes** — Select from 8 color presets and toggle between Light and Dark modes.
 - **Multiplayer quick-join** — Store server address, passwords, and company info per profile. The launcher passes the right arguments so you connect directly.
@@ -30,7 +30,7 @@ Each profile stores:
 | Field | What it does |
 |---|---|
 | **Name** | Display name in the list |
-| **Version** | Engine version to use — `latest` or a specific tag like `0.72.2` |
+| **Version** | Client version to use — `latest` or a specific tag like `0.72.2` |
 | **Save Path** | Relative path under your OpenTTD `save/` folder (e.g. `My Games/Coastal`). Loads the most recent `.sav` in that folder. Can also be an absolute path or left blank. |
 | **Server IP:Port** | Multiplayer server address, e.g. `play.example.com:3979` |
 | **Server Password** | Server join password (if any) |
@@ -43,7 +43,7 @@ You can **create**, **edit**, **duplicate**, and **delete** profiles from the ma
 
 Click **Settings** at the bottom of the profile list to configure:
 
-- **Parent Directory** — Where engine versions are downloaded and extracted to (subfolders per engine).
+- **Parent Directory** — Where client versions are downloaded and extracted to (subfolders per client).
 - **Docs Base Path** — Your OpenTTD documents folder (where `save/` and `openttd.cfg` live).
 - **Auto-close** — Optionally close the launcher once OpenTTD starts.
 - **Theming** — Pick from 8 preset accent colors and toggle Light/Dark mode.
@@ -57,7 +57,7 @@ The launcher stores all settings and profiles in a single `config.json` file. It
 ## Troubleshooting
 
 - **Launcher exits immediately** — Enable `logToFile` manually in `config.json` and check `log.txt` in the same folder.
-- **"Executable not found"** — Make sure your Parent Directory path is correct and contains extracted engine folders (e.g., `openttd-...` or `jgrpp-...`).
+- **"Executable not found"** — Make sure your Parent Directory path is correct and contains extracted client folders (e.g., `openttd-...` or `jgrpp-...`).
 - **Save not loading** — Check that the Save Path in your profile matches an actual folder under your OpenTTD `save/` directory. The launcher picks the newest `.sav` file in that folder.
 - **Download fails** — The launcher needs internet access to reach the API. Check your connection and firewall settings.
 - **macOS: "app is damaged"** — This is Gatekeeper blocking an unsigned binary. Right-click the file → Open → Open to allow it.
@@ -72,7 +72,7 @@ go build -ldflags "-H=windowsgui" -o dist/OpenTTD_Launcher.exe .
 
 # Linux / macOS
 go build -o dist/OpenTTD_Launcher .
-``` 
+```
 
 ## License
 

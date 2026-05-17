@@ -810,20 +810,20 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	versionEntry.SetOptions([]string{"latest (Stable)", "latest (Testing)"})
 	versionEntry.PlaceHolder = "latest (Stable), latest (Testing), or 15.3"
 
-	// Engine selection (OpenTTD Stable, OpenTTD Nightly, JGRPP)
-	engineOptions := []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
-	engineMap := map[string]string{
+	// Client selection (OpenTTD Stable, OpenTTD Nightly, JGRPP)
+	clientOptions := []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
+	clientMap := map[string]string{
 		"OpenTTD (Stable)":  "vanilla",
 		"OpenTTD (Nightly)": "vanilla-nightly",
 		"JGRPP":             "jgrpp",
 	}
-	revEngineMap := map[string]string{
+	revClientMap := map[string]string{
 		"vanilla":         "OpenTTD (Stable)",
 		"vanilla-nightly": "OpenTTD (Nightly)",
 		"jgrpp":           "JGRPP",
 	}
-	defaultVersionOptions := func(engineID string) []string {
-		switch engineID {
+	defaultVersionOptions := func(clientID string) []string {
+		switch clientID {
 		case "vanilla":
 			return []string{"latest (Stable)", "latest (Testing)"}
 		case "vanilla-nightly":
@@ -832,12 +832,12 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			return []string{"latest"}
 		}
 	}
-	displayVersion := func(engineID, stored string) string {
+	displayVersion := func(clientID, stored string) string {
 		s := strings.TrimSpace(stored)
 		lower := strings.ToLower(s)
-		switch engineID {
+		switch clientID {
 		case "vanilla", "vanilla-nightly":
-			if engineID == "vanilla-nightly" {
+			if clientID == "vanilla-nightly" {
 				switch lower {
 				case "", "latest", "latest-stable", "latest-testing", "latest (stable)", "latest (testing)":
 					return "latest"
@@ -860,12 +860,12 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			return s
 		}
 	}
-	storedVersion := func(engineID, entered string) string {
+	storedVersion := func(clientID, entered string) string {
 		s := strings.TrimSpace(entered)
 		lower := strings.ToLower(s)
-		switch engineID {
+		switch clientID {
 		case "vanilla", "vanilla-nightly":
-			if engineID == "vanilla-nightly" {
+			if clientID == "vanilla-nightly" {
 				if lower == "" || lower == "latest" || lower == "latest-stable" || lower == "latest-testing" || lower == "latest (stable)" || lower == "latest (testing)" {
 					return ""
 				}
@@ -886,9 +886,9 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			return s
 		}
 	}
-	fetchVersionsForEngine := func(engineID string) {
+	fetchVersionsForClient := func(clientID string) {
 		go func() {
-			versions, err := FetchAvailableVersionsForEngine(engineID, um.config)
+			versions, err := FetchAvailableVersionsForClient(clientID, um.config)
 			if err == nil && len(versions) > 0 {
 				um.cachedVersions = versions
 				versionEntry.SetOptions(versions)
@@ -896,28 +896,28 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			}
 		}()
 	}
-	engineSelect := widget.NewSelect(engineOptions, func(s string) {
-		// when engine changes, clear version then fetch versions for that engine
-		eng := engineMap[s]
-		versionEntry.SetText(displayVersion(eng, ""))
-		versionEntry.SetOptions(defaultVersionOptions(eng))
+	clientSelect := widget.NewSelect(clientOptions, func(s string) {
+		// when client changes, clear version then fetch versions for that client
+		cli := clientMap[s]
+		versionEntry.SetText(displayVersion(cli, ""))
+		versionEntry.SetOptions(defaultVersionOptions(cli))
 		versionEntry.Refresh()
-		fetchVersionsForEngine(eng)
+		fetchVersionsForClient(cli)
 	})
-	// Preselect engine and version display for new and existing profiles.
-	currentEngine := strings.TrimSpace(profile.Engine)
-	if currentEngine == "" {
-		currentEngine = strings.TrimSpace(um.config.DefaultEngine)
-		if currentEngine == "" {
-			currentEngine = "jgrpp"
+	// Preselect client and version display for new and existing profiles.
+	currentClient := strings.TrimSpace(profile.Client)
+	if currentClient == "" {
+		currentClient = strings.TrimSpace(um.config.DefaultClient)
+		if currentClient == "" {
+			currentClient = "jgrpp"
 		}
 	}
-	versionEntry.SetOptions(defaultVersionOptions(currentEngine))
-	versionEntry.SetText(displayVersion(currentEngine, profile.Version))
-	if sel, ok := revEngineMap[currentEngine]; ok {
-		engineSelect.SetSelected(sel)
+	versionEntry.SetOptions(defaultVersionOptions(currentClient))
+	versionEntry.SetText(displayVersion(currentClient, profile.Version))
+	if sel, ok := revClientMap[currentClient]; ok {
+		clientSelect.SetSelected(sel)
 	}
-	fetchVersionsForEngine(currentEngine)
+	fetchVersionsForClient(currentClient)
 
 	// Auto-detect mode for legacy configs or unsaved changes
 	if profile.LaunchMode == "" {
@@ -1188,8 +1188,8 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 			}
 		}
 
-		if strings.TrimSpace(engineSelect.Selected) == "" {
-			return false, "Engine selection is required."
+		if strings.TrimSpace(clientSelect.Selected) == "" {
+			return false, "Client selection is required."
 		}
 
 		if strings.TrimSpace(versionEntry.Text) == "" {
@@ -1228,15 +1228,15 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 
 		profile.Name = strings.TrimSpace(nameEntry.Text)
 
-		// Persist engine choice first, then normalize version token per engine
-		selectedEngine := "jgrpp"
-		if en := strings.TrimSpace(engineSelect.Selected); en != "" {
-			if mapped, ok := engineMap[en]; ok {
-				selectedEngine = mapped
+		// Persist client choice first, then normalize version token per client
+		selectedClient := "jgrpp"
+		if en := strings.TrimSpace(clientSelect.Selected); en != "" {
+			if mapped, ok := clientMap[en]; ok {
+				selectedClient = mapped
 			}
 		}
-		profile.Engine = selectedEngine
-		profile.Version = storedVersion(selectedEngine, versionEntry.Text)
+		profile.Client = selectedClient
+		profile.Version = storedVersion(selectedClient, versionEntry.Text)
 
 		rawSavePath := strings.TrimSpace(savePathEntry.Text)
 		// Strip leading "save/" or "save\" (case-insensitive)
@@ -1289,7 +1289,7 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	generalTab := container.NewTabItemWithIcon("General Options", theme.InfoIcon(), container.NewVBox(
 		sectionTitle("Identity"),
 		widget.NewLabel("Name"), nameEntry,
-		widget.NewLabel("Engine"), engineSelect,
+		widget.NewLabel("Client"), clientSelect,
 		widget.NewLabel("Version"), versionEntry,
 	))
 
@@ -1366,12 +1366,12 @@ func (um *UIManager) showProfileEditor(profileIdx int) {
 	versionEntry.OnChanged = func(string) {
 		updateState()
 	}
-	engineSelect.OnChanged = func(s string) {
-		eng := engineMap[s]
-		versionEntry.SetText(displayVersion(eng, ""))
-		versionEntry.SetOptions(defaultVersionOptions(eng))
+	clientSelect.OnChanged = func(s string) {
+		cli := clientMap[s]
+		versionEntry.SetText(displayVersion(cli, ""))
+		versionEntry.SetOptions(defaultVersionOptions(cli))
 		versionEntry.Refresh()
-		fetchVersionsForEngine(eng)
+		fetchVersionsForClient(cli)
 		updateState()
 	}
 	updateState()
@@ -1482,13 +1482,13 @@ func (um *UIManager) showSettingsView() {
 	nightlyMirrorEntry.SetText(um.config.NightlyMirror)
 	nightlyMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-nightlies/")
 
-	// Default engine selector: empty means no default
-	defaultEngineOptions := []string{"(none)", "OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
-	defaultEngineMap := map[string]string{"(none)": "", "OpenTTD (Stable)": "vanilla", "OpenTTD (Nightly)": "vanilla-nightly", "JGRPP": "jgrpp"}
-	revDefaultEngineMap := map[string]string{"": "(none)", "vanilla": "OpenTTD (Stable)", "vanilla-nightly": "OpenTTD (Nightly)", "jgrpp": "JGRPP"}
-	defaultEngineSelect := widget.NewSelect(defaultEngineOptions, func(string) {})
-	if label, ok := revDefaultEngineMap[um.config.DefaultEngine]; ok {
-		defaultEngineSelect.SetSelected(label)
+	// Default client selector: empty means no default
+	defaultClientOptions := []string{"(none)", "OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
+	defaultClientMap := map[string]string{"(none)": "", "OpenTTD (Stable)": "vanilla", "OpenTTD (Nightly)": "vanilla-nightly", "JGRPP": "jgrpp"}
+	revDefaultClientMap := map[string]string{"": "(none)", "vanilla": "OpenTTD (Stable)", "vanilla-nightly": "OpenTTD (Nightly)", "jgrpp": "JGRPP"}
+	defaultClientSelect := widget.NewSelect(defaultClientOptions, func(string) {})
+	if label, ok := revDefaultClientMap[um.config.DefaultClient]; ok {
+		defaultClientSelect.SetSelected(label)
 	}
 
 	autoCloseCheck := widget.NewCheck("Auto-close launcher when OpenTTD starts", nil)
@@ -1526,7 +1526,7 @@ func (um *UIManager) showSettingsView() {
 		widget.NewSeparator(),
 		widget.NewLabel("Vanilla CDN (stable) base URL"), vanillaMirrorEntry,
 		widget.NewLabel("Vanilla Nightly CDN base URL"), nightlyMirrorEntry,
-		widget.NewLabel("Default Engine (new profiles)"), defaultEngineSelect,
+		widget.NewLabel("Default Client (new profiles)"), defaultClientSelect,
 	))
 
 	tabs := container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
@@ -1551,10 +1551,10 @@ func (um *UIManager) showSettingsView() {
 
 	um.config.VanillaMirror = vanillaMirrorEntry.Text
 	um.config.NightlyMirror = nightlyMirrorEntry.Text
-	// map selected label back to engine id
-	if sel := defaultEngineSelect.Selected; sel != "" {
-		if mapped, ok := defaultEngineMap[sel]; ok {
-			um.config.DefaultEngine = mapped
+	// map selected label back to client id
+	if sel := defaultClientSelect.Selected; sel != "" {
+		if mapped, ok := defaultClientMap[sel]; ok {
+			um.config.DefaultClient = mapped
 		}
 	}
 	cancelBtn := widget.NewButton("Cancel", func() {
@@ -1717,11 +1717,11 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 	requested := strings.TrimSpace(profile.Version)
 	version := requested
 	requestedLower := strings.ToLower(requested)
-	engine := profile.Engine
-	if strings.TrimSpace(engine) == "" {
-		engine = um.config.DefaultEngine
-		if engine == "" {
-			engine = "jgrpp"
+	client := profile.Client
+	if strings.TrimSpace(client) == "" {
+		client = um.config.DefaultClient
+		if client == "" {
+			client = "jgrpp"
 		}
 	}
 
@@ -1735,27 +1735,27 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 		isLatestRequest = true
 		latestTrack = "testing"
 	}
-	if engine == "vanilla-nightly" && isLatestRequest {
+	if client == "vanilla-nightly" && isLatestRequest {
 		latestTrack = "testing"
 	}
 
 	if isLatestRequest {
 		if updateStatus != nil {
-			updateStatus(fmt.Sprintf("Resolving latest %s version (%s)", engine, latestTrack))
+			updateStatus(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
 		}
-		um.LogImportant(fmt.Sprintf("Resolving latest %s version (%s)", engine, latestTrack))
-		version = CheckForNewVersionForEngineTrack(engine, um.config, latestTrack)
+		um.LogImportant(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
+		version = CheckForNewVersionForClientTrack(client, um.config, latestTrack)
 		if version == "" {
 			um.LogImportant("Could not determine latest version from remote; trying latest local install.")
 			if updateStatus != nil {
 				updateStatus("Latest version lookup failed, using latest local install")
 			}
-			versionFolder := FindLatestFolderEngineWithConfig(um.config.ParentDir, engine, um.config)
+			versionFolder := FindLatestFolderClientWithConfig(um.config.ParentDir, client, um.config)
 			if versionFolder == "" {
 				if updateStatus != nil {
-					updateStatus("Failed: no local installation found for engine")
+					updateStatus("Failed: no local installation found for client")
 				}
-				um.LogImportant("No local installation found for engine.")
+				um.LogImportant("No local installation found for client.")
 				if onError != nil {
 					onError()
 				}
@@ -1774,31 +1774,31 @@ func (um *UIManager) launchProfile(profile Profile, updateStatus func(status str
 	}
 	if requested != "" && !isLatestRequest {
 		if updateStatus != nil {
-			updateStatus(fmt.Sprintf("Using requested %s version %s", engine, version))
+			updateStatus(fmt.Sprintf("Using requested %s version %s", client, version))
 		}
-		um.LogImportant(fmt.Sprintf("Using requested %s version %s", engine, version))
+		um.LogImportant(fmt.Sprintf("Using requested %s version %s", client, version))
 	}
 
 	if updateStatus != nil {
 		updateStatus("Looking for local version folder")
 	}
-	versionFolder := FindVersionFolderEngine(um.config.ParentDir, version, engine, um.config)
+	versionFolder := FindVersionFolderClient(um.config.ParentDir, version, client, um.config)
 	if versionFolder == "" {
 		if updateStatus != nil {
 			updateStatus("Version not found locally, downloading")
 		}
-		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download for engine %s.", version, engine))
-		if !DownloadAndExtractVersionForEngineWithLogger(version, engine, um.config, um.logger) {
+		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download for client %s.", version, client))
+		if !DownloadAndExtractVersionForClientWithLogger(version, client, um.config, um.logger) {
 			if updateStatus != nil {
 				updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
 			}
-			um.LogImportant(fmt.Sprintf("Failed to download version %s for engine %s.", version, engine))
+			um.LogImportant(fmt.Sprintf("Failed to download version %s for client %s.", version, client))
 			return
 		}
 		if updateStatus != nil {
 			updateStatus("Download complete, resolving extracted folder")
 		}
-		versionFolder = FindVersionFolderEngine(um.config.ParentDir, version, engine, um.config)
+		versionFolder = FindVersionFolderClient(um.config.ParentDir, version, client, um.config)
 		if versionFolder == "" {
 			if updateStatus != nil {
 				updateStatus("Failed: downloaded version folder could not be located")

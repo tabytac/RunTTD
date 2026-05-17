@@ -85,7 +85,7 @@ jobs:
           TAG=${{ github.ref_name }}
           PLATFORM=${{ matrix.platform }}
           BINARY=${{ matrix.output_name }}
-          
+
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             RELEASE_FILE="OpenTTD_Launcher_${TAG}_${PLATFORM}.exe"
             cp "$BINARY" "$RELEASE_FILE"
@@ -97,7 +97,7 @@ jobs:
             RELEASE_FILE="OpenTTD_Launcher_${TAG}_${PLATFORM}.zip"
             zip "$RELEASE_FILE" "$BINARY"
           fi
-          
+
           echo "RELEASE_FILE=$RELEASE_FILE" >> $GITHUB_ENV
 
       - name: Upload release artifact
