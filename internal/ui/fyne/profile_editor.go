@@ -366,6 +366,25 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}()
 	})
 
+	// NewGRF scan mode selection
+	newgrfLabelMap := map[string]string{
+		"":   "Default",
+		"Q":  "Skip Startup",
+		"QQ": "Disable All",
+	}
+	revNewgrfLabelMap := map[string]string{
+		"Default":      "",
+		"Skip Startup": "Q",
+		"Disable All ": "QQ",
+	}
+	initialNewgrf := profile.NewGRFScanMode
+	if initialNewgrf == "" {
+		initialNewgrf = ""
+	}
+	newgrfRadio := NewSegmentedRadio([]string{newgrfLabelMap[""], newgrfLabelMap["Q"], newgrfLabelMap["QQ"]}, newgrfLabelMap[initialNewgrf], func(s string) {
+		// no-op; selection read on save
+	})
+
 	// Auto-Latest Filter selection
 	filterLabelMap := map[string]string{
 		"both": "Saves & Scenarios",
@@ -582,6 +601,17 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		profile.AutoLatestFilter = revFilterLabelMap[autoLatestFilterRadio.Selected]
 		profile.ExtraArgs = strings.TrimSpace(extraArgsEntry.Text)
 
+		// Persist NewGRF scan mode
+		if sel := newgrfRadio.Selected; sel != "" {
+			if v, ok := revNewgrfLabelMap[sel]; ok {
+				profile.NewGRFScanMode = v
+			} else {
+				profile.NewGRFScanMode = ""
+			}
+		} else {
+			profile.NewGRFScanMode = ""
+		}
+
 		configPath := strings.TrimSpace(configFileEntry.Text)
 		if configPath != "" && um.Config.DocsBasePath != "" && filepath.IsAbs(configPath) {
 			if rel, err := filepath.Rel(um.Config.DocsBasePath, configPath); err == nil && !strings.HasPrefix(rel, "..") {
@@ -637,6 +667,10 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		widget.NewLabel("Config File Override (optional)"),
 		container.NewBorder(nil, nil, nil, browseConfigBtn, configFileEntry),
 		noConfigSaveCheck,
+		widget.NewSeparator(),
+		sectionTitle("NewGRF Scan Behavior"),
+		widget.NewLabel("Control NewGRF scanning/loading on startup:"),
+		container.NewHBox(newgrfRadio.Container),
 		widget.NewSeparator(),
 		sectionTitle("Custom Command Line Arguments"),
 		widget.NewLabel("Specify extra flags to pass to the OpenTTD executable:"),

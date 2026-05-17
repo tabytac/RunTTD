@@ -14,5 +14,6 @@ type Profile struct {
 	LaunchMode            string `json:"launchMode"` // "", "file", "folder", "multiplayer"
 	AutoLatestFilter      string `json:"autoLatestFilter"`
 	ExtraArgs             string `json:"extraArgs"`
-	Client                string `json:"client"` // "jgrpp", "vanilla", "vanilla-nightly"
+	Client                string `json:"client"`         // "jgrpp", "vanilla", "vanilla-nightly"
+	NewGRFScanMode        string `json:"newgrfScanMode"` // "" | "Q" | "QQ"
 }

@@ -25,6 +25,7 @@ func ExecuteOpenTTD(
 	ipPort, companyNumber, serverPassword, companyPassword string,
 	savePath, launchMode, extraArgs, configFilePath string,
 	noConfigSave bool,
+	newgrfMode string,
 	autoLatestFilter string,
 	docsBasePath string,
 	obs ProcessObserver,
@@ -109,6 +110,14 @@ func ExecuteOpenTTD(
 		args = append(args, "-x")
 	}
 
+	// NewGRF scan mode dedicated flags
+	switch strings.ToUpper(strings.TrimSpace(newgrfMode)) {
+	case "Q":
+		args = append(args, "-Q")
+	case "QQ":
+		args = append(args, "-QQ")
+	}
+
 	// Append extra arguments from the Advanced tab
 	if extraArgs != "" {
 		fields := stripDedicatedConfigArgs(strings.Fields(extraArgs))
@@ -169,6 +178,10 @@ func stripDedicatedConfigArgs(fields []string) []string {
 			skipNext = true
 			continue
 		case strings.HasPrefix(lower, "-c="):
+			continue
+		case lower == "-q":
+			continue
+		case lower == "-qq":
 			continue
 		default:
 			filtered = append(filtered, field)

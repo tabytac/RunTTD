@@ -204,7 +204,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			if updateStatus != nil {
 				updateStatus("Starting OpenTTD from latest local installation")
 			}
-			platform.ExecuteOpenTTD(context.Background(), versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, profile.ExtraArgs, profile.ConfigFilePath, profile.NoConfigSave, profile.AutoLatestFilter, um.Config.DocsBasePath, um)
+			platform.ExecuteOpenTTD(context.Background(), versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, profile.ExtraArgs, profile.ConfigFilePath, profile.NoConfigSave, profile.NewGRFScanMode, profile.AutoLatestFilter, um.Config.DocsBasePath, um)
 			if updateStatus != nil {
 				updateStatus("Launch command sent")
 			}
@@ -251,7 +251,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 	if updateStatus != nil {
 		updateStatus("Starting OpenTTD")
 	}
-	platform.ExecuteOpenTTD(context.Background(), versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, profile.ExtraArgs, profile.ConfigFilePath, profile.NoConfigSave, profile.AutoLatestFilter, um.Config.DocsBasePath, um)
+	platform.ExecuteOpenTTD(context.Background(), versionFolder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, profile.ExtraArgs, profile.ConfigFilePath, profile.NoConfigSave, profile.NewGRFScanMode, profile.AutoLatestFilter, um.Config.DocsBasePath, um)
 	if updateStatus != nil {
 		updateStatus("Launch command sent")
 	}

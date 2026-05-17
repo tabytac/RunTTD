@@ -50,6 +50,14 @@ Click **Settings** at the bottom of the profile list to configure:
 - **Verbose logging** — Show detailed log messages during launch.
 - **GitHub API URL** / **Detected OS** — Advanced settings, they're auto-detected.
 
+### NewGRF Scan Behavior
+
+In a profile's Advanced Options, you can control NewGRF scanning and loading with three modes:
+
+- **Default** — Normal behavior: OpenTTD scans and loads all NewGRF files on startup.
+- **Skip Startup** — Skip NewGRF loading at startup only. NewGRF files won't be scanned or loaded when the game starts, but the game behaves normally otherwise.
+- **Disable All** — Permanent session-wide disable. Disables all NewGRF scanning and loading for the entire lifetime of that OpenTTD process.
+
 ## Config File
 
 The launcher stores all settings and profiles in a single `config.json` file. It looks for this file next to the executable. You can edit it by hand if you prefer, but the UI covers everything.

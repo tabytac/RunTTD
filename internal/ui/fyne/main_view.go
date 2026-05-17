@@ -347,6 +347,19 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			addDetail(detailsContainer, theme.ConfirmIcon(), "No Config Save", "Enabled", false)
 		}
 
+		if profile.NewGRFScanMode != "" {
+			var desc string
+			switch strings.ToUpper(profile.NewGRFScanMode) {
+			case "Q":
+				desc = "Skip NewGRF loading at startup"
+			case "QQ":
+				desc = "Disable all NewGRF scanning/loading (session-wide)"
+			}
+			if desc != "" {
+				addDetail(detailsContainer, theme.InfoIcon(), "NewGRF Scan", desc, false)
+			}
+		}
+
 		if profile.LaunchMode == "file" || profile.LaunchMode == "folder" {
 			icon := theme.FolderOpenIcon()
 			label := "Folder Path"
