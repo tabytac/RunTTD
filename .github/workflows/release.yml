@@ -53,7 +53,7 @@ jobs:
 
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
-        run: go build -ldflags "-H=windowsgui" -o "dist/${{ matrix.output_name }}" .
+        run: go build -ldflags "-H=windowsgui" -o "dist/${{ matrix.output_name }}" ./cmd/openttd-launcher
 
       - name: Build binary (Linux)
         if: matrix.platform == 'linux-amd64'
@@ -61,7 +61,7 @@ jobs:
           CGO_ENABLED: 1
         run: |
           mkdir -p dist
-          go build -o dist/${{ matrix.output_name }} .
+          go build -o dist/${{ matrix.output_name }} ./cmd/openttd-launcher
 
       - name: Build binary (macOS Universal)
         if: matrix.platform == 'macos-universal'
@@ -70,9 +70,9 @@ jobs:
         run: |
           mkdir -p dist
           # Build for Intel
-          GOARCH=amd64 go build -o dist/launcher-amd64 .
+          GOARCH=amd64 go build -o dist/launcher-amd64 ./cmd/openttd-launcher
           # Build for Apple Silicon
-          GOARCH=arm64 go build -o dist/launcher-arm64 .
+          GOARCH=arm64 go build -o dist/launcher-arm64 ./cmd/openttd-launcher
           # Merge into universal binary
           lipo -create -output "dist/${{ matrix.output_name }}" dist/launcher-amd64 dist/launcher-arm64
           # Cleanup temporary binaries

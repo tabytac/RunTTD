@@ -1,6 +1,6 @@
 //go:build !windows
 
-package main
+package platform
 
 import (
 	"os"
@@ -8,10 +8,10 @@ import (
 	"runtime"
 )
 
-// getDocumentsDir returns the user's documents-equivalent folder.
+// GetDocumentsDir returns the user's documents-equivalent folder
 // macOS: ~/Documents
 // Linux: ~/.local/share
-func getDocumentsDir() string {
+func GetDocumentsDir() string {
 	homeDir, _ := os.UserHomeDir()
 	if runtime.GOOS == "darwin" {
 		return filepath.Join(homeDir, "Documents")

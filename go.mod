@@ -1,4 +1,4 @@
-module jgrpp-launcher
+module openttd-launcher
 
 go 1.26
 
