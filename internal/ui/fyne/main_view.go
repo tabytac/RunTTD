@@ -517,7 +517,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		um.showLogView(-1)
 	})
 
-	settingsBtn := widget.NewButton("Settings", func() {
+	settingsBtn := widget.NewButton("Global Settings", func() {
 		um.showSettingsView()
 	})
 

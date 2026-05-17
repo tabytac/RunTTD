@@ -170,7 +170,7 @@ func (um *UIManager) showSettingsView() {
 
 	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), container.NewVBox(
 		sectionTitle("System Settings"),
-		widget.NewLabel("GitHub API URL"), githubApiUrlEntry,
+		widget.NewLabel("JGRPP GitHub API URL"), githubApiUrlEntry,
 		widget.NewLabel("OS Type (detected automatically)"), osTypeEntry,
 		widget.NewSeparator(),
 		widget.NewLabel("Vanilla CDN (stable) base URL"), vanillaMirrorEntry,
