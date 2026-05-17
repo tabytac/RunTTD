@@ -23,7 +23,8 @@ func ExecuteOpenTTD(
 	ctx context.Context,
 	versionFolder string,
 	ipPort, companyNumber, serverPassword, companyPassword string,
-	savePath, launchMode, extraArgs string,
+	savePath, launchMode, extraArgs, configFilePath string,
+	noConfigSave bool,
 	autoLatestFilter string,
 	docsBasePath string,
 	obs ProcessObserver,
@@ -96,9 +97,21 @@ func ExecuteOpenTTD(
 		args = append(args, "-g", saveFile)
 	}
 
+	configPath := strings.TrimSpace(configFilePath)
+	if configPath != "" {
+		if !filepath.IsAbs(configPath) && docsBasePath != "" {
+			configPath = filepath.Join(docsBasePath, configPath)
+		}
+		args = append(args, "-c", configPath)
+	}
+
+	if noConfigSave {
+		args = append(args, "-x")
+	}
+
 	// Append extra arguments from the Advanced tab
 	if extraArgs != "" {
-		fields := strings.Fields(extraArgs)
+		fields := stripDedicatedConfigArgs(strings.Fields(extraArgs))
 		args = append(args, fields...)
 	}
 
@@ -136,4 +149,31 @@ func ExecuteOpenTTD(
 			obs.LogVerbose("OpenTTD exited normally")
 		}
 	}()
+}
+
+func stripDedicatedConfigArgs(fields []string) []string {
+	filtered := make([]string, 0, len(fields))
+	skipNext := false
+
+	for _, field := range fields {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+
+		lower := strings.ToLower(field)
+		switch {
+		case lower == "-x":
+			continue
+		case lower == "-c":
+			skipNext = true
+			continue
+		case strings.HasPrefix(lower, "-c="):
+			continue
+		default:
+			filtered = append(filtered, field)
+		}
+	}
+
+	return filtered
 }

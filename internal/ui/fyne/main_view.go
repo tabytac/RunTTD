@@ -340,6 +340,13 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 		addDetail(detailsContainer, theme.SettingsIcon(), "Version", versionText, false)
 
+		if strings.TrimSpace(profile.ConfigFilePath) != "" {
+			addDetail(detailsContainer, theme.FileIcon(), "Config Override", profile.ConfigFilePath, true)
+		}
+		if profile.NoConfigSave {
+			addDetail(detailsContainer, theme.ConfirmIcon(), "No Config Save", "Enabled", false)
+		}
+
 		if profile.LaunchMode == "file" || profile.LaunchMode == "folder" {
 			icon := theme.FolderOpenIcon()
 			label := "Folder Path"

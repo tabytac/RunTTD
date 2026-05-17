@@ -70,6 +70,30 @@ func (um *UIManager) browseSavePath(startPath, title string, directory bool) (st
 	return selected, nil
 }
 
+func (um *UIManager) browseConfigPath(startPath string) (string, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	selected, err := zenity.SelectFile(
+		zenity.Title("Select OpenTTD config file"),
+		zenity.FileFilters{
+			{Name: "OpenTTD Config", Patterns: []string{"*.cfg"}},
+		},
+		zenity.Filename(startPath),
+	)
+	if err != nil || selected == "" {
+		return "", err
+	}
+
+	if um.Config.DocsBasePath != "" {
+		if rel, relErr := filepath.Rel(um.Config.DocsBasePath, selected); relErr == nil && !strings.HasPrefix(rel, "..") {
+			return rel, nil
+		}
+	}
+
+	return selected, nil
+}
+
 // showProfileEditor displays the edit modal popup for creating or updating profiles
 func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	var profile domain.Profile
@@ -309,6 +333,39 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	extraArgsEntry.SetPlaceHolder("Example: -d 3 -r 1920x1080")
 	extraArgsEntry.Wrapping = fyne.TextWrapWord
 
+	configFileEntry := widget.NewEntry()
+	configFileEntry.SetText(profile.ConfigFilePath)
+	configFileEntry.SetPlaceHolder("Optional path to config file (openttd.cfg)")
+
+	noConfigSaveCheck := widget.NewCheck("Do not save config changes on exit", nil)
+	noConfigSaveCheck.SetChecked(profile.NoConfigSave)
+
+	browseConfigBtn := widget.NewButtonWithIcon("Browse...", theme.FileIcon(), func() {
+		go func() {
+			startPath := strings.TrimSpace(configFileEntry.Text)
+			if startPath == "" && um.Config.DocsBasePath != "" {
+				startPath = filepath.Join(um.Config.DocsBasePath, "openttd.cfg")
+			} else if startPath != "" && !filepath.IsAbs(startPath) && um.Config.DocsBasePath != "" {
+				startPath = filepath.Join(um.Config.DocsBasePath, startPath)
+			}
+
+			path, err := um.browseConfigPath(startPath)
+			if err != nil {
+				fyne.Do(func() {
+					dialog.ShowError(fmt.Errorf("could not open config picker: %w", err), um.Window)
+				})
+				return
+			}
+			if path == "" {
+				return
+			}
+
+			fyne.Do(func() {
+				configFileEntry.SetText(path)
+			})
+		}()
+	})
+
 	// Auto-Latest Filter selection
 	filterLabelMap := map[string]string{
 		"both": "Saves & Scenarios",
@@ -462,7 +519,26 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 	setStatus := func() {
 		ok, message := validate()
-		statusLabel.SetText(message)
+		if !ok {
+			statusLabel.SetText(message)
+			statusLabel.Refresh()
+			return
+		}
+
+		configPath := strings.TrimSpace(configFileEntry.Text)
+		if configPath != "" {
+			checkPath := configPath
+			if !filepath.IsAbs(checkPath) && um.Config.DocsBasePath != "" {
+				checkPath = filepath.Join(um.Config.DocsBasePath, checkPath)
+			}
+			if _, err := os.Stat(checkPath); err != nil {
+				statusLabel.SetText(fmt.Sprintf("Warning: config file not found yet: %s", checkPath))
+				statusLabel.Refresh()
+				return
+			}
+		}
+
+		statusLabel.SetText("")
 		_ = ok
 		statusLabel.Refresh()
 	}
@@ -506,6 +582,15 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		profile.AutoLatestFilter = revFilterLabelMap[autoLatestFilterRadio.Selected]
 		profile.ExtraArgs = strings.TrimSpace(extraArgsEntry.Text)
 
+		configPath := strings.TrimSpace(configFileEntry.Text)
+		if configPath != "" && um.Config.DocsBasePath != "" && filepath.IsAbs(configPath) {
+			if rel, err := filepath.Rel(um.Config.DocsBasePath, configPath); err == nil && !strings.HasPrefix(rel, "..") {
+				configPath = rel
+			}
+		}
+		profile.ConfigFilePath = configPath
+		profile.NoConfigSave = noConfigSaveCheck.Checked
+
 		switch profile.LaunchMode {
 		case "":
 			profile.SavePath = ""
@@ -548,6 +633,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	))
 
 	advancedTab := container.NewTabItemWithIcon("Advanced Options", theme.SettingsIcon(), container.NewVBox(
+		sectionTitle("OpenTTD Config Behavior"),
+		widget.NewLabel("Config File Override (optional)"),
+		container.NewBorder(nil, nil, nil, browseConfigBtn, configFileEntry),
+		noConfigSaveCheck,
+		widget.NewSeparator(),
 		sectionTitle("Custom Command Line Arguments"),
 		widget.NewLabel("Specify extra flags to pass to the OpenTTD executable:"),
 		extraArgsEntry,
@@ -605,7 +695,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}
 		setStatus()
 	}
-	for _, entry := range []*widget.Entry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry} {
+	for _, entry := range []*widget.Entry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry, configFileEntry} {
 		entry.OnChanged = func(string) {
 			updateState()
 		}
