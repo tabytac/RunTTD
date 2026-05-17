@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"openttd-launcher/internal/domain"
+	"runttd/internal/domain"
 )
 
 // DefaultOSType returns the platform-specific release package naming classification

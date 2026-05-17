@@ -21,16 +21,16 @@ jobs:
             platform: linux-amd64
             goos: linux
             goarch: amd64
-            output_name: openttd-launcher-linux
+            output_name: RunTTD-linux
           - os: windows-latest
             platform: windows-amd64
             goos: windows
             goarch: amd64
-            output_name: OpenTTD_Launcher.exe
+            output_name: RunTTD.exe
           - os: macos-latest
             platform: macos-universal
             goos: darwin
-            output_name: openttd-launcher-macos
+            output_name: RunTTD-macos
 
     steps:
       - name: Checkout
@@ -48,12 +48,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
 
-      - name: Run unit tests
-        run: go test ./...
-
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
-        run: go build -ldflags "-H=windowsgui" -o "dist/${{ matrix.output_name }}" ./cmd/openttd-launcher
+        run: go build -ldflags "-H=windowsgui" -o "dist/${{ matrix.output_name }}" ./cmd/runttd
 
       - name: Build binary (Linux)
         if: matrix.platform == 'linux-amd64'
@@ -61,7 +58,7 @@ jobs:
           CGO_ENABLED: 1
         run: |
           mkdir -p dist
-          go build -o dist/${{ matrix.output_name }} ./cmd/openttd-launcher
+          go build -o dist/${{ matrix.output_name }} ./cmd/runttd
 
       - name: Build binary (macOS Universal)
         if: matrix.platform == 'macos-universal'
@@ -70,9 +67,9 @@ jobs:
         run: |
           mkdir -p dist
           # Build for Intel
-          GOARCH=amd64 go build -o dist/launcher-amd64 ./cmd/openttd-launcher
+          GOARCH=amd64 go build -o dist/launcher-amd64 ./cmd/runttd
           # Build for Apple Silicon
-          GOARCH=arm64 go build -o dist/launcher-arm64 ./cmd/openttd-launcher
+          GOARCH=arm64 go build -o dist/launcher-arm64 ./cmd/runttd
           # Merge into universal binary
           lipo -create -output "dist/${{ matrix.output_name }}" dist/launcher-amd64 dist/launcher-arm64
           # Cleanup temporary binaries
@@ -87,14 +84,14 @@ jobs:
           BINARY=${{ matrix.output_name }}
 
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            RELEASE_FILE="OpenTTD_Launcher_${TAG}_${PLATFORM}.exe"
+            RELEASE_FILE="RunTTD_${TAG}_${PLATFORM}.exe"
             cp "$BINARY" "$RELEASE_FILE"
           elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            RELEASE_FILE="OpenTTD_Launcher_${TAG}_${PLATFORM}.tar.gz"
+            RELEASE_FILE="RunTTD_${TAG}_${PLATFORM}.tar.gz"
             tar -czf "$RELEASE_FILE" "$BINARY"
           else
             # macOS Universal
-            RELEASE_FILE="OpenTTD_Launcher_${TAG}_${PLATFORM}.zip"
+            RELEASE_FILE="RunTTD_${TAG}_${PLATFORM}.zip"
             zip "$RELEASE_FILE" "$BINARY"
           fi
 

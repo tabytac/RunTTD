@@ -12,8 +12,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"openttd-launcher/internal/domain"
-	"openttd-launcher/internal/platform"
+	"runttd/internal/domain"
+	"runttd/internal/platform"
 )
 
 // OnStarted is the ProcessObserver callback triggered when OpenTTD starts successfully

@@ -1,4 +1,4 @@
-# OpenTTD Launcher
+# RunTTD
 
 A desktop launcher for OpenTTD and JGR's Patchpack (JGRPP). Supports both vanilla OpenTTD (stable and nightly) and JGRPP releases. Handles profile management, version downloads, and multiplayer configuration.
 
@@ -16,8 +16,8 @@ A desktop launcher for OpenTTD and JGR's Patchpack (JGRPP). Supports both vanill
 
 1. **Download** the latest release for your OS from the [Releases](../../releases) page.
 2. **Run the executable** — no installer needed.
-   - **Windows**: `OpenTTD_Launcher.exe`
-   - **Linux**: `.tar.gz` archive containing the binary.
+   - **Windows**: `RunTTD.exe`
+   - **Linux**: `.tar.gz` archive containing the `RunTTD` binary.
    - **macOS**: `.zip` archive containing a Universal Binary (supports both Intel and Apple Silicon).
 
 3. On first launch you'll be asked to confirm your install paths. The defaults are usually fine.
@@ -68,10 +68,10 @@ Requires Go 1.26+. Linux builds also need `libgl1-mesa-dev` and `xorg-dev`.
 
 ```bash
 # Windows
-go build -ldflags "-H=windowsgui" -o dist/OpenTTD_Launcher.exe .
+go build -ldflags "-H=windowsgui" -o dist/RunTTD.exe .
 
 # Linux / macOS
-go build -o dist/OpenTTD_Launcher .
+go build -o dist/RunTTD .
 ```
 
 ## License

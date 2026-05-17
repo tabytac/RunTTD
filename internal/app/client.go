@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"openttd-launcher/internal/domain"
+	"runttd/internal/domain"
 )
 
 // Client defines the contract that different engine types (e.g. Vanilla, JGRPP) must implement to support download, updates, and identification

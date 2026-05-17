@@ -1,4 +1,4 @@
-module openttd-launcher
+module runttd
 
 go 1.26
 

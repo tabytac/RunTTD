@@ -14,8 +14,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/ncruces/zenity"
 
-	"openttd-launcher/internal/app"
-	"openttd-launcher/internal/domain"
+	"runttd/internal/app"
+	"runttd/internal/domain"
 )
 
 // valueOrDefault returns def if val is empty or whitespace

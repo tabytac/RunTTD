@@ -8,10 +8,10 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"openttd-launcher/internal/app"
-	"openttd-launcher/internal/domain"
-	"openttd-launcher/internal/platform"
-	fyneuipkg "openttd-launcher/internal/ui/fyne"
+	"runttd/internal/app"
+	"runttd/internal/domain"
+	"runttd/internal/platform"
+	fyneuipkg "runttd/internal/ui/fyne"
 )
 
 func setupGuiOutput() {

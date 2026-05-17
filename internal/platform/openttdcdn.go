@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"openttd-launcher/internal/domain"
+	"runttd/internal/domain"
 )
 
 var (

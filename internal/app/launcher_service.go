@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"openttd-launcher/internal/domain"
-	"openttd-launcher/internal/platform"
+	"runttd/internal/domain"
+	"runttd/internal/platform"
 )
 
 // LauncherService coordinates check, download, extraction and execution for the OpenTTD packages

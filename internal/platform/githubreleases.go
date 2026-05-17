@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"openttd-launcher/internal/domain"
+	"runttd/internal/domain"
 )
 
 var httpClient = &http.Client{

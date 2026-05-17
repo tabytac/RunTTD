@@ -12,7 +12,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/ncruces/zenity"
 
-	"openttd-launcher/internal/domain"
+	"runttd/internal/domain"
 )
 
 // scrollForwardingEntry forwards scroll events to parent containers

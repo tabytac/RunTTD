@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"openttd-launcher/internal/domain"
-	"openttd-launcher/internal/platform"
+	"runttd/internal/domain"
+	"runttd/internal/platform"
 )
 
 var (

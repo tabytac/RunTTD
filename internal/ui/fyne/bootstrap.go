@@ -9,9 +9,9 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/theme"
 
-	apppkg "openttd-launcher/internal/app"
-	"openttd-launcher/internal/domain"
-	"openttd-launcher/internal/platform"
+	apppkg "runttd/internal/app"
+	"runttd/internal/domain"
+	"runttd/internal/platform"
 )
 
 //go:embed app_icon.png
@@ -37,7 +37,7 @@ func NewUIManager(config *domain.Config, configPath string) *UIManager {
 	fyneApp := app.New()
 	appIcon := fyne.NewStaticResource("app_icon.png", appIconBytes)
 	fyneApp.SetIcon(appIcon)
-	window := fyneApp.NewWindow("OpenTTD Launcher")
+	window := fyneApp.NewWindow("RunTTD")
 	window.SetIcon(appIcon)
 	window.Resize(fyne.NewSize(1024, 768))
 

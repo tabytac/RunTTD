@@ -18,7 +18,7 @@ import (
 	fyneadvancedlist "github.com/dweymouth/fyne-advanced-list"
 	"github.com/ncruces/zenity"
 
-	"openttd-launcher/internal/domain"
+	"runttd/internal/domain"
 )
 
 // rightClickButton is a button that also handles right-clicks
@@ -43,7 +43,7 @@ func (b *rightClickButton) TappedSecondary(_ *fyne.PointEvent) {
 
 // makeOnboardingView creates the first-run configuration screen
 func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
-	welcomeLabel := widget.NewLabel("Welcome to OpenTTD Launcher!")
+	welcomeLabel := widget.NewLabel("Welcome to RunTTD!")
 	welcomeLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: false}
 	welcomeLabel.Alignment = fyne.TextAlignCenter
 
@@ -300,7 +300,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		detailsContainer.Objects = nil
 
 		if selectedIdx < 0 || selectedIdx >= len(um.Config.Profiles) {
-			welcomeTitle := widget.NewLabel("Welcome to OpenTTD Launcher")
+			welcomeTitle := widget.NewLabel("Welcome to RunTTD")
 			welcomeTitle.TextStyle = fyne.TextStyle{Bold: true}
 			welcomeTitle.Alignment = fyne.TextAlignCenter
 
@@ -555,7 +555,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	split := container.NewHSplit(leftPanel, rightPanel)
 	split.Offset = 0.35
 
-	headerLabel := widget.NewLabel("OpenTTD Launcher")
+	headerLabel := widget.NewLabel("RunTTD")
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
 	var themeToggleBtn *widget.Button
 	themeToggleBtn = widget.NewButtonWithIcon("", theme.ColorPaletteIcon(), func() {
