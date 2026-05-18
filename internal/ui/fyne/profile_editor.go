@@ -375,7 +375,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	revNewgrfLabelMap := map[string]string{
 		"Default":      "",
 		"Skip Startup": "Q",
-		"Disable All ": "QQ",
+		"Disable All":  "QQ",
 	}
 	initialNewgrf := profile.NewGRFScanMode
 	if initialNewgrf == "" {
