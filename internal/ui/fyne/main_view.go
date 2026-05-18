@@ -191,7 +191,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	selectedIdx := indexOfProfileByName(um.Config.Profiles, um.SelectedProfileName)
 	detailsContainer := container.NewVBox()
 
-	selectionHint := widget.NewLabel("Tip: Press 1-9 to quick launch, or select a profile and press Enter / double-click.")
+	selectionHint := widget.NewLabel("Tip: Press 1-9, or 0 to quick launch. Select a profile and press Enter / double-click.")
 	selectionHint.Wrapping = fyne.TextWrapWord
 
 	var profileList *fyneadvancedlist.List
@@ -607,8 +607,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			return
 		}
 
-		if len(event.Name) == 1 && event.Name[0] >= '1' && event.Name[0] <= '9' {
+		if len(event.Name) == 1 && event.Name[0] >= '0' && event.Name[0] <= '9' {
 			idx := int(event.Name[0] - '1')
+			if event.Name[0] == '0' {
+				idx = 9
+			}
 			if idx < len(um.Config.Profiles) {
 				um.showLogView(idx)
 				return
