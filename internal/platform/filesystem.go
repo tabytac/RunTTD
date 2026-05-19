@@ -62,6 +62,16 @@ func VersionMatchesFolder(name, version string) bool {
 	return strings.Contains(name, version) || strings.HasPrefix(name, version) || strings.Contains(name, "-"+version+"-") || strings.HasSuffix(name, "-"+version)
 }
 
+func ClientDownloadDir(cfg *domain.Config, client string) string {
+	if cfg == nil {
+		return ""
+	}
+	if cfg.SubfolderPerClient && client != "" {
+		return filepath.Join(cfg.ParentDir, client)
+	}
+	return cfg.ParentDir
+}
+
 // ExtractArchive decompresses tar.xz, zip, or dmg archives depending on current operating system capabilities
 func ExtractArchive(archivePath, destDir string) error {
 	if strings.HasSuffix(archivePath, ".tar.xz") {

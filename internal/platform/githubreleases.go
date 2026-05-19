@@ -85,7 +85,7 @@ func CheckForNewVersion(ctx context.Context, config *domain.Config) string {
 // DownloadAndExtractVersion downloads a specific JGRPP version archive and extracts it to the download directory
 func DownloadAndExtractVersion(ctx context.Context, version string, config *domain.Config) bool {
 	repoURL := fmt.Sprintf("%s/releases/tags/jgrpp-%s", config.GithubApiUrl, version)
-	downloadDir := config.ParentDir
+	downloadDir := ClientDownloadDir(config, "jgrpp")
 
 	req, err := http.NewRequestWithContext(ctx, "GET", repoURL, nil)
 	if err != nil {

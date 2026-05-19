@@ -55,8 +55,8 @@ func (j *jgrppClient) Latest(ctx context.Context, cfg *domain.Config) (string, e
 func (j *jgrppClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config) (bool, error) {
 	return platform.DownloadAndExtractVersion(ctx, version, cfg), nil
 }
-func (j *jgrppClient) FindInstalled(ctx context.Context, parentDir, version string, cfg *domain.Config) (string, error) {
-	folder := platform.FindVersionFolderClient(parentDir, version, "jgrpp", cfg)
+func (j *jgrppClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
+	folder := platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, "jgrpp"), version, "jgrpp", cfg)
 	return folder, nil
 }
 
@@ -86,8 +86,8 @@ func (v *vanillaClient) DownloadAndExtract(ctx context.Context, version string, 
 	ok := platform.DownloadAndExtractVersionForClient(ctx, version, v.ID(), cfg)
 	return ok, nil
 }
-func (v *vanillaClient) FindInstalled(ctx context.Context, parentDir, version string, cfg *domain.Config) (string, error) {
-	folder := platform.FindVersionFolderClient(parentDir, version, v.ID(), cfg)
+func (v *vanillaClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
+	folder := platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, v.ID()), version, v.ID(), cfg)
 	return folder, nil
 }
 
@@ -117,10 +117,10 @@ func ClientDownloadAndExtract(ctx context.Context, clientID, version string, cfg
 	return c.DownloadAndExtract(ctx, version, cfg)
 }
 
-func ClientFindInstalled(ctx context.Context, clientID, parentDir, version string, cfg *domain.Config) (string, error) {
+func ClientFindInstalled(ctx context.Context, clientID, version string, cfg *domain.Config) (string, error) {
 	c := GetClient(clientID)
 	if c == nil {
 		return "", fmt.Errorf("%w: %s", ErrUnknownClient, clientID)
 	}
-	return c.FindInstalled(ctx, parentDir, version, cfg)
+	return c.FindInstalled(ctx, version, cfg)
 }

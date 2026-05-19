@@ -25,7 +25,7 @@ func (s *LauncherService) ResolveVersionFolder(ctx context.Context, profile doma
 
 	version := profile.Version
 	if version == "" || version == "latest" {
-		localLatest := platform.FindLatestFolderClientWithConfig(cfg.ParentDir, client, cfg)
+		localLatest := platform.FindLatestFolderClientWithConfig(platform.ClientDownloadDir(cfg, client), client, cfg)
 		if localLatest != "" {
 			return localLatest, nil
 		}
@@ -37,7 +37,7 @@ func (s *LauncherService) ResolveVersionFolder(ctx context.Context, profile doma
 		version = latestTag
 	}
 
-	folder, err := ClientFindInstalled(ctx, client, cfg.ParentDir, version, cfg)
+	folder, err := ClientFindInstalled(ctx, client, version, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to check local installation: %w", err)
 	}
@@ -64,7 +64,7 @@ func (s *LauncherService) EnsureInstalled(ctx context.Context, profile domain.Pr
 		version = latestTag
 	}
 
-	folder, err := ClientFindInstalled(ctx, client, cfg.ParentDir, version, cfg)
+	folder, err := ClientFindInstalled(ctx, client, version, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to check local installation: %w", err)
 	}
@@ -81,7 +81,7 @@ func (s *LauncherService) EnsureInstalled(ctx context.Context, profile domain.Pr
 		return "", fmt.Errorf("download/extraction failed for version %s: %w", version, err)
 	}
 
-	folder, err = ClientFindInstalled(ctx, client, cfg.ParentDir, version, cfg)
+	folder, err = ClientFindInstalled(ctx, client, version, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to verify installation: %w", err)
 	}

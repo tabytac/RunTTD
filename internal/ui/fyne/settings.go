@@ -149,6 +149,19 @@ func (um *UIManager) showSettingsView() {
 	verboseCheck := widget.NewCheck("Verbose logging (show all messages)", nil)
 	verboseCheck.SetChecked(um.Config.Verbose)
 
+	subfolderCheck := widget.NewCheck("Organize downloaded clients into per-client subfolders", nil)
+	subfolderCheck.SetChecked(um.Config.SubfolderPerClient)
+
+	subfolderInfo := widget.NewLabel("Keeps each client's downloaded files in a separate folder, " +
+		"instead of all sharing the parent folder. If you change this later, anything already " +
+		"downloaded gets fetched again.")
+	subfolderInfo.Wrapping = fyne.TextWrapWord
+
+	subfolderGroup := container.NewVBox(
+		subfolderCheck,
+		container.NewBorder(nil, nil, widget.NewLabel("    "), nil, subfolderInfo),
+	)
+
 	sectionTitle := func(title string) *widget.Label {
 		label := widget.NewLabel(title)
 		label.TextStyle = fyne.TextStyle{Bold: true}
@@ -159,6 +172,7 @@ func (um *UIManager) showSettingsView() {
 		sectionTitle("Install Locations"),
 		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
 		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
+		subfolderGroup,
 		widget.NewLabel("Docs Base Path (Saves & config)"),
 		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
 	))
@@ -191,6 +205,7 @@ func (um *UIManager) showSettingsView() {
 		um.Config.AutoCloseOnStart = autoCloseCheck.Checked
 		um.Config.AutoOpenLog = autoOpenLogCheck.Checked
 		um.Config.Verbose = verboseCheck.Checked
+		um.Config.SubfolderPerClient = subfolderCheck.Checked
 		um.Config.VanillaMirror = vanillaMirrorEntry.Text
 		um.Config.NightlyMirror = nightlyMirrorEntry.Text
 

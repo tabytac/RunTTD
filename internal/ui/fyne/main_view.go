@@ -105,6 +105,14 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		}()
 	})
 
+	subfolderInfo := widget.NewLabel("Optional. Keeps each client's downloaded files in a separate " +
+		"folder, instead of all sharing the parent folder. Easiest to choose now, before anything " +
+		"is downloaded; you can change it later in Settings.")
+	subfolderInfo.Wrapping = fyne.TextWrapWord
+
+	subfolderCheck := widget.NewCheck("Organize downloaded clients into per-client subfolders", nil)
+	subfolderCheck.SetChecked(um.Config.SubfolderPerClient)
+
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
 
@@ -128,6 +136,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 
 		um.Config.ParentDir = strings.TrimSpace(parentDirEntry.Text)
 		um.Config.DocsBasePath = strings.TrimSpace(docsBasePathEntry.Text)
+		um.Config.SubfolderPerClient = subfolderCheck.Checked
 		um.Config.FirstRun = false
 
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
@@ -174,6 +183,9 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
 		widget.NewLabel("Docs Base Path (Saves & config)"),
 		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
+		widget.NewSeparator(),
+		subfolderCheck,
+		container.NewBorder(nil, nil, widget.NewLabel("    "), nil, subfolderInfo),
 		statusLabel,
 	)
 

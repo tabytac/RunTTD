@@ -189,7 +189,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			if updateStatus != nil {
 				updateStatus("Latest version lookup failed, using latest local install")
 			}
-			versionFolder := platform.FindLatestFolderClientWithConfig(um.Config.ParentDir, client, um.Config)
+			versionFolder := platform.FindLatestFolderClientWithConfig(platform.ClientDownloadDir(um.Config, client), client, um.Config)
 			if versionFolder == "" {
 				if updateStatus != nil {
 					updateStatus("Failed: no local installation found for client")
@@ -221,7 +221,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 	if updateStatus != nil {
 		updateStatus("Looking for local version folder")
 	}
-	versionFolder := platform.FindVersionFolderClient(um.Config.ParentDir, version, client, um.Config)
+	versionFolder := platform.FindVersionFolderClient(platform.ClientDownloadDir(um.Config, client), version, client, um.Config)
 	if versionFolder == "" {
 		if updateStatus != nil {
 			updateStatus("Version not found locally, downloading")
@@ -237,7 +237,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 		if updateStatus != nil {
 			updateStatus("Download complete, resolving extracted folder")
 		}
-		versionFolder = platform.FindVersionFolderClient(um.Config.ParentDir, version, client, um.Config)
+		versionFolder = platform.FindVersionFolderClient(platform.ClientDownloadDir(um.Config, client), version, client, um.Config)
 		if versionFolder == "" {
 			if updateStatus != nil {
 				updateStatus("Failed: downloaded version folder could not be located")

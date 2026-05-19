@@ -334,7 +334,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 		fmt.Sprintf("openttd-%s.dmg", version),
 	)
 
-	downloadDir := cfg.ParentDir
+	downloadDir := ClientDownloadDir(cfg, client)
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
 		return false
 	}
