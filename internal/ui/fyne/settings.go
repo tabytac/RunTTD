@@ -32,10 +32,14 @@ func (e *scrollForwardingEntry) Scrolled(ev *fyne.ScrollEvent) {
 
 // showSettingsView shows a dialog to edit global settings
 func (um *UIManager) showSettingsView() {
-	var scrollBox *container.Scroll
+	var scrolls map[*container.TabItem]*container.Scroll
+	var tabs *container.AppTabs
 	forwardScroll := func(ev *fyne.ScrollEvent) {
-		if scrollBox != nil {
-			scrollBox.Scrolled(ev)
+		if scrolls == nil || tabs == nil {
+			return
+		}
+		if s, ok := scrolls[tabs.Selected()]; ok {
+			s.Scrolled(ev)
 		}
 	}
 
@@ -117,34 +121,46 @@ func (um *UIManager) showSettingsView() {
 		um.Config.SubfolderPerClient,
 	)
 
-	pathsTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), container.NewVBox(
+	pathsContent := container.NewVBox(
 		NewSectionHeader("Installation Paths"),
 		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
 		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
 		widget.NewLabel("Docs Base Path (Saves & config)"),
 		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
 		subfolderGroup,
-	))
+	)
+	pathsScroll := container.NewVScroll(pathsContent)
+	pathsScroll.SetMinSize(fyne.NewSize(0, 300))
+	pathsTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), pathsScroll)
 
-	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), container.NewVBox(
+	behaviorContent := container.NewVBox(
 		NewSectionHeader("Launch Behavior"),
 		container.NewGridWithColumns(1, autoCloseCheck, autoOpenLogCheck, verboseCheck),
-	))
+	)
+	behaviorScroll := container.NewVScroll(behaviorContent)
+	behaviorScroll.SetMinSize(fyne.NewSize(0, 300))
+	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), behaviorScroll)
 
-	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), container.NewVBox(
+	advancedContent := container.NewVBox(
 		NewSectionHeader("Download Sources"),
 		widget.NewLabel("Vanilla CDN (stable) base URL"), vanillaMirrorEntry,
 		widget.NewLabel("Vanilla Nightly CDN base URL"), nightlyMirrorEntry,
 		widget.NewLabel("JGRPP GitHub API URL"), jgrppApiUrlEntry,
-
 		NewSectionHeader("Profile Defaults"),
 		widget.NewLabel("Default Client (new profiles)"), defaultClientSelect,
-
 		NewSectionHeader("System"),
 		widget.NewLabel("OS Type (detected automatically)"), osTypeEntry,
-	))
+	)
+	advancedScroll := container.NewVScroll(advancedContent)
+	advancedScroll.SetMinSize(fyne.NewSize(0, 300))
+	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), advancedScroll)
 
-	tabs := container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
+	tabs = container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
+	scrolls = map[*container.TabItem]*container.Scroll{
+		pathsTab:    pathsScroll,
+		behaviorTab: behaviorScroll,
+		advancedTab: advancedScroll,
+	}
 	tabs.SetTabLocation(container.TabLocationTop)
 
 	var settingsDialog *widget.PopUp
