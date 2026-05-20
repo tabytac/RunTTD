@@ -135,8 +135,6 @@ func (um *UIManager) showSettingsView() {
 		NewSectionHeader("Download Sources"),
 		widget.NewLabel("Vanilla CDN (stable) base URL"), vanillaMirrorEntry,
 		widget.NewLabel("Vanilla Nightly CDN base URL"), nightlyMirrorEntry,
-
-		NewSectionHeader("JGRPP"),
 		widget.NewLabel("JGRPP GitHub API URL"), jgrppApiUrlEntry,
 
 		NewSectionHeader("Profile Defaults"),
