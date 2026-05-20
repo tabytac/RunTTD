@@ -723,7 +723,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 	updateState()
 
-	editDialog = NewModalDialog(um.Window.Canvas(), "Edit Profile", form, cancelBtn, saveBtn, saveAndRunBtn)
+	dialogTitle := "Edit Profile"
+	if isNew {
+		dialogTitle = "Create Profile"
+	}
+	editDialog = NewModalDialog(um.Window.Canvas(), dialogTitle, form, cancelBtn, saveBtn, saveAndRunBtn)
 	editDialog.Resize(fyne.NewSize(850, 600))
 	editDialog.Show()
 }
