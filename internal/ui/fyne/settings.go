@@ -111,8 +111,11 @@ func (um *UIManager) showSettingsView() {
 	autoOpenLogCheck := widget.NewCheck("Auto-open log panel when game starts", nil)
 	autoOpenLogCheck.SetChecked(um.Config.AutoOpenLog)
 
-	verboseCheck := widget.NewCheck("Verbose logging (show all messages)", nil)
-	verboseCheck.SetChecked(um.Config.Verbose)
+	verboseCheck, verboseGroup := NewLabeledCheckWithDescription(
+		"Verbose logging (show all messages)",
+		"Includes debug-level messages in the log panel. Useful for troubleshooting.",
+		um.Config.Verbose,
+	)
 
 	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(
 		"Organize downloaded clients into per-client subfolders",
@@ -135,7 +138,7 @@ func (um *UIManager) showSettingsView() {
 
 	behaviorContent := container.NewVBox(
 		NewSectionHeader("Launch Behavior"),
-		container.NewGridWithColumns(1, autoCloseCheck, autoOpenLogCheck, verboseCheck),
+		verboseGroup,
 	)
 	behaviorScroll := container.NewVScroll(behaviorContent)
 	behaviorScroll.SetMinSize(fyne.NewSize(0, 300))
