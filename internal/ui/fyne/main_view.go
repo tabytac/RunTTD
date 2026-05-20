@@ -47,8 +47,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	welcomeLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: false}
 	welcomeLabel.Alignment = fyne.TextAlignCenter
 
-	instructions := widget.NewLabel("Before we begin, please confirm your installation folders.\nThese default paths are based on your operating system, but you can change them if you have a custom setup.")
-	instructions.Wrapping = fyne.TextWrapWord
+	instructions := NewSectionDescription("Before we begin, please confirm your installation folders.\nThese default paths are based on your operating system, but you can change them if you have a custom setup.")
 
 	parentDirEntry := widget.NewEntry()
 	parentDirEntry.SetText(um.Config.ParentDir)
@@ -105,13 +104,12 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		}()
 	})
 
-	subfolderInfo := widget.NewLabel("Optional. Keeps each client's downloaded files in a separate " +
-		"folder, instead of all sharing the parent folder. Easiest to choose now, before anything " +
-		"is downloaded; you can change it later in Settings.")
-	subfolderInfo.Wrapping = fyne.TextWrapWord
-
-	subfolderCheck := widget.NewCheck("Organize downloaded clients into per-client subfolders", nil)
-	subfolderCheck.SetChecked(um.Config.SubfolderPerClient)
+	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(
+		"Organize downloaded clients into per-client subfolders",
+		"Keeps each client's downloaded files in a separate folder, instead of all sharing the parent folder. "+
+			"Easiest to choose now, before anything is downloaded; you can change it later in Settings.",
+		um.Config.SubfolderPerClient,
+	)
 
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
@@ -176,16 +174,14 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 
 	form := container.NewVBox(
 		welcomeLabel,
-		widget.NewSeparator(),
 		instructions,
-		widget.NewSeparator(),
+		NewSectionHeader("Installation Paths"),
 		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
 		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
 		widget.NewLabel("Docs Base Path (Saves & config)"),
 		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
-		widget.NewSeparator(),
-		subfolderCheck,
-		container.NewBorder(nil, nil, widget.NewLabel("    "), nil, subfolderInfo),
+		NewSectionHeader("Optional"),
+		subfolderGroup,
 		statusLabel,
 	)
 

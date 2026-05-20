@@ -461,12 +461,6 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}()
 	})
 
-	sectionTitle := func(title string) *widget.Label {
-		label := widget.NewLabel(title)
-		label.TextStyle = fyne.TextStyle{Bold: true}
-		return label
-	}
-
 	fileOption.Objects = []fyne.CanvasObject{
 		widget.NewLabel("Select a specific save or scenario file to load:"),
 		browseFileBtn,
@@ -486,11 +480,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		savePathEntry,
 	}
 	multiplayerOption.Objects = []fyne.CanvasObject{
-		sectionTitle("Server Connection"),
+		NewSectionTitle("Server Connection"),
 		widget.NewLabel("Server IP:Port"), ipPortEntry,
 		widget.NewLabel("Server Password"), serverPassEntry,
 		widget.NewSeparator(),
-		sectionTitle("Company Details"),
+		NewSectionTitle("Company Details"),
 		container.NewGridWithColumns(2,
 			container.NewVBox(widget.NewLabel("Company Number"), companyNumEntry),
 			container.NewVBox(widget.NewLabel("Company Password"), companyPassEntry),
@@ -649,30 +643,30 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 
 	generalTab := container.NewTabItemWithIcon("General Options", theme.InfoIcon(), container.NewVBox(
-		sectionTitle("Identity"),
+		NewSectionTitle("Identity"),
 		widget.NewLabel("Name"), nameEntry,
 		widget.NewLabel("Client"), clientSelect,
 		widget.NewLabel("Version"), versionEntry,
 	))
 
 	launchTab := container.NewTabItemWithIcon("Launch Options", theme.MediaPlayIcon(), container.NewVBox(
-		sectionTitle("How should the game start?"),
+		NewSectionTitle("How should the game start?"),
 		modeSelect.Container,
 		widget.NewSeparator(),
 		optionsStack,
 	))
 
 	advancedTab := container.NewTabItemWithIcon("Advanced Options", theme.SettingsIcon(), container.NewVBox(
-		sectionTitle("OpenTTD Config Behavior"),
+		NewSectionTitle("OpenTTD Config Behavior"),
 		widget.NewLabel("Config File Override (optional)"),
 		container.NewBorder(nil, nil, nil, browseConfigBtn, configFileEntry),
 		noConfigSaveCheck,
 		widget.NewSeparator(),
-		sectionTitle("NewGRF Scan Behavior"),
+		NewSectionTitle("NewGRF Scan Behavior"),
 		widget.NewLabel("Control NewGRF scanning/loading on startup:"),
 		container.NewHBox(newgrfRadio.Container),
 		widget.NewSeparator(),
-		sectionTitle("Custom Command Line Arguments"),
+		NewSectionTitle("Custom Command Line Arguments"),
 		widget.NewLabel("Specify extra flags to pass to the OpenTTD executable:"),
 		extraArgsEntry,
 	))
@@ -686,7 +680,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	)
 
 	launchTab.Content = container.NewVBox(
-		sectionTitle("How should the game start?"),
+		NewSectionTitle("How should the game start?"),
 		modeSelect.Container,
 		widget.NewSeparator(),
 		optionsStack,

@@ -149,47 +149,40 @@ func (um *UIManager) showSettingsView() {
 	verboseCheck := widget.NewCheck("Verbose logging (show all messages)", nil)
 	verboseCheck.SetChecked(um.Config.Verbose)
 
-	subfolderCheck := widget.NewCheck("Organize downloaded clients into per-client subfolders", nil)
-	subfolderCheck.SetChecked(um.Config.SubfolderPerClient)
-
-	subfolderInfo := widget.NewLabel("Keeps each client's downloaded files in a separate folder, " +
-		"instead of all sharing the parent folder. If you change this later, anything already " +
-		"downloaded gets fetched again.")
-	subfolderInfo.Wrapping = fyne.TextWrapWord
-
-	subfolderGroup := container.NewVBox(
-		subfolderCheck,
-		container.NewBorder(nil, nil, widget.NewLabel("    "), nil, subfolderInfo),
+	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(
+		"Organize downloaded clients into per-client subfolders",
+		"Keeps each client's downloaded files in a separate folder, instead of all sharing the parent folder. "+
+			"If you change this later, anything already downloaded gets fetched again.",
+		um.Config.SubfolderPerClient,
 	)
 
-	sectionTitle := func(title string) *widget.Label {
-		label := widget.NewLabel(title)
-		label.TextStyle = fyne.TextStyle{Bold: true}
-		return label
-	}
-
 	pathsTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), container.NewVBox(
-		sectionTitle("Install Locations"),
+		NewSectionHeader("Installation Paths"),
 		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
 		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
-		subfolderGroup,
 		widget.NewLabel("Docs Base Path (Saves & config)"),
 		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
+		subfolderGroup,
 	))
 
 	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), container.NewVBox(
-		sectionTitle("Launch Behavior"),
+		NewSectionHeader("Launch Behavior"),
 		container.NewGridWithColumns(1, autoCloseCheck, autoOpenLogCheck, verboseCheck),
 	))
 
 	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), container.NewVBox(
-		sectionTitle("System Settings"),
-		widget.NewLabel("JGRPP GitHub API URL"), githubApiUrlEntry,
-		widget.NewLabel("OS Type (detected automatically)"), osTypeEntry,
-		widget.NewSeparator(),
+		NewSectionHeader("Download Sources"),
 		widget.NewLabel("Vanilla CDN (stable) base URL"), vanillaMirrorEntry,
 		widget.NewLabel("Vanilla Nightly CDN base URL"), nightlyMirrorEntry,
+
+		NewSectionHeader("JGRPP"),
+		widget.NewLabel("JGRPP GitHub API URL"), githubApiUrlEntry,
+
+		NewSectionHeader("Profile Defaults"),
 		widget.NewLabel("Default Client (new profiles)"), defaultClientSelect,
+
+		NewSectionHeader("System"),
+		widget.NewLabel("OS Type (detected automatically)"), osTypeEntry,
 	))
 
 	tabs := container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
