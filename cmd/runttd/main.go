@@ -44,17 +44,19 @@ func main() {
 		// Default config values if config.json does not exist.
 		docsBase := platform.GetDocumentsDir()
 		ottdDirName := "OpenTTD"
+		clientsSuffix := "-Clients"
 		if runtime.GOOS == "linux" {
 			ottdDirName = "openttd"
+			clientsSuffix = "-clients"
 		}
 		defaultDocsDir := filepath.Join(docsBase, ottdDirName)
-		defaultParentDir := filepath.Join(docsBase, ottdDirName+"-JGRPP")
+		defaultParentDir := filepath.Join(docsBase, ottdDirName+clientsSuffix)
 
 		config = &domain.Config{
 			FirstRun:         true,
 			ParentDir:        defaultParentDir,
 			DocsBasePath:     defaultDocsDir,
-			GithubApiUrl:     "https://api.github.com/repos/JGRennison/OpenTTD-patches",
+			JgrppApiUrl:      "https://api.github.com/repos/JGRennison/OpenTTD-patches",
 			OSType:           platform.DefaultOSType(),
 			AutoCloseOnStart: false,
 			Verbose:          false,

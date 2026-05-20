@@ -20,7 +20,7 @@ var httpClient = &http.Client{
 
 // FetchAvailableVersions fetches the most recent 20 JGRPP releases from the GitHub repository API
 func FetchAvailableVersions(ctx context.Context, config *domain.Config) ([]string, error) {
-	repoURL := fmt.Sprintf("%s/releases?per_page=20", config.GithubApiUrl)
+	repoURL := fmt.Sprintf("%s/releases?per_page=20", config.JgrppApiUrl)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", repoURL, nil)
 	if err != nil {
@@ -51,7 +51,7 @@ func FetchAvailableVersions(ctx context.Context, config *domain.Config) ([]strin
 
 // CheckForNewVersion fetches the latest JGRPP release tag and returns its formatted version suffix
 func CheckForNewVersion(ctx context.Context, config *domain.Config) string {
-	repoURL := fmt.Sprintf("%s/releases/latest", config.GithubApiUrl)
+	repoURL := fmt.Sprintf("%s/releases/latest", config.JgrppApiUrl)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", repoURL, nil)
 	if err != nil {
@@ -84,7 +84,7 @@ func CheckForNewVersion(ctx context.Context, config *domain.Config) string {
 
 // DownloadAndExtractVersion downloads a specific JGRPP version archive and extracts it to the download directory
 func DownloadAndExtractVersion(ctx context.Context, version string, config *domain.Config) bool {
-	repoURL := fmt.Sprintf("%s/releases/tags/jgrpp-%s", config.GithubApiUrl, version)
+	repoURL := fmt.Sprintf("%s/releases/tags/jgrpp-%s", config.JgrppApiUrl, version)
 	downloadDir := ClientDownloadDir(config, "jgrpp")
 
 	req, err := http.NewRequestWithContext(ctx, "GET", repoURL, nil)

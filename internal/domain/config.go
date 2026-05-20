@@ -11,7 +11,7 @@ type Config struct {
 	FirstRun           bool   `json:"-"`
 	ParentDir          string `json:"parentDir"`
 	DocsBasePath       string `json:"docsBasePath"`
-	GithubApiUrl       string `json:"githubApiUrl"`
+	JgrppApiUrl        string `json:"jgrppApiUrl"`
 	OSType             string `json:"osType"`
 	AutoOpenLog        bool   `json:"autoOpenLog"`
 	AutoCloseOnStart   bool   `json:"autoCloseOnStart"`

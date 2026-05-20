@@ -78,8 +78,8 @@ func (um *UIManager) showSettingsView() {
 	}
 	updateDocsValidation(docsBasePathEntry.Text)
 
-	githubApiUrlEntry := newScrollForwardingEntry(forwardScroll)
-	githubApiUrlEntry.SetText(um.Config.GithubApiUrl)
+	jgrppApiUrlEntry := newScrollForwardingEntry(forwardScroll)
+	jgrppApiUrlEntry.SetText(um.Config.JgrppApiUrl)
 
 	osTypeEntry := newScrollForwardingEntry(forwardScroll)
 	osTypeEntry.SetText(um.Config.OSType)
@@ -137,7 +137,7 @@ func (um *UIManager) showSettingsView() {
 		widget.NewLabel("Vanilla Nightly CDN base URL"), nightlyMirrorEntry,
 
 		NewSectionHeader("JGRPP"),
-		widget.NewLabel("JGRPP GitHub API URL"), githubApiUrlEntry,
+		widget.NewLabel("JGRPP GitHub API URL"), jgrppApiUrlEntry,
 
 		NewSectionHeader("Profile Defaults"),
 		widget.NewLabel("Default Client (new profiles)"), defaultClientSelect,
@@ -154,7 +154,7 @@ func (um *UIManager) showSettingsView() {
 	saveBtn := widget.NewButton("Save Settings", func() {
 		um.Config.ParentDir = parentDirEntry.Text
 		um.Config.DocsBasePath = docsBasePathEntry.Text
-		um.Config.GithubApiUrl = githubApiUrlEntry.Text
+		um.Config.JgrppApiUrl = jgrppApiUrlEntry.Text
 		um.Config.OSType = osTypeEntry.Text
 		um.Config.AutoCloseOnStart = autoCloseCheck.Checked
 		um.Config.AutoOpenLog = autoOpenLogCheck.Checked
