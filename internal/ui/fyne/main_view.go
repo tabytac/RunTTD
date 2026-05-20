@@ -5,7 +5,6 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	fyneadvancedlist "github.com/dweymouth/fyne-advanced-list"
-	"github.com/ncruces/zenity"
 
 	"runttd/internal/domain"
 )
@@ -54,25 +52,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	parentDirEntry.SetPlaceHolder("Folder where OpenTTD game files / executables will be automatically installed")
 
 	parentDirBtn := widget.NewButton("Browse...", func() {
-		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			defer func() {
-				if r := recover(); r != nil {
-					um.Logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
-				}
-			}()
-			um.Logger.Append("Opening Parent Directory picker...")
-			directory, err := zenity.SelectFile(
-				zenity.Directory(),
-				zenity.Title("Select Parent Directory"),
-				zenity.Filename(parentDirEntry.Text),
-			)
-			um.Logger.Append(fmt.Sprintf("Picker closed. Err: %v", err))
-			if err == nil && directory != "" {
-				parentDirEntry.SetText(directory)
-			}
-		}()
+		um.browseDirectory(parentDirEntry, "Select Parent Directory", "Parent Directory")
 	})
 
 	docsBasePathEntry := widget.NewEntry()
@@ -83,25 +63,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	validationIcon.Hide()
 
 	docsBasePathBtn := widget.NewButton("Browse...", func() {
-		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			defer func() {
-				if r := recover(); r != nil {
-					um.Logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
-				}
-			}()
-			um.Logger.Append("Opening Docs Base Path picker...")
-			directory, err := zenity.SelectFile(
-				zenity.Directory(),
-				zenity.Title("Select Docs Base Path"),
-				zenity.Filename(docsBasePathEntry.Text),
-			)
-			um.Logger.Append(fmt.Sprintf("Picker closed. Err: %v", err))
-			if err == nil && directory != "" {
-				docsBasePathEntry.SetText(directory)
-			}
-		}()
+		um.browseDirectory(docsBasePathEntry, "Select Docs Base Path", "Docs Base Path")
 	})
 
 	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(

@@ -1,16 +1,13 @@
 package fyne
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/ncruces/zenity"
 
 	"runttd/internal/domain"
 )
@@ -47,25 +44,7 @@ func (um *UIManager) showSettingsView() {
 	parentDirEntry.SetPlaceHolder("Folder where game files / executables will be automatically installed")
 
 	parentDirBtn := widget.NewButton("Browse...", func() {
-		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			defer func() {
-				if r := recover(); r != nil {
-					um.Logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
-				}
-			}()
-			um.Logger.Append("Opening Parent Directory picker (Settings)...")
-			directory, err := zenity.SelectFile(
-				zenity.Directory(),
-				zenity.Title("Select Parent Directory"),
-				zenity.Filename(parentDirEntry.Text),
-			)
-			um.Logger.Append(fmt.Sprintf("Picker closed (Settings). Err: %v", err))
-			if err == nil && directory != "" {
-				parentDirEntry.SetText(directory)
-			}
-		}()
+		um.browseDirectory(&parentDirEntry.Entry, "Select Parent Directory", "Parent Directory (Settings)")
 	})
 
 	docsBasePathEntry := newScrollForwardingEntry(forwardScroll)
@@ -76,25 +55,7 @@ func (um *UIManager) showSettingsView() {
 	validationIcon.Hide()
 
 	docsBasePathBtn := widget.NewButton("Browse...", func() {
-		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			defer func() {
-				if r := recover(); r != nil {
-					um.Logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
-				}
-			}()
-			um.Logger.Append("Opening Docs Base Path picker (Settings)...")
-			directory, err := zenity.SelectFile(
-				zenity.Directory(),
-				zenity.Title("Select Docs Base Path"),
-				zenity.Filename(docsBasePathEntry.Text),
-			)
-			um.Logger.Append(fmt.Sprintf("Picker closed (Settings). Err: %v", err))
-			if err == nil && directory != "" {
-				docsBasePathEntry.SetText(directory)
-			}
-		}()
+		um.browseDirectory(&docsBasePathEntry.Entry, "Select Docs Base Path", "Docs Base Path (Settings)")
 	})
 
 	updateDocsValidation := func(path string) {
@@ -218,23 +179,7 @@ func (um *UIManager) showSettingsView() {
 		settingsDialog.Hide()
 	})
 
-	title := widget.NewLabel("Global Settings")
-	title.TextStyle = fyne.TextStyle{Bold: true}
-
-	toolbar := container.NewCenter(container.NewHBox(
-		container.NewPadded(cancelBtn),
-		container.NewPadded(saveBtn),
-	))
-
-	content := container.NewBorder(
-		container.NewPadded(title),
-		container.NewPadded(toolbar),
-		nil,
-		nil,
-		container.NewPadded(tabs),
-	)
-
-	settingsDialog = widget.NewModalPopUp(content, um.Window.Canvas())
+	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", tabs, cancelBtn, saveBtn)
 	settingsDialog.Resize(fyne.NewSize(850, 600))
 	settingsDialog.Show()
 }

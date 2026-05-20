@@ -40,3 +40,21 @@ func NewLabeledCheckWithDescription(label, description string, checked bool) (*w
 	)
 	return check, group
 }
+
+// NewModalDialog returns a modal popup with a bold title bar, content area, and centred button toolbar
+func NewModalDialog(canvas fyne.Canvas, title string, content fyne.CanvasObject, buttons ...*widget.Button) *widget.PopUp {
+	paddedButtons := make([]fyne.CanvasObject, len(buttons))
+	for i, btn := range buttons {
+		paddedButtons[i] = container.NewPadded(btn)
+	}
+	toolbar := container.NewCenter(container.NewHBox(paddedButtons...))
+
+	frame := container.NewBorder(
+		container.NewPadded(NewSectionTitle(title)),
+		container.NewPadded(toolbar),
+		nil,
+		nil,
+		container.NewPadded(content),
+	)
+	return widget.NewModalPopUp(frame, canvas)
+}

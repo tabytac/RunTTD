@@ -695,23 +695,6 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		editDialog.Hide()
 	})
 
-	toolbar := container.NewCenter(container.NewHBox(
-		container.NewPadded(cancelBtn),
-		container.NewPadded(saveBtn),
-		container.NewPadded(saveAndRunBtn),
-	))
-
-	title := widget.NewLabel("Edit Profile")
-	title.TextStyle = fyne.TextStyle{Bold: true}
-
-	content := container.NewBorder(
-		container.NewPadded(title),
-		container.NewPadded(toolbar),
-		nil,
-		nil,
-		container.NewPadded(form),
-	)
-
 	updateState := func() {
 		ok, _ := validate()
 		if ok {
@@ -741,7 +724,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 	updateState()
 
-	editDialog = widget.NewModalPopUp(content, um.Window.Canvas())
+	editDialog = NewModalDialog(um.Window.Canvas(), "Edit Profile", form, cancelBtn, saveBtn, saveAndRunBtn)
 	editDialog.Resize(fyne.NewSize(850, 600))
 	editDialog.Show()
 }
