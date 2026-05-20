@@ -642,21 +642,25 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}
 	}
 
-	generalTab := container.NewTabItemWithIcon("General Options", theme.InfoIcon(), container.NewVBox(
+	generalScroll := container.NewVScroll(container.NewVBox(
 		NewSectionTitle("Identity"),
 		widget.NewLabel("Name"), nameEntry,
 		widget.NewLabel("Client"), clientSelect,
 		widget.NewLabel("Version"), versionEntry,
 	))
+	generalScroll.SetMinSize(fyne.NewSize(0, 300))
+	generalTab := container.NewTabItemWithIcon("General Options", theme.InfoIcon(), generalScroll)
 
-	launchTab := container.NewTabItemWithIcon("Launch Options", theme.MediaPlayIcon(), container.NewVBox(
+	launchScroll := container.NewVScroll(container.NewVBox(
 		NewSectionTitle("How should the game start?"),
 		modeSelect.Container,
 		widget.NewSeparator(),
 		optionsStack,
 	))
+	launchScroll.SetMinSize(fyne.NewSize(0, 300))
+	launchTab := container.NewTabItemWithIcon("Launch Options", theme.MediaPlayIcon(), launchScroll)
 
-	advancedTab := container.NewTabItemWithIcon("Advanced Options", theme.SettingsIcon(), container.NewVBox(
+	advancedScroll := container.NewVScroll(container.NewVBox(
 		NewSectionTitle("OpenTTD Config Behavior"),
 		widget.NewLabel("Config File Override (optional)"),
 		container.NewBorder(nil, nil, nil, browseConfigBtn, configFileEntry),
@@ -670,6 +674,8 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		widget.NewLabel("Specify extra flags to pass to the OpenTTD executable:"),
 		extraArgsEntry,
 	))
+	advancedScroll.SetMinSize(fyne.NewSize(0, 300))
+	advancedTab := container.NewTabItemWithIcon("Advanced Options", theme.SettingsIcon(), advancedScroll)
 
 	tabs := container.NewAppTabs(generalTab, launchTab, advancedTab)
 	tabs.SetTabLocation(container.TabLocationTop)
@@ -677,13 +683,6 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	form := container.NewVBox(
 		statusLabel,
 		tabs,
-	)
-
-	launchTab.Content = container.NewVBox(
-		NewSectionTitle("How should the game start?"),
-		modeSelect.Container,
-		widget.NewSeparator(),
-		optionsStack,
 	)
 
 	saveBtn = widget.NewButton("Save", func() { saveProfile(false) })
