@@ -138,6 +138,8 @@ func (um *UIManager) showSettingsView() {
 
 	behaviorContent := container.NewVBox(
 		NewSectionHeader("Launch Behavior"),
+		autoCloseCheck,
+		autoOpenLogCheck,
 		verboseGroup,
 	)
 	behaviorScroll := container.NewVScroll(behaviorContent)
