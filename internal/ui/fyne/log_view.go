@@ -3,6 +3,7 @@ package fyne
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -162,6 +163,39 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 		if client == "" {
 			client = "jgrpp"
 		}
+	}
+
+	if client == "custom" {
+		folder := strings.TrimSpace(profile.CustomExecutablePath)
+		if folder == "" {
+			if updateStatus != nil {
+				updateStatus("Failed: custom executable folder is not set")
+			}
+			um.LogImportant("Custom client selected but no executable folder is configured.")
+			if onError != nil {
+				onError()
+			}
+			return
+		}
+		if _, err := os.Stat(folder); err != nil {
+			if updateStatus != nil {
+				updateStatus("Failed: custom executable folder does not exist")
+			}
+			um.LogImportant(fmt.Sprintf("Custom executable folder not found: %s (%v)", folder, err))
+			if onError != nil {
+				onError()
+			}
+			return
+		}
+		um.LogVerbose(fmt.Sprintf("Using custom executable folder: %s", folder))
+		if updateStatus != nil {
+			updateStatus("Starting OpenTTD from custom folder")
+		}
+		platform.ExecuteOpenTTD(context.Background(), folder, profile.ServerIpPort, profile.ServerCompanyNumber, profile.ServerPassword, profile.ServerCompanyPassword, profile.SavePath, profile.LaunchMode, profile.ExtraArgs, profile.ConfigFilePath, profile.NoConfigSave, profile.NewGRFScanMode, profile.AutoLatestFilter, um.Config.DocsBasePath, um)
+		if updateStatus != nil {
+			updateStatus("Launch command sent")
+		}
+		return
 	}
 
 	isLatestRequest := false

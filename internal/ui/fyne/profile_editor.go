@@ -42,17 +42,41 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	versionEntry.SetOptions([]string{"latest (Stable)", "latest (Testing)"})
 	versionEntry.PlaceHolder = "latest (Stable), latest (Testing), or 15.3"
 
-	// Client selection (OpenTTD Stable, OpenTTD Nightly, JGRPP)
-	clientOptions := []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP"}
+	customFolderEntry := widget.NewEntry()
+	customFolderEntry.SetText(profile.CustomExecutablePath)
+	customFolderEntry.SetPlaceHolder("Folder containing openttd executable")
+
+	customFolderBtn := widget.NewButton("Browse...", func() {
+		um.browseDirectory(customFolderEntry, "Select Custom Executable Folder", "Custom Executable Folder")
+	})
+	customFolderRow := container.NewBorder(nil, nil, nil, customFolderBtn, customFolderEntry)
+
+	versionGroup := container.NewVBox(widget.NewLabel("Version"), versionEntry)
+	customFolderGroup := container.NewVBox(widget.NewLabel("Executable Folder"), customFolderRow)
+
+	updateClientFields := func(clientID string) {
+		if clientID == "custom" {
+			versionGroup.Hide()
+			customFolderGroup.Show()
+		} else {
+			versionGroup.Show()
+			customFolderGroup.Hide()
+		}
+	}
+
+	// Client selection (OpenTTD Stable, OpenTTD Nightly, JGRPP, Custom Executable)
+	clientOptions := []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP", "Custom Executable"}
 	clientMap := map[string]string{
 		"OpenTTD (Stable)":  "vanilla",
 		"OpenTTD (Nightly)": "vanilla-nightly",
 		"JGRPP":             "jgrpp",
+		"Custom Executable": "custom",
 	}
 	revClientMap := map[string]string{
 		"vanilla":         "OpenTTD (Stable)",
 		"vanilla-nightly": "OpenTTD (Nightly)",
 		"jgrpp":           "JGRPP",
+		"custom":          "Custom Executable",
 	}
 	defaultVersionOptions := func(clientID string) []string {
 		switch clientID {
@@ -130,9 +154,13 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			}
 		}()
 	}
+	// updateState is defined later, but the client radio callback may need to call it.
+	var updateState func()
 	initializingClientSelection := true
-	clientSelect := widget.NewSelect(clientOptions, func(s string) {
+	var clientSelect *SegmentedRadio
+	clientSelect = NewSegmentedRadio(clientOptions, "", func(s string) {
 		cli := clientMap[s]
+		updateClientFields(cli)
 		if initializingClientSelection {
 			versionEntry.SetOptions(defaultVersionOptions(cli))
 			versionEntry.Refresh()
@@ -143,6 +171,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		versionEntry.SetOptions(defaultVersionOptions(cli))
 		versionEntry.Refresh()
 		fetchVersionsForClient(cli)
+		if updateState != nil {
+			updateState()
+		}
 	})
 	// Preselect client and version display for new and existing profiles.
 	currentClient := strings.TrimSpace(profile.Client)
@@ -157,6 +188,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	if sel, ok := revClientMap[currentClient]; ok {
 		clientSelect.SetSelected(sel)
 	}
+	updateClientFields(currentClient)
 	initializingClientSelection = false
 	fetchVersionsForClient(currentClient)
 
@@ -445,7 +477,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			return false, "Client selection is required."
 		}
 
-		if strings.TrimSpace(versionEntry.Text) == "" {
+		if clientMap[clientSelect.Selected] == "custom" {
+			if strings.TrimSpace(customFolderEntry.Text) == "" {
+				return false, "Executable folder is required for custom client."
+			}
+		} else if strings.TrimSpace(versionEntry.Text) == "" {
 			return false, "Version is required or use latest."
 		}
 
@@ -507,7 +543,13 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			}
 		}
 		profile.Client = selectedClient
-		profile.Version = storedVersion(selectedClient, versionEntry.Text)
+		if selectedClient == "custom" {
+			profile.Version = ""
+			profile.CustomExecutablePath = strings.TrimSpace(customFolderEntry.Text)
+		} else {
+			profile.Version = storedVersion(selectedClient, versionEntry.Text)
+			profile.CustomExecutablePath = ""
+		}
 
 		rawSavePath := strings.TrimSpace(savePathEntry.Text)
 		for {
@@ -577,8 +619,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	generalScroll := container.NewVScroll(container.NewVBox(
 		NewSectionTitle("Identity"),
 		widget.NewLabel("Name"), nameEntry,
-		widget.NewLabel("Client"), clientSelect,
-		widget.NewLabel("Version"), versionEntry,
+		widget.NewLabel("Client"), clientSelect.Container,
+		versionGroup,
+		customFolderGroup,
 	))
 	generalScroll.SetMinSize(fyne.NewSize(0, 300))
 	generalTab := container.NewTabItemWithIcon("General Options", theme.InfoIcon(), generalScroll)
@@ -626,7 +669,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		editDialog.Hide()
 	})
 
-	updateState := func() {
+	updateState = func() {
 		ok, _ := validate()
 		if ok {
 			saveBtn.Enable()
@@ -637,20 +680,12 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}
 		setStatus()
 	}
-	for _, entry := range []*widget.Entry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry, configFileEntry} {
+	for _, entry := range []*widget.Entry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry, configFileEntry, customFolderEntry} {
 		entry.OnChanged = func(string) {
 			updateState()
 		}
 	}
 	versionEntry.OnChanged = func(string) {
-		updateState()
-	}
-	clientSelect.OnChanged = func(s string) {
-		cli := clientMap[s]
-		versionEntry.SetText(displayVersion(cli, ""))
-		versionEntry.SetOptions(defaultVersionOptions(cli))
-		versionEntry.Refresh()
-		fetchVersionsForClient(cli)
 		updateState()
 	}
 	updateState()

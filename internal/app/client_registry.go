@@ -26,11 +26,12 @@ func RegisterClient(c Client) {
 	clientRegistry[c.ID()] = c
 }
 
-// RegisterBuiltInClients registers the standard built-in engine tracks (JGRPP, Stable Vanilla, and Nightly Vanilla)
+// RegisterBuiltInClients registers the standard built-in engine tracks (JGRPP, Stable Vanilla, Nightly Vanilla, and Custom)
 func RegisterBuiltInClients() {
 	RegisterClient(&jgrppClient{})
 	RegisterClient(&vanillaClient{nightly: false})
 	RegisterClient(&vanillaClient{nightly: true})
+	RegisterClient(&customClient{})
 }
 
 // GetClient retrieves the Client implementation mapped to the specified identifier.
@@ -58,6 +59,25 @@ func (j *jgrppClient) DownloadAndExtract(ctx context.Context, version string, cf
 func (j *jgrppClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
 	folder := platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, "jgrpp"), version, "jgrpp", cfg)
 	return folder, nil
+}
+
+// customClient is a placeholder for user-managed executables. All "what version is available
+// remotely" and "download/extract" methods are no-ops; the profile carries the folder directly.
+type customClient struct{}
+
+func (c *customClient) ID() string          { return "custom" }
+func (c *customClient) DisplayName() string { return "Custom Executable" }
+func (c *customClient) FetchVersions(ctx context.Context, cfg *domain.Config) ([]string, error) {
+	return nil, nil
+}
+func (c *customClient) Latest(ctx context.Context, cfg *domain.Config) (string, error) {
+	return "", nil
+}
+func (c *customClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config) (bool, error) {
+	return false, nil
+}
+func (c *customClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
+	return "", nil
 }
 
 // vanillaClient uses CDN mirrors

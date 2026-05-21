@@ -306,11 +306,19 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		detailsContainer.Add(container.NewPadded(intentLabel))
 		detailsContainer.Add(widget.NewSeparator())
 
-		versionText := profile.Version
-		if versionText == "" {
-			versionText = "latest"
+		if profile.Client == "custom" {
+			folder := strings.TrimSpace(profile.CustomExecutablePath)
+			if folder == "" {
+				folder = "(not set)"
+			}
+			addDetail(detailsContainer, theme.FolderIcon(), "Executable Folder", folder, true)
+		} else {
+			versionText := profile.Version
+			if versionText == "" {
+				versionText = "latest"
+			}
+			addDetail(detailsContainer, theme.SettingsIcon(), "Version", versionText, false)
 		}
-		addDetail(detailsContainer, theme.SettingsIcon(), "Version", versionText, false)
 
 		if strings.TrimSpace(profile.ConfigFilePath) != "" {
 			addDetail(detailsContainer, theme.FileIcon(), "Config Override", profile.ConfigFilePath, true)
@@ -398,9 +406,14 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 			if i < len(um.Config.Profiles) {
 				profile := um.Config.Profiles[i]
-				versionText := profile.Version
-				if versionText == "" {
-					versionText = "latest"
+				var versionText string
+				if profile.Client == "custom" {
+					versionText = "custom"
+				} else {
+					versionText = profile.Version
+					if versionText == "" {
+						versionText = "latest"
+					}
 				}
 				nameLabel.SetText(fmt.Sprintf("%d. %s", i+1, profile.Name))
 				versionLabel.SetText(versionText)
