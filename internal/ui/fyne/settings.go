@@ -133,7 +133,6 @@ func (um *UIManager) showSettingsView() {
 		subfolderGroup,
 	)
 	pathsScroll := container.NewVScroll(pathsContent)
-	pathsScroll.SetMinSize(fyne.NewSize(0, 300))
 	pathsTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), pathsScroll)
 
 	behaviorContent := container.NewVBox(
@@ -143,7 +142,6 @@ func (um *UIManager) showSettingsView() {
 		verboseGroup,
 	)
 	behaviorScroll := container.NewVScroll(behaviorContent)
-	behaviorScroll.SetMinSize(fyne.NewSize(0, 300))
 	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), behaviorScroll)
 
 	advancedContent := container.NewVBox(
@@ -157,7 +155,6 @@ func (um *UIManager) showSettingsView() {
 		widget.NewLabel("OS Type (detected automatically)"), osTypeEntry,
 	)
 	advancedScroll := container.NewVScroll(advancedContent)
-	advancedScroll.SetMinSize(fyne.NewSize(0, 300))
 	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), advancedScroll)
 
 	tabs = container.NewAppTabs(pathsTab, behaviorTab, advancedTab)

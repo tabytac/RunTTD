@@ -148,10 +148,9 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	)
 
 	onboardingScroll := container.NewVScroll(form)
-	onboardingScroll.SetMinSize(fyne.NewSize(0, 300))
 	return container.NewBorder(
 		nil,
-		container.NewHBox(widget.NewLabel(""), continueBtn),
+		container.NewPadded(container.NewHBox(continueBtn)),
 		nil,
 		nil,
 		container.NewPadded(onboardingScroll),
