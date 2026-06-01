@@ -95,8 +95,10 @@ func ExtractArchive(archivePath, destDir string) error {
 
 // ExtractDMG mounts a macOS DMG and copies over any contained .app bundles into target directory
 func ExtractDMG(dmgPath, destDir string) error {
-	mountPoint := filepath.Join(os.TempDir(), "jgrpp_dmg_mount")
-	_ = os.MkdirAll(mountPoint, 0755)
+	mountPoint, err := os.MkdirTemp("", "runttd_dmg_mount_")
+	if err != nil {
+		return fmt.Errorf("failed to create DMG mount dir: %w", err)
+	}
 	defer func() {
 		_ = exec.Command("hdiutil", "detach", mountPoint, "-quiet").Run()
 		_ = os.RemoveAll(mountPoint)
