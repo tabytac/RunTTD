@@ -87,23 +87,20 @@ func DownloadAndExtractVersion(ctx context.Context, version string, config *doma
 	repoURL := fmt.Sprintf("%s/releases/tags/jgrpp-%s", config.JgrppApiUrl, version)
 	downloadDir := ClientDownloadDir(config, "jgrpp")
 
-	req, err := http.NewRequestWithContext(ctx, "GET", repoURL, nil)
+	resp, err := doGETWithRetry(ctx, httpClient, repoURL)
 	if err != nil {
 		return false
 	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
+		resp.Body.Close()
 		return false
 	}
 
 	var releaseInfo domain.ReleaseInfo
-	if err := json.NewDecoder(resp.Body).Decode(&releaseInfo); err != nil {
-		fmt.Printf("Failed to parse release info: %v\n", err)
+	decodeErr := json.NewDecoder(resp.Body).Decode(&releaseInfo)
+	resp.Body.Close()
+	if decodeErr != nil {
+		fmt.Printf("Failed to parse release info: %v\n", decodeErr)
 		return false
 	}
 
@@ -135,12 +132,9 @@ func DownloadAndExtractVersion(ctx context.Context, version string, config *doma
 		return false
 	}
 
-	dReq, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
-	if err != nil {
-		return false
-	}
-
-	resp, err = httpClient.Do(dReq)
+	dlCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	resp, err = doGETWithRetry(dlCtx, downloadClient, downloadURL)
 	if err != nil {
 		fmt.Printf("Failed to download file: %v\n", err)
 		return false

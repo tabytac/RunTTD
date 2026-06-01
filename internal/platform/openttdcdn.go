@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"runttd/internal/domain"
 )
@@ -370,24 +371,23 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 				logf("Nightly selected asset: %s", url)
 				archivePath := filepath.Join(downloadDir, id)
 
-				req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+				dlCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+				resp, err := doGETWithRetry(dlCtx, downloadClient, url)
 				if err != nil {
-					logf("Nightly asset request failed: %v", err)
-					continue
-				}
-				resp, err := httpClient.Do(req)
-				if err != nil {
+					cancel()
 					logf("Nightly asset download failed: %v", err)
 					continue
 				}
 				if resp.StatusCode != 200 {
 					resp.Body.Close()
+					cancel()
 					logf("Nightly asset download returned HTTP %d: %s", resp.StatusCode, url)
 					continue
 				}
 				file, err := os.Create(archivePath)
 				if err != nil {
 					resp.Body.Close()
+					cancel()
 					logf("Nightly asset create failed: %v", err)
 					continue
 				}
@@ -395,6 +395,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 					file.Close()
 					resp.Body.Close()
 					os.Remove(archivePath)
+					cancel()
 					logf("Nightly asset copy failed: %v", err)
 					continue
 				}
@@ -402,10 +403,12 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 				resp.Body.Close()
 				if err := ExtractArchive(archivePath, downloadDir); err != nil {
 					os.Remove(archivePath)
+					cancel()
 					logf("Nightly extract failed: %v", err)
 					continue
 				}
 				os.Remove(archivePath)
+				cancel()
 				return true
 			}
 		}
@@ -418,37 +421,40 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 		}
 		urlCandidates = append(urlCandidates, baseTrimmed+"/"+version+"/"+name, baseTrimmed+"/"+name)
 		for _, url := range urlCandidates {
-			req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+			dlCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+			resp, err := doGETWithRetry(dlCtx, downloadClient, url)
 			if err != nil {
-				continue
-			}
-			resp, err := httpClient.Do(req)
-			if err != nil {
+				cancel()
 				continue
 			}
 			if resp.StatusCode != 200 {
 				resp.Body.Close()
+				cancel()
 				continue
 			}
 			archivePath := filepath.Join(downloadDir, name)
 			file, err := os.Create(archivePath)
 			if err != nil {
 				resp.Body.Close()
+				cancel()
 				continue
 			}
 			if _, err = io.Copy(file, resp.Body); err != nil {
 				file.Close()
 				resp.Body.Close()
 				os.Remove(archivePath)
+				cancel()
 				continue
 			}
 			file.Close()
 			resp.Body.Close()
 			if err := ExtractArchive(archivePath, downloadDir); err != nil {
 				os.Remove(archivePath)
+				cancel()
 				continue
 			}
 			os.Remove(archivePath)
+			cancel()
 			return true
 		}
 	}
