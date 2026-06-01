@@ -302,13 +302,13 @@ func ResolveConfigPath() string {
 	candidates := make([]string, 0, 3)
 
 	if wd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(wd, "config.json"))
+		candidates = append(candidates, filepath.Join(wd, "runttd-config.json"))
 	}
 	if exePath, err := os.Executable(); err == nil {
 		exeDir := filepath.Dir(exePath)
 		candidates = append(candidates,
-			filepath.Join(exeDir, "config.json"),
-			filepath.Join(filepath.Dir(exeDir), "config.json"),
+			filepath.Join(exeDir, "runttd-config.json"),
+			filepath.Join(filepath.Dir(exeDir), "runttd-config.json"),
 		)
 	}
 
@@ -327,7 +327,7 @@ func ResolveConfigPath() string {
 	if len(candidates) > 0 {
 		return candidates[0]
 	}
-	return "config.json"
+	return "runttd-config.json"
 }
 
 // ResolveLogPath returns the resolved log file path located next to the config file

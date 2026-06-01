@@ -37,7 +37,7 @@ Each profile stores:
 | **NewGRF Scan Behavior** | Control NewGRF scanning/loading on startup (see below) |
 | **Custom Arguments** | Extra command-line flags passed straight to the OpenTTD executable |
 
-You can create, edit, duplicate, and delete profiles from the main window. Profiles are stored in `config.json` next to the executable.
+You can create, edit, duplicate, and delete profiles from the main window. Profiles are stored in `runttd-config.json` next to the executable.
 
 ## Settings
 
@@ -54,7 +54,7 @@ Click **Settings** at the bottom of the profile list to configure:
 
 ## Config File
 
-Settings and profiles all live in a single `config.json` next to the executable. The UI covers all of it, but you can hand-edit the file too if that's your thing.
+Settings and profiles all live in a single `runttd-config.json` next to the executable. The UI covers all of it, but you can hand-edit the file too if that's your thing.
 
 ## Known Issues
 
@@ -68,7 +68,7 @@ Stuff that's rough or untested:
 
 ## Troubleshooting
 
-- **Launcher exits immediately.** Enable `logToFile` manually in `config.json` and check `log.txt` in the same folder.
+- **Launcher exits immediately.** Enable `logToFile` manually in `runttd-config.json` and check `log.txt` in the same folder.
 - **"Executable not found".** Make sure your Parent Directory path is correct and contains extracted client folders like `openttd-...` or `jgrpp-...`.
 - **Save not loading.** Check that the Save Path in your profile matches an actual folder under your OpenTTD `save/` directory. The launcher picks the newest `.sav` file in that folder.
 - **Download fails.** The launcher needs internet access to reach the API. Check your connection and firewall settings. With verbose logging on, the log will say which URLs it tried.

@@ -41,7 +41,7 @@ func main() {
 	if err == nil {
 		bootstrapFileLog = config.LogToFile
 	} else if errors.Is(err, os.ErrNotExist) {
-		// Default config values if config.json does not exist.
+		// Default config values if runttd-config.json does not exist.
 		docsBase := platform.GetDocumentsDir()
 		ottdDirName := "OpenTTD"
 		clientsSuffix := "-Clients"
