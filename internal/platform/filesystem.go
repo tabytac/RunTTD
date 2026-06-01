@@ -84,7 +84,9 @@ func ExtractArchive(archivePath, destDir string) error {
 	// .zip
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-Command", fmt.Sprintf("Expand-Archive -Path '%s' -DestinationPath '%s'", archivePath, destDir))
+		cmd = exec.Command("powershell", "-NoProfile", "-Command",
+			"Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
+			archivePath, destDir)
 	} else {
 		cmd = exec.Command("unzip", "-q", archivePath, "-d", destDir)
 	}
