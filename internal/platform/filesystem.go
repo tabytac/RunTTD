@@ -72,29 +72,50 @@ func ClientDownloadDir(cfg *domain.Config, client string) string {
 	return cfg.ParentDir
 }
 
+// runExtractor runs an extraction command, reporting a clear error if the tool is missing or extraction fails
+func runExtractor(tool, archivePath string, cmd *exec.Cmd) error {
+	if _, err := exec.LookPath(tool); err != nil {
+		return fmt.Errorf("%q not found on PATH — install it to extract %s", tool, filepath.Base(archivePath))
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to extract %s with %q: %w", filepath.Base(archivePath), tool, err)
+	}
+	return nil
+}
+
 // ExtractArchive decompresses tar.xz, zip, or dmg archives depending on current operating system capabilities
 func ExtractArchive(archivePath, destDir string) error {
 	if strings.HasSuffix(archivePath, ".tar.xz") {
 		cmd := exec.Command("tar", "-xf", archivePath, "-C", destDir)
-		return cmd.Run()
+		return runExtractor("tar", archivePath, cmd)
 	}
 	if strings.HasSuffix(archivePath, ".dmg") {
 		return ExtractDMG(archivePath, destDir)
 	}
 	// .zip
-	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-NoProfile", "-Command",
-			"Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
-			archivePath, destDir)
-	} else {
-		cmd = exec.Command("unzip", "-q", archivePath, "-d", destDir)
+		// Expand-Archive's parameter binder cannot read $args[N], so the paths
+		// are embedded directly, single-quoted with '' escaping to stay injection-safe
+		script := fmt.Sprintf(
+			"Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force",
+			strings.ReplaceAll(archivePath, "'", "''"),
+			strings.ReplaceAll(destDir, "'", "''"),
+		)
+		cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to extract %s with Expand-Archive: %w", filepath.Base(archivePath), err)
+		}
+		return nil
 	}
-	return cmd.Run()
+	cmd := exec.Command("unzip", "-q", archivePath, "-d", destDir)
+	return runExtractor("unzip", archivePath, cmd)
 }
 
 // ExtractDMG mounts a macOS DMG and copies over any contained .app bundles into target directory
 func ExtractDMG(dmgPath, destDir string) error {
+	if _, err := exec.LookPath("hdiutil"); err != nil {
+		return fmt.Errorf("%q not found on PATH — install it to extract %s", "hdiutil", filepath.Base(dmgPath))
+	}
 	mountPoint, err := os.MkdirTemp("", "runttd_dmg_mount_")
 	if err != nil {
 		return fmt.Errorf("failed to create DMG mount dir: %w", err)
