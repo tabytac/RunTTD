@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -168,6 +169,8 @@ func (um *UIManager) showSettingsView() {
 	var settingsDialog *widget.PopUp
 
 	saveBtn := widget.NewButton("Save Settings", func() {
+		prevSubfolderPerClient := um.Config.SubfolderPerClient
+
 		um.Config.ParentDir = parentDirEntry.Text
 		um.Config.DocsBasePath = docsBasePathEntry.Text
 		um.Config.JgrppApiUrl = jgrppApiUrlEntry.Text
@@ -188,6 +191,14 @@ func (um *UIManager) showSettingsView() {
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
 		if settingsDialog != nil {
 			settingsDialog.Hide()
+		}
+
+		if um.Config.SubfolderPerClient != prevSubfolderPerClient {
+			dialog.ShowInformation(
+				"Install location changed",
+				"The launcher will now look for clients in the new location and may re-download them. Existing downloads are left in place — move or delete them manually if you no longer need them.",
+				um.Window,
+			)
 		}
 	})
 
