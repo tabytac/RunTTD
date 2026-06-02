@@ -72,22 +72,39 @@ func ClientDownloadDir(cfg *domain.Config, client string) string {
 	return cfg.ParentDir
 }
 
-// runExtractor runs an extraction command, reporting a clear error if the tool is missing or extraction fails
-func runExtractor(tool, archivePath string, cmd *exec.Cmd) error {
+// logExtractOutput appends non-empty extractor output lines to the logger, if any
+func logExtractOutput(logger *Logger, out []byte) {
+	if logger == nil || len(out) == 0 {
+		return
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimRight(line, "\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		logger.Append("extract: " + line)
+	}
+}
+
+// runExtractor runs an extraction command with no console window, logging its output, reporting a clear error if the tool is missing or extraction fails
+func runExtractor(tool, archivePath string, cmd *exec.Cmd, logger *Logger) error {
 	if _, err := exec.LookPath(tool); err != nil {
 		return fmt.Errorf("%q not found on PATH — install it to extract %s", tool, filepath.Base(archivePath))
 	}
-	if err := cmd.Run(); err != nil {
+	cmd.SysProcAttr = GetNoWindowSysProcAttr()
+	out, err := cmd.CombinedOutput()
+	logExtractOutput(logger, out)
+	if err != nil {
 		return fmt.Errorf("failed to extract %s with %q: %w", filepath.Base(archivePath), tool, err)
 	}
 	return nil
 }
 
 // ExtractArchive decompresses tar.xz, zip, or dmg archives depending on current operating system capabilities
-func ExtractArchive(archivePath, destDir string) error {
+func ExtractArchive(archivePath, destDir string, logger *Logger) error {
 	if strings.HasSuffix(archivePath, ".tar.xz") {
 		cmd := exec.Command("tar", "-xf", archivePath, "-C", destDir)
-		return runExtractor("tar", archivePath, cmd)
+		return runExtractor("tar", archivePath, cmd, logger)
 	}
 	if strings.HasSuffix(archivePath, ".dmg") {
 		return ExtractDMG(archivePath, destDir)
@@ -95,20 +112,24 @@ func ExtractArchive(archivePath, destDir string) error {
 	// .zip
 	if runtime.GOOS == "windows" {
 		// Expand-Archive's parameter binder cannot read $args[N], so the paths
-		// are embedded directly, single-quoted with '' escaping to stay injection-safe
+		// are embedded directly, single-quoted with '' escaping to stay injection-safe.
+		// $ProgressPreference is silenced so the progress bar is not captured as noise.
 		script := fmt.Sprintf(
-			"Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force",
+			"$ProgressPreference='SilentlyContinue'; Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force",
 			strings.ReplaceAll(archivePath, "'", "''"),
 			strings.ReplaceAll(destDir, "'", "''"),
 		)
 		cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
-		if err := cmd.Run(); err != nil {
+		cmd.SysProcAttr = GetNoWindowSysProcAttr()
+		out, err := cmd.CombinedOutput()
+		logExtractOutput(logger, out)
+		if err != nil {
 			return fmt.Errorf("failed to extract %s with Expand-Archive: %w", filepath.Base(archivePath), err)
 		}
 		return nil
 	}
 	cmd := exec.Command("unzip", "-q", archivePath, "-d", destDir)
-	return runExtractor("unzip", archivePath, cmd)
+	return runExtractor("unzip", archivePath, cmd, logger)
 }
 
 // ExtractDMG mounts a macOS DMG and copies over any contained .app bundles into target directory
@@ -125,7 +146,9 @@ func ExtractDMG(dmgPath, destDir string) error {
 		_ = os.RemoveAll(mountPoint)
 	}()
 
-	if err := exec.Command("hdiutil", "attach", "-nobrowse", "-mountpoint", mountPoint, dmgPath).Run(); err != nil {
+	attachCmd := exec.Command("hdiutil", "attach", "-nobrowse", "-mountpoint", mountPoint, dmgPath)
+	attachCmd.SysProcAttr = GetNoWindowSysProcAttr()
+	if err := attachCmd.Run(); err != nil {
 		return fmt.Errorf("failed to mount DMG: %w", err)
 	}
 
@@ -142,7 +165,9 @@ func ExtractDMG(dmgPath, destDir string) error {
 		if entry.IsDir() && strings.HasSuffix(entry.Name(), ".app") {
 			src := filepath.Join(mountPoint, entry.Name())
 			dst := filepath.Join(outputDir, entry.Name())
-			if err := exec.Command("cp", "-R", src, dst).Run(); err != nil {
+			cpCmd := exec.Command("cp", "-R", src, dst)
+			cpCmd.SysProcAttr = GetNoWindowSysProcAttr()
+			if err := cpCmd.Run(); err != nil {
 				return fmt.Errorf("failed to copy %s: %w", entry.Name(), err)
 			}
 		}

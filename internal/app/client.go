@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"runttd/internal/domain"
+	"runttd/internal/platform"
 )
 
 // Client defines the contract that different engine types (e.g. Vanilla, JGRPP) must implement to support download, updates, and identification
@@ -12,6 +13,6 @@ type Client interface {
 	DisplayName() string
 	FetchVersions(ctx context.Context, cfg *domain.Config) ([]string, error)
 	Latest(ctx context.Context, cfg *domain.Config) (string, error)
-	DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config) (bool, error)
+	DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error)
 	FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error)
 }

@@ -53,8 +53,8 @@ func (j *jgrppClient) FetchVersions(ctx context.Context, cfg *domain.Config) ([]
 func (j *jgrppClient) Latest(ctx context.Context, cfg *domain.Config) (string, error) {
 	return platform.CheckForNewVersion(ctx, cfg), nil
 }
-func (j *jgrppClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config) (bool, error) {
-	return platform.DownloadAndExtractVersion(ctx, version, cfg), nil
+func (j *jgrppClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
+	return platform.DownloadAndExtractVersionWithLogger(ctx, version, cfg, logger), nil
 }
 func (j *jgrppClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
 	folder := platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, "jgrpp"), version, "jgrpp", cfg)
@@ -73,7 +73,7 @@ func (c *customClient) FetchVersions(ctx context.Context, cfg *domain.Config) ([
 func (c *customClient) Latest(ctx context.Context, cfg *domain.Config) (string, error) {
 	return "", nil
 }
-func (c *customClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config) (bool, error) {
+func (c *customClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
 	return false, nil
 }
 func (c *customClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
@@ -102,8 +102,8 @@ func (v *vanillaClient) Latest(ctx context.Context, cfg *domain.Config) (string,
 	latest := platform.CheckForNewVersionForClient(ctx, v.ID(), cfg)
 	return latest, nil
 }
-func (v *vanillaClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config) (bool, error) {
-	ok := platform.DownloadAndExtractVersionForClient(ctx, version, v.ID(), cfg)
+func (v *vanillaClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
+	ok := platform.DownloadAndExtractVersionForClientWithLogger(ctx, version, v.ID(), cfg, logger)
 	return ok, nil
 }
 func (v *vanillaClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
@@ -129,12 +129,12 @@ func ClientLatest(ctx context.Context, clientID string, cfg *domain.Config) (str
 	return c.Latest(ctx, cfg)
 }
 
-func ClientDownloadAndExtract(ctx context.Context, clientID, version string, cfg *domain.Config) (bool, error) {
+func ClientDownloadAndExtract(ctx context.Context, clientID, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
 	c := GetClient(clientID)
 	if c == nil {
 		return false, fmt.Errorf("%w: %s", ErrUnknownClient, clientID)
 	}
-	return c.DownloadAndExtract(ctx, version, cfg)
+	return c.DownloadAndExtract(ctx, version, cfg, logger)
 }
 
 func ClientFindInstalled(ctx context.Context, clientID, version string, cfg *domain.Config) (string, error) {

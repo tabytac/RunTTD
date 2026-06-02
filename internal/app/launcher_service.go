@@ -76,7 +76,7 @@ func (s *LauncherService) EnsureInstalled(ctx context.Context, profile domain.Pr
 		logger.Append(fmt.Sprintf("Downloading %s version %s...", client, version))
 	}
 
-	ok, err := ClientDownloadAndExtract(ctx, client, version, cfg)
+	ok, err := ClientDownloadAndExtract(ctx, client, version, cfg, logger)
 	if err != nil || !ok {
 		return "", fmt.Errorf("download/extraction failed for version %s: %w", version, err)
 	}

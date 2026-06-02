@@ -306,7 +306,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 		}
 	}
 	if client == "jgrpp" {
-		return DownloadAndExtractVersion(ctx, version, cfg)
+		return DownloadAndExtractVersionWithLogger(ctx, version, cfg, logger)
 	}
 
 	base := cfg.VanillaMirror
@@ -401,7 +401,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 				}
 				file.Close()
 				resp.Body.Close()
-				if err := ExtractArchive(archivePath, downloadDir); err != nil {
+				if err := ExtractArchive(archivePath, downloadDir, logger); err != nil {
 					os.Remove(archivePath)
 					cancel()
 					logf("Nightly extract failed: %v", err)
@@ -448,7 +448,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 			}
 			file.Close()
 			resp.Body.Close()
-			if err := ExtractArchive(archivePath, downloadDir); err != nil {
+			if err := ExtractArchive(archivePath, downloadDir, logger); err != nil {
 				os.Remove(archivePath)
 				cancel()
 				continue
