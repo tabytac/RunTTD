@@ -6,6 +6,7 @@ require (
 	fyne.io/fyne/v2 v2.7.4
 	github.com/dweymouth/fyne-advanced-list v0.0.0-20250211191927-58ea85eec72c
 	github.com/ncruces/zenity v0.10.14
+	golang.org/x/mod v0.36.0
 )
 
 require (
