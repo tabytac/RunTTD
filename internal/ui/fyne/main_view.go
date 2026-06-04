@@ -45,8 +45,10 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	welcomeLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: false}
 	welcomeLabel.Alignment = fyne.TextAlignCenter
 
-	instructions := NewSectionDescription("Before we begin, please confirm your installation folders.\nThese default paths are based on your operating system, but you can change them if you have a custom setup.")
+	subtitle := NewSectionDescription("Let's confirm a few settings before you start.")
+	subtitle.Alignment = fyne.TextAlignCenter
 
+	// --- Installation paths ---
 	parentDirEntry := widget.NewEntry()
 	parentDirEntry.SetText(um.Config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where OpenTTD game files / executables will be automatically installed")
@@ -66,11 +68,23 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		um.browseDirectory(docsBasePathEntry, "Select Docs Base Path", "Docs Base Path")
 	})
 
+	// --- Preferences ---
+	defaultClientSelect := widget.NewSelect(defaultClientOptions, func(string) {})
+	if label, ok := revDefaultClientMap[um.Config.DefaultClient]; ok {
+		defaultClientSelect.SetSelected(label)
+	}
+
 	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(
 		"Organize downloaded clients into per-client subfolders",
 		"Keeps each client's downloaded files in a separate folder, instead of all sharing the parent folder. "+
 			"Easiest to choose now, before anything is downloaded; you can change it later in Settings.",
 		um.Config.SubfolderPerClient,
+	)
+
+	autoCloseCheck, autoCloseGroup := NewLabeledCheckWithDescription(
+		"Auto-close launcher when OpenTTD starts",
+		"Hides the launcher once the game opens. You can change it later in Settings.",
+		um.Config.AutoCloseOnStart,
 	)
 
 	statusLabel := widget.NewLabel("")
@@ -97,6 +111,12 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		um.Config.ParentDir = strings.TrimSpace(parentDirEntry.Text)
 		um.Config.DocsBasePath = strings.TrimSpace(docsBasePathEntry.Text)
 		um.Config.SubfolderPerClient = subfolderCheck.Checked
+		um.Config.AutoCloseOnStart = autoCloseCheck.Checked
+		if sel := defaultClientSelect.Selected; sel != "" {
+			if mapped, ok := defaultClientMap[sel]; ok {
+				um.Config.DefaultClient = mapped
+			}
+		}
 		um.Config.FirstRun = false
 
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
@@ -136,21 +156,33 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 
 	form := container.NewVBox(
 		welcomeLabel,
-		instructions,
+		subtitle,
 		NewSectionHeader("Installation Paths"),
-		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
-		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
-		widget.NewLabel("Docs Base Path (Saves & config)"),
-		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
-		NewSectionHeader("Optional"),
+		NewSectionDescription("These defaults are based on your operating system — change them if you have a custom setup."),
+		NewLabeledField(
+			"Parent Directory",
+			"Where clients are downloaded and installed.",
+			container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
+		),
+		NewLabeledField(
+			"Docs Base Path",
+			"Where your saves and configuration (openttd.cfg) are stored.",
+			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
+		),
+		NewSectionHeader("Preferences"),
+		NewLabeledField(
+			"Default Client",
+			"Pre-fills the client for new profiles. Leave as (none) to decide per profile.",
+			defaultClientSelect,
+		),
 		subfolderGroup,
-		statusLabel,
+		autoCloseGroup,
 	)
 
 	onboardingScroll := container.NewVScroll(form)
 	return container.NewBorder(
 		nil,
-		container.NewPadded(container.NewHBox(continueBtn)),
+		container.NewPadded(container.NewVBox(statusLabel, container.NewHBox(continueBtn))),
 		nil,
 		nil,
 		container.NewPadded(onboardingScroll),
