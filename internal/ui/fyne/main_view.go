@@ -90,17 +90,11 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
 
+	// validate is a backstop for the Continue handler; the live hint and the
+	// disabled button (see updateState) are the primary guard against empty paths.
 	validate := func() bool {
-		if strings.TrimSpace(parentDirEntry.Text) == "" {
-			statusLabel.SetText("Parent Directory cannot be empty.")
-			return false
-		}
-		if strings.TrimSpace(docsBasePathEntry.Text) == "" {
-			statusLabel.SetText("Docs Base Path cannot be empty.")
-			return false
-		}
-		statusLabel.SetText("")
-		return true
+		return strings.TrimSpace(parentDirEntry.Text) != "" &&
+			strings.TrimSpace(docsBasePathEntry.Text) != ""
 	}
 
 	continueBtn := widget.NewButton("Continue", func() {
@@ -140,11 +134,21 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		}
 	}
 
+	// updateState keeps the Continue button and the status hint in sync with the
+	// path fields. Continue stays disabled until both paths are filled, so the
+	// hint explains what is still needed rather than leaving the button inertly
+	// greyed out.
 	updateState := func(_ string) {
-		if strings.TrimSpace(parentDirEntry.Text) != "" && strings.TrimSpace(docsBasePathEntry.Text) != "" {
-			continueBtn.Enable()
-		} else {
+		switch {
+		case strings.TrimSpace(parentDirEntry.Text) == "":
+			statusLabel.SetText("Enter a Parent Directory to continue.")
 			continueBtn.Disable()
+		case strings.TrimSpace(docsBasePathEntry.Text) == "":
+			statusLabel.SetText("Enter a Docs Base Path to continue.")
+			continueBtn.Disable()
+		default:
+			statusLabel.SetText("")
+			continueBtn.Enable()
 		}
 	}
 	parentDirEntry.OnChanged = updateState
@@ -152,6 +156,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		updateState(s)
 		updateDocsValidation(s)
 	}
+	updateState("")
 	updateDocsValidation(docsBasePathEntry.Text)
 
 	form := container.NewVBox(
