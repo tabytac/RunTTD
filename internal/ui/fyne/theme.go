@@ -80,16 +80,33 @@ func (p *LauncherTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVarian
 	if variant == theme.VariantDark {
 		switch name {
 		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
-			return color.NRGBA{R: 25, G: 25, B: 25, A: 255} // Neutral Dark BG
+			return color.NRGBA{R: 38, G: 41, B: 44, A: 255} // Dark BG #26292C
 		case theme.ColorNameInputBackground:
-			return color.NRGBA{R: 32, G: 32, B: 32, A: 255} // Neutral Dark Input
+			return color.NRGBA{R: 45, G: 49, B: 52, A: 255} // Dark Input #2D3134
 		case ColorNameSidebar:
-			return color.NRGBA{R: 19, G: 19, B: 19, A: 255} // Neutral Dark Sidebar
+			return color.NRGBA{R: 25, G: 27, B: 29, A: 255} // Dark Sidebar #191B1D
 		case ColorNameContent:
-			return color.NRGBA{R: 29, G: 29, B: 29, A: 255} // Neutral Dark Content
+			return color.NRGBA{R: 38, G: 41, B: 44, A: 255} // Dark Content #26292C
 		case ColorNameHeader:
-			return color.NRGBA{R: 35, G: 35, B: 35, A: 255} // Neutral Dark Header
-
+			return color.NRGBA{R: 43, G: 46, B: 49, A: 255} // Dark Header #2B2E31
+		case theme.ColorNameForeground:
+			return color.NRGBA{R: 230, G: 232, B: 234, A: 255} // Dark text #E6E8EA
+		case theme.ColorNameDisabled:
+			return color.NRGBA{R: 140, G: 145, B: 150, A: 255} // Dark disabled #8C9196
+		case theme.ColorNamePlaceHolder:
+			return color.NRGBA{R: 140, G: 145, B: 150, A: 255} // Dark placeholder #8C9196
+		case theme.ColorNameInputBorder:
+			return color.NRGBA{R: 71, G: 75, B: 79, A: 255} // Dark border #474B4F
+		case theme.ColorNameSeparator:
+			return color.NRGBA{R: 74, G: 78, B: 82, A: 255} // Dark separator #4A4E52
+		case theme.ColorNameButton:
+			return color.NRGBA{R: 52, G: 56, B: 60, A: 255} // Dark button #34383C
+		case theme.ColorNameDisabledButton:
+			return color.NRGBA{R: 34, G: 37, B: 40, A: 255} // Dark disabled button #222528
+		case theme.ColorNameMenuBackground:
+			return color.NRGBA{R: 48, G: 52, B: 55, A: 255} // Dark menu #303437
+		case theme.ColorNameScrollBar:
+			return color.NRGBA{R: 90, G: 95, B: 100, A: 255} // Dark scrollbar #5A5F64
 		case theme.ColorNameSelection:
 			return withAlpha(accent, 115) // 45% Opacity
 		case theme.ColorNameHover:
@@ -100,15 +117,33 @@ func (p *LauncherTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVarian
 	} else {
 		switch name {
 		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
-			return color.NRGBA{R: 246, G: 246, B: 246, A: 255}
+			return color.NRGBA{R: 244, G: 245, B: 246, A: 255} // Light BG #F4F5F6
 		case theme.ColorNameInputBackground:
-			return color.NRGBA{R: 238, G: 238, B: 238, A: 255}
+			return color.NRGBA{R: 255, G: 255, B: 255, A: 255} // Light Input #FFFFFF
 		case ColorNameSidebar:
-			return color.NRGBA{R: 236, G: 236, B: 236, A: 255}
+			return color.NRGBA{R: 231, G: 234, B: 236, A: 255} // Light Sidebar #E7EAEC
 		case ColorNameContent:
-			return color.NRGBA{R: 250, G: 250, B: 250, A: 255}
+			return color.NRGBA{R: 251, G: 252, B: 252, A: 255} // Light Content #FBFCFC
 		case ColorNameHeader:
-			return color.NRGBA{R: 224, G: 224, B: 224, A: 255}
+			return color.NRGBA{R: 221, G: 225, B: 228, A: 255} // Light Header #DDE1E4
+		case theme.ColorNameForeground:
+			return color.NRGBA{R: 36, G: 39, B: 42, A: 255} // Light text #24272A
+		case theme.ColorNameDisabled:
+			return color.NRGBA{R: 107, G: 112, B: 117, A: 255} // Light disabled #6B7075
+		case theme.ColorNamePlaceHolder:
+			return color.NRGBA{R: 107, G: 112, B: 117, A: 255} // Light placeholder #6B7075
+		case theme.ColorNameInputBorder:
+			return color.NRGBA{R: 182, G: 188, B: 193, A: 255} // Light border #B6BCC1
+		case theme.ColorNameSeparator:
+			return color.NRGBA{R: 196, G: 201, B: 205, A: 255} // Light separator #C4C9CD
+		case theme.ColorNameButton:
+			return color.NRGBA{R: 255, G: 255, B: 255, A: 255} // Light button #FFFFFF
+		case theme.ColorNameDisabledButton:
+			return color.NRGBA{R: 238, G: 240, B: 241, A: 255} // Light disabled button #EEF0F1
+		case theme.ColorNameMenuBackground:
+			return color.NRGBA{R: 255, G: 255, B: 255, A: 255} // Light menu #FFFFFF
+		case theme.ColorNameScrollBar:
+			return color.NRGBA{R: 176, G: 182, B: 187, A: 255} // Light scrollbar #B0B6BB
 		case theme.ColorNameSelection:
 			return withAlpha(accent, 115) // 45% Opacity
 		case theme.ColorNameHover:
