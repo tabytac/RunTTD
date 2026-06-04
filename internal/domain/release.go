@@ -9,6 +9,7 @@ type ReleaseAsset struct {
 // ReleaseInfo contains GitHub release tags and associated download assets
 type ReleaseInfo struct {
 	TagName string         `json:"tag_name"`
+	HTMLURL string         `json:"html_url"`
 	Assets  []ReleaseAsset `json:"assets"`
 }
 
