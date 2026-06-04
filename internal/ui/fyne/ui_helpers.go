@@ -41,6 +41,17 @@ func NewLabeledCheckWithDescription(label, description string, checked bool) (*w
 	return check, group
 }
 
+// NewLabeledField stacks a bold label, an indented italic description, and a
+// control vertically. Used for onboarding path/preference rows so that the
+// field name, its explanation, and its input read as one consistent unit.
+func NewLabeledField(label, description string, control fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewVBox(
+		NewSectionTitle(label),
+		container.NewBorder(nil, nil, widget.NewLabel("    "), nil, NewSectionDescription(description)),
+		control,
+	)
+}
+
 // NewModalDialog returns a modal popup with a bold title bar, content area, and centred button toolbar
 func NewModalDialog(canvas fyne.Canvas, title string, content fyne.CanvasObject, buttons ...*widget.Button) *widget.PopUp {
 	paddedButtons := make([]fyne.CanvasObject, len(buttons))
