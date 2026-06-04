@@ -13,6 +13,15 @@ import (
 	"runttd/internal/domain"
 )
 
+// Default Client selector options shared by the onboarding screen and the
+// global settings dialog. defaultClientMap is label->config value;
+// revDefaultClientMap is the inverse. "(none)" maps to "" (no default).
+var (
+	defaultClientOptions = []string{"(none)", "OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP", "Custom Executable"}
+	defaultClientMap     = map[string]string{"(none)": "", "OpenTTD (Stable)": "vanilla", "OpenTTD (Nightly)": "vanilla-nightly", "JGRPP": "jgrpp", "Custom Executable": "custom"}
+	revDefaultClientMap  = map[string]string{"": "(none)", "vanilla": "OpenTTD (Stable)", "vanilla-nightly": "OpenTTD (Nightly)", "jgrpp": "JGRPP", "custom": "Custom Executable"}
+)
+
 // scrollForwardingEntry forwards scroll events to parent containers
 type scrollForwardingEntry struct {
 	widget.Entry
@@ -98,9 +107,6 @@ func (um *UIManager) showSettingsView() {
 	nightlyMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-nightlies/")
 
 	// Default client selector: empty means no default
-	defaultClientOptions := []string{"(none)", "OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP", "Custom Executable"}
-	defaultClientMap := map[string]string{"(none)": "", "OpenTTD (Stable)": "vanilla", "OpenTTD (Nightly)": "vanilla-nightly", "JGRPP": "jgrpp", "Custom Executable": "custom"}
-	revDefaultClientMap := map[string]string{"": "(none)", "vanilla": "OpenTTD (Stable)", "vanilla-nightly": "OpenTTD (Nightly)", "jgrpp": "JGRPP", "custom": "Custom Executable"}
 	defaultClientSelect := widget.NewSelect(defaultClientOptions, func(string) {})
 	if label, ok := revDefaultClientMap[um.Config.DefaultClient]; ok {
 		defaultClientSelect.SetSelected(label)
