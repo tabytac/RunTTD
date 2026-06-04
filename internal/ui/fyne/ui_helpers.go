@@ -41,12 +41,14 @@ func NewLabeledCheckWithDescription(label, description string, checked bool) (*w
 	return check, group
 }
 
-// NewLabeledField stacks a bold label, an indented italic description, and a
-// control vertically. Used for onboarding path/preference rows so that the
-// field name, its explanation, and its input read as one consistent unit.
+// NewLabeledField stacks a plain field label, an indented italic description,
+// and a control vertically. Used for onboarding path/preference rows so that the
+// field name, its explanation, and its input read as one consistent unit. The
+// label is intentionally not bold, so section headers stay visually dominant
+// above the fields they group.
 func NewLabeledField(label, description string, control fyne.CanvasObject) fyne.CanvasObject {
 	return container.NewVBox(
-		NewSectionTitle(label),
+		widget.NewLabel(label),
 		container.NewBorder(nil, nil, widget.NewLabel("    "), nil, NewSectionDescription(description)),
 		control,
 	)
