@@ -41,11 +41,11 @@ func (b *rightClickButton) TappedSecondary(_ *fyne.PointEvent) {
 
 // makeOnboardingView creates the first-run configuration screen
 func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
-	welcomeLabel := widget.NewLabel("Welcome to RunTTD!")
+	welcomeLabel := widget.NewLabel("Set up RunTTD")
 	welcomeLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: false}
 	welcomeLabel.Alignment = fyne.TextAlignCenter
 
-	subtitle := NewSectionDescription("Let's confirm a few settings before you start.")
+	subtitle := NewSectionDescription("Confirm your installation folders and preferences to get started.")
 	subtitle.Alignment = fyne.TextAlignCenter
 
 	// --- Installation paths ---
@@ -69,6 +69,8 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	})
 
 	// --- Preferences ---
+	// Default Client is required: the dropdown starts unselected unless the
+	// config already has a value, and Continue is gated on a selection below.
 	defaultClientSelect := widget.NewSelect(defaultClientOptions, func(string) {})
 	if label, ok := revDefaultClientMap[um.Config.DefaultClient]; ok {
 		defaultClientSelect.SetSelected(label)
@@ -91,10 +93,12 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	statusLabel.Wrapping = fyne.TextWrapWord
 
 	// validate is a backstop for the Continue handler; the live hint and the
-	// disabled button (see updateState) are the primary guard against empty paths.
+	// disabled button (see updateState) are the primary guard. All three inputs
+	// (both paths and a default client) are required.
 	validate := func() bool {
 		return strings.TrimSpace(parentDirEntry.Text) != "" &&
-			strings.TrimSpace(docsBasePathEntry.Text) != ""
+			strings.TrimSpace(docsBasePathEntry.Text) != "" &&
+			defaultClientSelect.Selected != ""
 	}
 
 	continueBtn := widget.NewButton("Continue", func() {
@@ -106,10 +110,9 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		um.Config.DocsBasePath = strings.TrimSpace(docsBasePathEntry.Text)
 		um.Config.SubfolderPerClient = subfolderCheck.Checked
 		um.Config.AutoCloseOnStart = autoCloseCheck.Checked
-		if sel := defaultClientSelect.Selected; sel != "" {
-			if mapped, ok := defaultClientMap[sel]; ok {
-				um.Config.DefaultClient = mapped
-			}
+		// validate() guarantees a selection, so this lookup always hits.
+		if mapped, ok := defaultClientMap[defaultClientSelect.Selected]; ok {
+			um.Config.DefaultClient = mapped
 		}
 		um.Config.FirstRun = false
 
@@ -135,9 +138,9 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	}
 
 	// updateState keeps the Continue button and the status hint in sync with the
-	// path fields. Continue stays disabled until both paths are filled, so the
-	// hint explains what is still needed rather than leaving the button inertly
-	// greyed out.
+	// required inputs (both paths and a default client). Continue stays disabled
+	// until all are set, so the hint explains what is still needed rather than
+	// leaving the button inertly greyed out.
 	updateState := func(_ string) {
 		switch {
 		case strings.TrimSpace(parentDirEntry.Text) == "":
@@ -145,6 +148,9 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 			continueBtn.Disable()
 		case strings.TrimSpace(docsBasePathEntry.Text) == "":
 			statusLabel.SetText("Enter a Docs Base Path to continue.")
+			continueBtn.Disable()
+		case defaultClientSelect.Selected == "":
+			statusLabel.SetText("Choose a default client to continue.")
 			continueBtn.Disable()
 		default:
 			statusLabel.SetText("")
@@ -156,6 +162,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		updateState(s)
 		updateDocsValidation(s)
 	}
+	defaultClientSelect.OnChanged = updateState
 	updateState("")
 	updateDocsValidation(docsBasePathEntry.Text)
 
@@ -163,21 +170,20 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		welcomeLabel,
 		subtitle,
 		NewSectionHeader("Installation Paths"),
-		NewSectionDescription("These defaults are based on your operating system — change them if you have a custom setup."),
 		NewLabeledField(
-			"Parent Directory",
-			"Where clients are downloaded and installed.",
+			"Parent Directory (required)",
+			"RunTTD downloads, installs, and removes game clients here.",
 			container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
 		),
 		NewLabeledField(
-			"Docs Base Path",
-			"Where your saves and configuration (openttd.cfg) are stored.",
+			"Docs Base Path (required)",
+			"Where your saves and configuration (openttd.cfg) live. RunTTD reads from here but never modifies your files.",
 			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
 		),
 		NewSectionHeader("Preferences"),
 		NewLabeledField(
-			"Default Client",
-			"Pre-fills the client for new profiles. Leave as (none) to use the built-in default (JGRPP).",
+			"Default Client (required)",
+			"The client new profiles use by default. You can change it per profile.",
 			defaultClientSelect,
 		),
 		subfolderGroup,
