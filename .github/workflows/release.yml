@@ -50,7 +50,7 @@ jobs:
 
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
-        run: go build -ldflags "-H=windowsgui" -o "dist/${{ matrix.output_name }}" ./cmd/runttd
+        run: go build -ldflags "-H=windowsgui -X main.Version=${{ github.ref_name }}" -o "dist/${{ matrix.output_name }}" ./cmd/runttd
 
       - name: Build binary (Linux)
         if: matrix.platform == 'linux-amd64'
@@ -58,7 +58,7 @@ jobs:
           CGO_ENABLED: 1
         run: |
           mkdir -p dist
-          go build -o dist/${{ matrix.output_name }} ./cmd/runttd
+          go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/${{ matrix.output_name }} ./cmd/runttd
 
       - name: Build binary (macOS Universal)
         if: matrix.platform == 'macos-universal'
@@ -67,9 +67,9 @@ jobs:
         run: |
           mkdir -p dist
           # Build for Intel
-          GOARCH=amd64 go build -o dist/launcher-amd64 ./cmd/runttd
+          GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/launcher-amd64 ./cmd/runttd
           # Build for Apple Silicon
-          GOARCH=arm64 go build -o dist/launcher-arm64 ./cmd/runttd
+          GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/launcher-arm64 ./cmd/runttd
           # Merge into universal binary
           lipo -create -output "dist/${{ matrix.output_name }}" dist/launcher-amd64 dist/launcher-arm64
           # Cleanup temporary binaries
