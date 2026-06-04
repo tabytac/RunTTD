@@ -177,7 +177,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		NewSectionHeader("Preferences"),
 		NewLabeledField(
 			"Default Client",
-			"Pre-fills the client for new profiles. Leave as (none) to decide per profile.",
+			"Pre-fills the client for new profiles. Leave as (none) to use the built-in default (JGRPP).",
 			defaultClientSelect,
 		),
 		subfolderGroup,
