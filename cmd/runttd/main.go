@@ -14,6 +14,11 @@ import (
 	fyneuipkg "runttd/internal/ui/fyne"
 )
 
+// Version is the RunTTD release version, set at build time via
+// -ldflags "-X main.Version=<tag>". Defaults to "dev" for local builds,
+// which suppresses the update indicator.
+var Version = "dev"
+
 func setupGuiOutput() {
 	if runtime.GOOS == "windows" {
 		f, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
@@ -95,7 +100,7 @@ func main() {
 		}
 	}()
 
-	ui := fyneuipkg.NewUIManager(config, configPath)
+	ui := fyneuipkg.NewUIManager(config, configPath, Version)
 	if bootstrapFileLog {
 		platform.AppendToLogFileRaw(logPath, "Launching UI")
 	}

@@ -24,6 +24,7 @@ type UIManager struct {
 	Config              *domain.Config
 	Logger              *platform.Logger
 	ConfigPath          string
+	Version             string
 	SelectedProfileName string
 	LastListSelectID    int
 	LastListSelectAt    time.Time
@@ -33,7 +34,7 @@ type UIManager struct {
 }
 
 // NewUIManager creates a new UIManager instance, configuring the static app icons and custom presets theme
-func NewUIManager(config *domain.Config, configPath string) *UIManager {
+func NewUIManager(config *domain.Config, configPath string, version string) *UIManager {
 	fyneApp := app.New()
 	appIcon := fyne.NewStaticResource("app_icon.png", appIconBytes)
 	fyneApp.SetIcon(appIcon)
@@ -47,6 +48,7 @@ func NewUIManager(config *domain.Config, configPath string) *UIManager {
 		Config:           config,
 		Logger:           platform.NewLogger(config.LogToFile, filepath.Join(filepath.Dir(configPath), "log.txt")),
 		ConfigPath:       configPath,
+		Version:          version,
 		LastListSelectID: -1,
 		LauncherService:  apppkg.NewLauncherService(),
 	}
