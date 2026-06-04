@@ -1,8 +1,10 @@
 package fyne
 
 import (
+	"context"
 	"fmt"
 	"image/color"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +19,7 @@ import (
 	fyneadvancedlist "github.com/dweymouth/fyne-advanced-list"
 
 	"runttd/internal/domain"
+	"runttd/internal/platform"
 )
 
 // rightClickButton is a button that also handles right-clicks
@@ -625,8 +628,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	themeToggleBtn.Importance = widget.LowImportance
 
-	headerContent := container.NewBorder(nil, nil, nil, themeToggleBtn, headerLabel)
+	headerRight := container.NewHBox(themeToggleBtn)
+	headerContent := container.NewBorder(nil, nil, nil, headerRight, headerLabel)
 	header := NewThemedBox(ColorNameHeader, container.NewPadded(headerContent))
+
+	um.startUpdateCheck(headerRight)
 
 	mainContent := container.NewBorder(header, nil, nil, nil, split)
 	um.Window.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
@@ -653,6 +659,47 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	})
 
 	return mainContent
+}
+
+// startUpdateCheck shows the update pill if a newer RunTTD release exists.
+// The GitHub check runs at most once per app run; the result is cached on the
+// UIManager and reused on later view constructions, so navigating back to the
+// main view does not re-hit the API or make the pill flicker. On any error, no
+// update, or a dev build, the header is left unchanged.
+func (um *UIManager) startUpdateCheck(headerRight *fyne.Container) {
+	if um.updateChecked {
+		if um.updateTag != "" {
+			um.addUpdatePill(headerRight, um.updateTag, um.updateURL)
+		}
+		return
+	}
+	go func() {
+		tag, releaseURL, err := platform.LatestRunTTDRelease(context.Background())
+		fyne.Do(func() {
+			um.updateChecked = true
+			if err != nil || !platform.IsNewerVersion(um.Version, tag) {
+				return
+			}
+			um.updateTag = tag
+			um.updateURL = releaseURL
+			um.addUpdatePill(headerRight, tag, releaseURL)
+		})
+	}()
+}
+
+// addUpdatePill prepends an accent-colored "update available" pill to the header
+// (left of the theme button) that opens the release page when clicked. Must be
+// called on the main goroutine (inside fyne.Do or a UI callback).
+func (um *UIManager) addUpdatePill(headerRight *fyne.Container, tag, releaseURL string) {
+	pill := widget.NewButton("↻  Update to "+tag, func() {
+		if u, perr := neturl.Parse(releaseURL); perr == nil {
+			_ = fyne.CurrentApp().OpenURL(u)
+		}
+	})
+	pill.Importance = widget.HighImportance
+	// Prepend so the pill sits left of the theme toggle button.
+	headerRight.Objects = append([]fyne.CanvasObject{pill}, headerRight.Objects...)
+	headerRight.Refresh()
 }
 
 // showThemeCustomizer presents the preset accent color circular items and mode toggles

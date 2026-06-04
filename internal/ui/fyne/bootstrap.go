@@ -25,6 +25,9 @@ type UIManager struct {
 	Logger              *platform.Logger
 	ConfigPath          string
 	Version             string
+	updateChecked       bool   // true once the GitHub update check has resolved
+	updateTag           string // newer release tag, "" if none/unknown
+	updateURL           string // newer release page URL
 	SelectedProfileName string
 	LastListSelectID    int
 	LastListSelectAt    time.Time
