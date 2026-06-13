@@ -4,9 +4,9 @@ import "time"
 
 // InstalledVersion describes one client/version folder found on disk.
 type InstalledVersion struct {
-	Path      string    // absolute folder path
-	Client    string    // "jgrpp" | "vanilla" | "vanilla-nightly" | "" if unclassifiable
-	Version   string    // best-effort, display-only; "" if unknown
+	Path      string // absolute folder path
+	Client    string // "jgrpp" | "vanilla" | "vanilla-nightly" | "" if unclassifiable
+	Version   string // best-effort, display-only; "" if unknown
 	SizeBytes int64
 	ModTime   time.Time
 }
