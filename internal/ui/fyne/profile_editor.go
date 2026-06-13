@@ -64,20 +64,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}
 	}
 
-	// Client selection (OpenTTD Stable, OpenTTD Nightly, JGRPP, Custom Executable)
-	clientOptions := []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP", "Custom Executable"}
-	clientMap := map[string]string{
-		"OpenTTD (Stable)":  "vanilla",
-		"OpenTTD (Nightly)": "vanilla-nightly",
-		"JGRPP":             "jgrpp",
-		"Custom Executable": "custom",
-	}
-	revClientMap := map[string]string{
-		"vanilla":         "OpenTTD (Stable)",
-		"vanilla-nightly": "OpenTTD (Nightly)",
-		"jgrpp":           "JGRPP",
-		"custom":          "Custom Executable",
-	}
+	// Client selection (OpenTTD Stable, OpenTTD Nightly, JGRPP, Custom Executable).
+	// The label<->value maps are shared with the onboarding and settings views via
+	// the package-level defaultClient* vars (see settings.go).
 	defaultVersionOptions := func(clientID string) []string {
 		switch clientID {
 		case "vanilla":
@@ -158,8 +147,8 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	var updateState func()
 	initializingClientSelection := true
 	var clientSelect *SegmentedRadio
-	clientSelect = NewSegmentedRadio(clientOptions, "", func(s string) {
-		cli := clientMap[s]
+	clientSelect = NewSegmentedRadio(defaultClientOptions, "", func(s string) {
+		cli := defaultClientMap[s]
 		updateClientFields(cli)
 		if initializingClientSelection {
 			versionEntry.SetOptions(defaultVersionOptions(cli))
@@ -185,7 +174,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 	versionEntry.SetOptions(defaultVersionOptions(currentClient))
 	versionEntry.SetText(displayVersion(currentClient, profile.Version))
-	if sel, ok := revClientMap[currentClient]; ok {
+	if sel, ok := revDefaultClientMap[currentClient]; ok {
 		clientSelect.SetSelected(sel)
 	}
 	updateClientFields(currentClient)
@@ -474,7 +463,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			return false, "Client selection is required."
 		}
 
-		if clientMap[clientSelect.Selected] == "custom" {
+		if defaultClientMap[clientSelect.Selected] == "custom" {
 			if strings.TrimSpace(customFolderEntry.Text) == "" {
 				return false, "Executable folder is required for custom client."
 			}
@@ -535,7 +524,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 		selectedClient := "jgrpp"
 		if en := strings.TrimSpace(clientSelect.Selected); en != "" {
-			if mapped, ok := clientMap[en]; ok {
+			if mapped, ok := defaultClientMap[en]; ok {
 				selectedClient = mapped
 			}
 		}
