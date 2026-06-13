@@ -145,6 +145,12 @@ func parseVersionFromName(name string) string {
 }
 
 // RevealInFileManager opens the given folder in the OS file manager.
+//
+// Note: unlike the archive-extraction helpers, this must NOT set the no-window
+// SysProcAttr. explorer/open/xdg-open are GUI launchers, and HideWindow /
+// CREATE_NO_WINDOW suppresses the very File Explorer window we want to show (the
+// launcher still exits cleanly, so Start() returns nil and the click silently
+// does nothing). These launchers don't spawn a console, so there's nothing to hide.
 func RevealInFileManager(path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -155,6 +161,5 @@ func RevealInFileManager(path string) error {
 	default:
 		cmd = exec.Command("xdg-open", path)
 	}
-	cmd.SysProcAttr = GetNoWindowSysProcAttr()
 	return cmd.Start()
 }
