@@ -454,6 +454,17 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	}
 	recomputeVisible()
 
+	// displayPos returns the row position of real profile index `real` within the
+	// current filter, or -1 if it is filtered out.
+	displayPos := func(real int) int {
+		for d, r := range visibleIdx {
+			if r == real {
+				return d
+			}
+		}
+		return -1
+	}
+
 	profileList = fyneadvancedlist.NewList(
 		func() int { return len(visibleIdx) },
 		func() fyne.CanvasObject {
@@ -564,8 +575,13 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 			selectedIdx = len(um.Config.Profiles) - 1
 			um.SelectedProfileName = um.Config.Profiles[selectedIdx].Name
+			recomputeVisible()
 			profileList.Refresh()
-			profileList.Select(widget.ListItemID(selectedIdx))
+			if d := displayPos(selectedIdx); d >= 0 {
+				profileList.Select(widget.ListItemID(d))
+			} else {
+				profileList.UnselectAll()
+			}
 			refreshDetails()
 		} else {
 			dialog.ShowError(fmt.Errorf("select a profile to duplicate"), um.Window)
@@ -593,8 +609,13 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 						selectedIdx = nextIdx
 						um.SelectedProfileName = um.Config.Profiles[selectedIdx].Name
+						recomputeVisible()
 						profileList.Refresh()
-						profileList.Select(widget.ListItemID(selectedIdx))
+						if d := displayPos(selectedIdx); d >= 0 {
+							profileList.Select(widget.ListItemID(d))
+						} else {
+							profileList.UnselectAll()
+						}
 						refreshDetails()
 					},
 					um.Window,
@@ -659,7 +680,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	rightPanel := NewThemedBox(ColorNameContent, rightPanelObj)
 
 	if selectedIdx >= 0 && selectedIdx < len(um.Config.Profiles) {
-		profileList.Select(widget.ListItemID(selectedIdx))
+		if d := displayPos(selectedIdx); d >= 0 {
+			profileList.Select(widget.ListItemID(d))
+		}
 	}
 	updateButtonStates()
 	refreshDetails()
@@ -696,7 +719,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				idx = 9
 			}
 			if idx >= 0 && idx < len(um.Config.Profiles) {
-				profileList.Select(widget.ListItemID(idx))
+				if d := displayPos(idx); d >= 0 {
+					profileList.Select(widget.ListItemID(d))
+				} else {
+					profileList.UnselectAll()
+				}
 				launchIndex(idx)
 				return
 			}
