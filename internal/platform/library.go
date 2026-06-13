@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -140,4 +142,19 @@ func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 func parseVersionFromName(name string) string {
 	m := regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`).FindString(name)
 	return m
+}
+
+// RevealInFileManager opens the given folder in the OS file manager.
+func RevealInFileManager(path string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", path)
+	case "darwin":
+		cmd = exec.Command("open", path)
+	default:
+		cmd = exec.Command("xdg-open", path)
+	}
+	cmd.SysProcAttr = GetNoWindowSysProcAttr()
+	return cmd.Start()
 }
