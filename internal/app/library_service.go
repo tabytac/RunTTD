@@ -13,6 +13,7 @@ import (
 // BuildLibrary scans installed versions and annotates each with the profiles
 // that resolve to it. "Referenced" is computed by inverting the same resolution
 // a launch uses, so an entry with empty ReferencedBy is genuinely unused.
+// ctx is reserved for a future network-backed build; current resolution is local/synchronous.
 func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry {
 	scanned := platform.ScanInstalledVersions(cfg)
 
@@ -20,7 +21,10 @@ func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry
 	for _, p := range cfg.Profiles {
 		client := strings.TrimSpace(p.Client)
 		if client == "" {
-			client = "jgrpp"
+			client = strings.TrimSpace(cfg.DefaultClient)
+			if client == "" {
+				client = "jgrpp"
+			}
 		}
 		if client == "custom" {
 			continue
