@@ -82,12 +82,8 @@ func CheckForNewVersion(ctx context.Context, config *domain.Config) string {
 	return ""
 }
 
-// DownloadAndExtractVersion downloads a specific JGRPP version archive and extracts it to the download directory
-func DownloadAndExtractVersion(ctx context.Context, version string, config *domain.Config) bool {
-	return DownloadAndExtractVersionWithLogger(ctx, version, config, nil)
-}
-
-// DownloadAndExtractVersionWithLogger is DownloadAndExtractVersion with extractor output routed to the logger
+// DownloadAndExtractVersionWithLogger downloads a specific JGRPP version archive
+// and extracts it to the download directory, routing extractor output to the logger
 func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, config *domain.Config, logger *Logger) bool {
 	repoURL := fmt.Sprintf("%s/releases/tags/jgrpp-%s", config.JgrppApiUrl, version)
 	downloadDir := ClientDownloadDir(config, "jgrpp")

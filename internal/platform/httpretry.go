@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -31,15 +32,23 @@ func retryAfterDelay(resp *http.Response) time.Duration {
 	if resp == nil {
 		return 0
 	}
-	v := resp.Header.Get("Retry-After")
+	v := strings.TrimSpace(resp.Header.Get("Retry-After"))
 	if v == "" {
 		return 0
 	}
-	secs, err := strconv.Atoi(v)
-	if err != nil || secs < 0 {
-		return 0
+	// Retry-After may be either delay-seconds or an HTTP-date (RFC 7231).
+	if secs, err := strconv.Atoi(v); err == nil {
+		if secs < 0 {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
 	}
-	return time.Duration(secs) * time.Second
+	if t, err := http.ParseTime(v); err == nil {
+		if d := time.Until(t); d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {

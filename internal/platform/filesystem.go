@@ -175,21 +175,6 @@ func ExtractDMG(dmgPath, destDir string) error {
 	return nil
 }
 
-// FindVersionFolder searches the folder directory for a specific JGRPP version folder
-func FindVersionFolder(parentDir, version string) string {
-	entries, err := os.ReadDir(parentDir)
-	if err != nil {
-		return ""
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() && strings.Contains(entry.Name(), fmt.Sprintf("jgrpp-%s", version)) {
-			return filepath.Join(parentDir, entry.Name())
-		}
-	}
-	return ""
-}
-
 // FindVersionFolderClient finds client-specific installations using matching platform architecture aliases
 func FindVersionFolderClient(parentDir, version, client string, cfg *domain.Config) string {
 	entries, err := os.ReadDir(parentDir)
@@ -231,36 +216,6 @@ func FindVersionFolderClient(parentDir, version, client string, cfg *domain.Conf
 		}
 	}
 	return ""
-}
-
-// FindLatestFolder finds the most recently updated JGRPP directory folder
-func FindLatestFolder(parentDir string) string {
-	entries, err := os.ReadDir(parentDir)
-	if err != nil {
-		return ""
-	}
-
-	var latestFolder string
-	var latestTime time.Time
-
-	for _, entry := range entries {
-		if entry.IsDir() && strings.Contains(entry.Name(), "jgrpp") {
-			info, err := entry.Info()
-			if err != nil {
-				continue
-			}
-			if info.ModTime().After(latestTime) {
-				latestTime = info.ModTime()
-				latestFolder = filepath.Join(parentDir, entry.Name())
-			}
-		}
-	}
-	return latestFolder
-}
-
-// FindLatestFolderClient searches directory files and returns the newest installation path for a client
-func FindLatestFolderClient(parentDir, client string) string {
-	return FindLatestFolderClientWithConfig(parentDir, client, nil)
 }
 
 // FindLatestFolderClientWithConfig locates the latest installed folder for a given profile client, using active config platform rules

@@ -293,12 +293,7 @@ func CheckForNewVersionForClientTrack(ctx context.Context, client string, cfg *d
 	}
 }
 
-// DownloadAndExtractVersionForClient extracts specified target release packages
-func DownloadAndExtractVersionForClient(ctx context.Context, version, client string, cfg *domain.Config) bool {
-	return DownloadAndExtractVersionForClientWithLogger(ctx, version, client, cfg, nil)
-}
-
-// DownloadAndExtractVersionForClientWithLogger downloads client package and outputs status tracking messages
+// DownloadAndExtractVersionForClientWithLogger downloads a client package and outputs status tracking messages
 func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, client string, cfg *domain.Config, logger *Logger) bool {
 	logf := func(format string, args ...any) {
 		if logger != nil {

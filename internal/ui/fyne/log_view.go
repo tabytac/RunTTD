@@ -220,16 +220,19 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 		um.LogImportant(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
 		version = platform.CheckForNewVersionForClientTrack(context.Background(), client, um.Config, latestTrack)
 		if version == "" {
-			um.LogImportant("Could not determine latest version from remote; trying latest local install.")
+			// The remote lookup failed or returned nothing — typically because the
+			// download server is unreachable (offline). Skip the update check and
+			// fall back to launching the newest install already on disk.
+			um.LogImportant("Could not reach the download server to check for a newer version; falling back to the latest local install.")
 			if updateStatus != nil {
-				updateStatus("Latest version lookup failed, using latest local install")
+				updateStatus("Update check unavailable (offline?), using latest local install")
 			}
 			versionFolder := platform.FindLatestFolderClientWithConfig(platform.ClientDownloadDir(um.Config, client), client, um.Config)
 			if versionFolder == "" {
 				if updateStatus != nil {
-					updateStatus("Failed: no local installation found for client")
+					updateStatus("Failed: offline and no local installation found for client")
 				}
-				um.LogImportant("No local installation found for client.")
+				um.LogImportant("No local installation found for client, and the download server could not be reached.")
 				if onError != nil {
 					onError()
 				}
