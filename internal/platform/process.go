@@ -126,7 +126,11 @@ func ExecuteOpenTTD(
 	}
 
 	cmd := exec.CommandContext(ctx, exePath, args...)
-	obs.LogVerbose(fmt.Sprintf("Running command: %s %v", exePath, args))
+	if len(args) > 0 {
+		obs.LogVerbose(fmt.Sprintf("Running command: %s %v", exePath, args))
+	} else {
+		obs.LogVerbose(fmt.Sprintf("Running command: %s", exePath))
+	}
 	cmd.SysProcAttr = GetDetachedSysProcAttr()
 
 	stdout, _ := cmd.StdoutPipe()
