@@ -11,11 +11,29 @@ import (
 )
 
 // BuildLibrary scans installed versions and annotates each with the profiles
-// that resolve to it. "Referenced" is computed by inverting the same resolution
-// a launch uses, so an entry with empty ReferencedBy is genuinely unused.
+// that resolve to it. "Referenced" is computed by resolving each profile to the
+// installed folder it would launch, so an entry with empty ReferencedBy is
+// genuinely unused.
+//
+// For a "latest" profile, the referenced folder is the HIGHEST-version install
+// for that client (by version number, not file mod-time) — this matches what an
+// online launch picks when that version is installed, and is offline-safe.
 // ctx is reserved for a future network-backed build; current resolution is local/synchronous.
 func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry {
 	scanned := platform.ScanInstalledVersions(cfg)
+
+	// latestByClient holds the path of the highest-version installed folder for
+	// each client, used to resolve "latest" profiles without a network call.
+	latestByClient := map[string]domain.InstalledVersion{}
+	for _, v := range scanned {
+		if v.Client == "" {
+			continue
+		}
+		cur, ok := latestByClient[v.Client]
+		if !ok || compareVersions(v.Version, cur.Version) > 0 {
+			latestByClient[v.Client] = v
+		}
+	}
 
 	refs := map[string][]string{} // folder path -> profile names
 	for _, p := range cfg.Profiles {
@@ -29,15 +47,16 @@ func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry
 		if client == "custom" {
 			continue
 		}
-		dir := platform.ClientDownloadDir(cfg, client)
 		version := strings.TrimSpace(p.Version)
 		lower := strings.ToLower(version)
 		var folder string
 		switch lower {
 		case "", "latest", "latest-stable", "latest-testing", "latest (stable)", "latest (testing)":
-			folder = platform.FindLatestFolderClientWithConfig(dir, client, cfg)
+			if v, ok := latestByClient[client]; ok {
+				folder = v.Path
+			}
 		default:
-			folder = platform.FindVersionFolderClient(dir, version, client, cfg)
+			folder = platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, client), version, client, cfg)
 		}
 		if folder != "" {
 			refs[folder] = append(refs[folder], p.Name)
