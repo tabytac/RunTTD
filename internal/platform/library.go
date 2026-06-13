@@ -83,6 +83,15 @@ func DeleteInstalledVersion(cfg *domain.Config, path string) error {
 var nightlyDateRe = regexp.MustCompile(`^openttd-(?:19|20)\d{6}`)
 var versionRe = regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`)
 
+// nightlyDateTokenRe captures the YYYYMMDD build date of a nightly folder name
+// (the first token after "openttd-").
+var nightlyDateTokenRe = regexp.MustCompile(`^openttd-((?:19|20)\d{6})`)
+
+// osTagRe matches the trailing OS/arch tag of an OpenTTD release folder name.
+// Anchored to the end so it picks up the suffix regardless of the version/hash
+// block in front of it (e.g. "...-master-g<hash>-windows-arm64").
+var osTagRe = regexp.MustCompile(`(?i)-(windows-(?:win64|win32|arm64)|linux-generic-(?:amd64|arm64|i386)|macos-universal)$`)
+
 // classifyClientFolder returns the client a folder belongs to, or "" if it does
 // not look like a managed client install.
 func classifyClientFolder(name string) string {
@@ -130,6 +139,7 @@ func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 				Path:      path,
 				Client:    classifyClientFolder(entry.Name()),
 				Version:   parseVersionFromName(entry.Name()),
+				OSTag:     parseOSTag(entry.Name()),
 				SizeBytes: size,
 				ModTime:   modTime,
 			})
@@ -139,9 +149,25 @@ func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 }
 
 // parseVersionFromName makes a best-effort extraction of a version token from a
-// folder name. Used for display and for sort order within a client group.
+// folder name. Used for display and for sort order within a client group. For
+// nightly folders (openttd-YYYYMMDD-master-...), it returns the build date
+// formatted as YYYY-MM-DD; otherwise it returns the dotted version (e.g. 14.1).
 func parseVersionFromName(name string) string {
+	if m := nightlyDateTokenRe.FindStringSubmatch(strings.ToLower(name)); len(m) == 2 {
+		d := m[1] // YYYYMMDD
+		return d[0:4] + "-" + d[4:6] + "-" + d[6:8]
+	}
 	return versionRe.FindString(name)
+}
+
+// parseOSTag returns the trailing OS/arch tag of a release folder name (e.g.
+// "windows-win64", "macos-universal"), lowercased, or "" if none is present.
+func parseOSTag(name string) string {
+	m := osTagRe.FindStringSubmatch(name)
+	if len(m) == 2 {
+		return strings.ToLower(m[1])
+	}
+	return ""
 }
 
 // RevealInFileManager opens the given folder in the OS file manager.

@@ -7,6 +7,7 @@ type InstalledVersion struct {
 	Path      string // absolute folder path
 	Client    string // "jgrpp" | "vanilla" | "vanilla-nightly" | "" if unclassifiable
 	Version   string // best-effort, display-only; "" if unknown
+	OSTag     string // raw OS/arch tag from the folder name, e.g. "windows-win64"; "" if absent
 	SizeBytes int64
 	ModTime   time.Time
 }

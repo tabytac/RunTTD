@@ -19,6 +19,29 @@ import (
 	"runttd/internal/platform"
 )
 
+// osDisplayLabel maps a raw OS/arch tag (e.g. "windows-win64") to a friendly,
+// user-facing label. Unrecognized tags are returned as-is so nothing is hidden.
+func osDisplayLabel(tag string) string {
+	switch tag {
+	case "windows-win64":
+		return "Windows 64-bit"
+	case "windows-win32":
+		return "Windows 32-bit"
+	case "windows-arm64":
+		return "Windows ARM64"
+	case "linux-generic-amd64":
+		return "Linux x64"
+	case "linux-generic-arm64":
+		return "Linux ARM64"
+	case "linux-generic-i386":
+		return "Linux 32-bit"
+	case "macos-universal":
+		return "macOS"
+	default:
+		return tag
+	}
+}
+
 // clientDisplayName maps a client id to its library group header label.
 func clientDisplayName(client string) string {
 	switch client {
@@ -220,6 +243,14 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	}
 	chip := statusChip(chipText, chipFill, libChipFg)
 
+	// Small muted OS/arch label next to the version + status pill.
+	titleObjects := []fyne.CanvasObject{titleLabel, chip}
+	if e.OSTag != "" {
+		osLabel := widget.NewLabel(osDisplayLabel(e.OSTag))
+		osLabel.TextStyle = fyne.TextStyle{Italic: true}
+		titleObjects = append(titleObjects, osLabel)
+	}
+
 	meta := widget.NewLabel(fmt.Sprintf("%s · %s", humanSize(e.SizeBytes), e.ModTime.Format("2006-01-02")))
 
 	revealBtn := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
@@ -233,7 +264,7 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	})
 	deleteBtn.Importance = widget.LowImportance
 
-	titleRow := container.NewHBox(titleLabel, chip)
+	titleRow := container.NewHBox(titleObjects...)
 	left := container.NewVBox(titleRow, meta)
 	actions := container.NewHBox(revealBtn, deleteBtn)
 
