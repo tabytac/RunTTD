@@ -342,9 +342,6 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		"Disable All":  "QQ",
 	}
 	initialNewgrf := profile.NewGRFScanMode
-	if initialNewgrf == "" {
-		initialNewgrf = ""
-	}
 	newgrfRadio := NewSegmentedRadio([]string{newgrfLabelMap[""], newgrfLabelMap["Q"], newgrfLabelMap["QQ"]}, newgrfLabelMap[initialNewgrf], func(s string) {
 		// no-op; selection read on save
 	})

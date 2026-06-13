@@ -51,6 +51,13 @@ func (l *Logger) GetAll() []string {
 	return out
 }
 
+// Len returns the number of buffered log lines without copying the buffer.
+func (l *Logger) Len() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.lines)
+}
+
 // AppendToLogFileRaw exposes the raw log file writing capability for bootstrapping and panic recovery logging
 func AppendToLogFileRaw(path, msg string) {
 	appendToLogFile(path, msg)

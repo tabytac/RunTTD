@@ -30,9 +30,10 @@ func (um *UIManager) showToast(message string) {
 	content := container.NewPadded(toast)
 	pop := widget.NewPopUp(content, um.Window.Canvas())
 
-	// Position at bottom center
+	// Position at bottom center, accounting for the popup's actual width.
 	size := um.Window.Content().Size()
-	pop.ShowAtPosition(fyne.NewPos(size.Width/2-100, size.Height-60))
+	popWidth := pop.MinSize().Width
+	pop.ShowAtPosition(fyne.NewPos((size.Width-popWidth)/2, size.Height-60))
 
 	go func() {
 		time.Sleep(3 * time.Second)
@@ -75,13 +76,18 @@ func (um *UIManager) showLogView(profileIdx int) {
 	logBox := container.NewVScroll(logLabel)
 	logBox.SetMinSize(fyne.NewSize(600, 400))
 
-	// Update the log display whenever logger changes
+	// Update the log display whenever the logger gains new lines. The last seen
+	// count is tracked so an unchanged buffer skips the rebuild, the binding
+	// write, and the scroll — leaving the user free to scroll up without being
+	// yanked back to the bottom every tick.
+	lastLineCount := -1
 	updateLogDisplay := func() {
-		logs := um.Logger.GetAll()
-		text := ""
-		for _, line := range logs {
-			text += line + "\n"
+		if um.Logger.Len() == lastLineCount {
+			return
 		}
+		logs := um.Logger.GetAll()
+		lastLineCount = len(logs)
+		text := strings.Join(logs, "\n")
 		fyne.Do(func() {
 			_ = logBinding.Set(text)
 			logBox.ScrollToBottom()
@@ -113,12 +119,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 	})
 
 	copyBtn := widget.NewButtonWithIcon("Copy to Clipboard", theme.ContentCopyIcon(), func() {
-		logs := um.Logger.GetAll()
-		text := ""
-		for _, line := range logs {
-			text += line + "\n"
-		}
-		um.App.Clipboard().SetContent(text)
+		um.App.Clipboard().SetContent(strings.Join(um.Logger.GetAll(), "\n"))
 		um.showToast("Logs copied to clipboard!")
 	})
 

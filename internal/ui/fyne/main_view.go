@@ -236,8 +236,10 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 					})
 
 					time.Sleep(1500 * time.Millisecond)
-					runBtn.SetText(oldText)
-					updateButtonStates()
+					fyne.Do(func() {
+						runBtn.SetText(oldText)
+						updateButtonStates()
+					})
 				}()
 			}
 			return
@@ -259,7 +261,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 
 		if seeLogsBtn != nil {
-			if len(um.Logger.GetAll()) > 0 {
+			if um.Logger.Len() > 0 {
 				seeLogsBtn.Enable()
 			} else {
 				seeLogsBtn.Disable()
