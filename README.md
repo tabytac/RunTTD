@@ -12,6 +12,8 @@ Works with vanilla OpenTTD (stable and nightly) and with JGRPP releases. See [Kn
 - **Custom themes.** 8 color presets, plus a Light/Dark toggle.
 - **Multiplayer quick-join.** Store the server address, passwords, and company info per profile, and the game opens straight to that server.
 - **Save path loading.** Point a profile at a save folder and the launcher loads the most recent `.sav` file in it.
+- **Installed-clients library.** See every downloaded version, its size on disk, and total space used; remove versions you no longer need, including a one-click cleanup of versions no profile is using.
+- **Profile search.** Filter the profile list by name when you have many profiles.
 
 ## Compatibility
 
