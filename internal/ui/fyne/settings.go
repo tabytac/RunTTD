@@ -1,8 +1,10 @@
 package fyne
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -11,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"runttd/internal/domain"
+	"runttd/internal/platform"
 )
 
 // Default Client selector options shared by the onboarding screen and the
@@ -22,6 +25,68 @@ var (
 	defaultClientMap     = map[string]string{"OpenTTD (Stable)": "vanilla", "OpenTTD (Nightly)": "vanilla-nightly", "JGRPP": "jgrpp", "Custom Executable": "custom"}
 	revDefaultClientMap  = map[string]string{"vanilla": "OpenTTD (Stable)", "vanilla-nightly": "OpenTTD (Nightly)", "jgrpp": "JGRPP", "custom": "Custom Executable"}
 )
+
+// A stored OSType of "" means auto-detect (resolved per machine via
+// platform.DefaultOSType()), so a shared config works on any PC; the other
+// values are explicit overrides. osDisplayLabel supplies the friendly labels.
+const osAutoLabelPrefix = "Auto-detect"
+
+var osTypeValues = []string{
+	"windows-win64", "windows-win32", "windows-arm64",
+	"linux-generic-amd64", "linux-generic-arm64", "linux-generic-i386",
+	"macos-universal",
+}
+
+// osAutoLabel annotates the auto-detect option with what this PC resolves to.
+func osAutoLabel(detected string) string {
+	return fmt.Sprintf("%s (this PC: %s)", osAutoLabelPrefix, osDisplayLabel(detected))
+}
+
+// osTypeOptions returns the dropdown labels: auto-detect, the explicit values,
+// and any non-empty stored tag that is unknown (preserved so it is never lost).
+func osTypeOptions(detected, stored string) []string {
+	opts := []string{osAutoLabel(detected)}
+	for _, v := range osTypeValues {
+		opts = append(opts, osDisplayLabel(v))
+	}
+	if stored != "" && !knownOSType(stored) {
+		opts = append(opts, stored)
+	}
+	return opts
+}
+
+func knownOSType(value string) bool {
+	for _, v := range osTypeValues {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+// osTypeValueToLabel maps a stored OSType to its dropdown label ("" -> auto).
+func osTypeValueToLabel(detected, value string) string {
+	if value == "" {
+		return osAutoLabel(detected)
+	}
+	if knownOSType(value) {
+		return osDisplayLabel(value)
+	}
+	return value
+}
+
+// osTypeLabelToValue maps a selected label back to the stored OSType (auto -> "").
+func osTypeLabelToValue(detected, label string) string {
+	if label == osAutoLabel(detected) || strings.HasPrefix(label, osAutoLabelPrefix) {
+		return ""
+	}
+	for _, v := range osTypeValues {
+		if osDisplayLabel(v) == label {
+			return v
+		}
+	}
+	return label
+}
 
 // scrollForwardingEntry forwards scroll events to parent containers
 type scrollForwardingEntry struct {
@@ -96,8 +161,9 @@ func (um *UIManager) showSettingsView() {
 	jgrppApiUrlEntry := newScrollForwardingEntry(forwardScroll)
 	jgrppApiUrlEntry.SetText(um.Config.JgrppApiUrl)
 
-	osTypeEntry := newScrollForwardingEntry(forwardScroll)
-	osTypeEntry.SetText(um.Config.OSType)
+	osDetected := platform.DefaultOSType()
+	osTypeSelect := widget.NewSelect(osTypeOptions(osDetected, um.Config.OSType), func(string) {})
+	osTypeSelect.SetSelected(osTypeValueToLabel(osDetected, um.Config.OSType))
 
 	vanillaMirrorEntry := newScrollForwardingEntry(forwardScroll)
 	vanillaMirrorEntry.SetText(um.Config.VanillaMirror)
@@ -161,7 +227,9 @@ func (um *UIManager) showSettingsView() {
 		NewSectionHeader("Profile Defaults"),
 		widget.NewLabel("Default Client (new profiles)"), defaultClientSelect,
 		NewSectionHeader("System"),
-		widget.NewLabel("OS Type (detected automatically)"), osTypeEntry,
+		widget.NewLabel("OS Type"), osTypeSelect,
+		NewSectionDescription("Auto-detect is recommended and makes shared configs work on any PC. "+
+			"Override only to download builds for a different system."),
 	)
 	advancedScroll := container.NewVScroll(advancedContent)
 	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), advancedScroll)
@@ -182,7 +250,7 @@ func (um *UIManager) showSettingsView() {
 		um.Config.ParentDir = parentDirEntry.Text
 		um.Config.DocsBasePath = docsBasePathEntry.Text
 		um.Config.JgrppApiUrl = jgrppApiUrlEntry.Text
-		um.Config.OSType = osTypeEntry.Text
+		um.Config.OSType = osTypeLabelToValue(osDetected, osTypeSelect.Selected)
 		um.Config.AutoCloseOnStart = autoCloseCheck.Checked
 		um.Config.AutoOpenLog = autoOpenLogCheck.Checked
 		um.Config.Verbose = verboseCheck.Checked
