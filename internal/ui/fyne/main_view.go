@@ -208,18 +208,15 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	selectedIdx := indexOfProfileByName(um.Config.Profiles, um.SelectedProfileName)
 	detailsContainer := container.NewVBox()
 
-	// visibleIdx maps a displayed row position to the real Config.Profiles index.
-	// When the filter is empty it is the identity mapping. Quick-launch digits and
-	// the "N." prefix always use the REAL index, so filtering is purely visual.
+	// visibleIdx maps a displayed row to the real Config.Profiles index (identity
+	// when unfiltered); quick-launch always uses the real index, so filtering is visual.
 	visibleIdx := make([]int, len(um.Config.Profiles))
 	for i := range visibleIdx {
 		visibleIdx[i] = i
 	}
 	filterText := ""
 
-	// displayPos is forward-declared so handleRowTap (defined below, but only
-	// invoked from live UI callbacks) can map a real index to its display row.
-	// It is assigned its body further down, after recomputeVisible.
+	// displayPos is forward-declared so handleRowTap can use it; assigned below.
 	var displayPos func(real int) int
 
 	selectionHint := widget.NewLabel("Tip: Press 1-9, or 0 to quick launch. Select a profile and press Enter / double-click.")
@@ -463,8 +460,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	}
 	recomputeVisible()
 
-	// displayPos returns the row position of real profile index `real` within the
-	// current filter, or -1 if it is filtered out.
+	// displayPos returns the filtered row position of a real index, or -1 if hidden.
 	displayPos = func(real int) int {
 		for d, r := range visibleIdx {
 			if r == real {

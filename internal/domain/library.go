@@ -4,17 +4,17 @@ import "time"
 
 // InstalledVersion describes one client/version folder found on disk.
 type InstalledVersion struct {
-	Path      string // absolute folder path
+	Path      string
 	Client    string // "jgrpp" | "vanilla" | "vanilla-nightly" | "" if unclassifiable
-	Version   string // best-effort, display-only; "" if unknown
-	OSTag     string // raw OS/arch tag from the folder name, e.g. "windows-win64"; "" if absent
+	Version   string // best-effort, display-only
+	OSTag     string // raw OS/arch tag, e.g. "windows-win64"
 	SizeBytes int64
 	ModTime   time.Time
 }
 
 // LibraryEntry is an InstalledVersion annotated with the profiles that resolve
-// to it. An empty ReferencedBy means no profile launches this folder (orphan).
+// to it; an empty ReferencedBy means an orphan no profile launches.
 type LibraryEntry struct {
 	InstalledVersion
-	ReferencedBy []string // profile names; empty = orphan
+	ReferencedBy []string
 }

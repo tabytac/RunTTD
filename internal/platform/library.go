@@ -14,13 +14,12 @@ import (
 	"runttd/internal/domain"
 )
 
-// DirSize returns the total size in bytes of all regular files under root.
-// Unreadable entries are skipped rather than aborting the walk.
+// DirSize sums the sizes of all regular files under root, skipping unreadable entries.
 func DirSize(root string) (int64, error) {
 	var total int64
 	err := filepath.WalkDir(root, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil // skip unreadable entries, keep walking
+			return nil
 		}
 		if d.IsDir() {
 			return nil
@@ -35,8 +34,7 @@ func DirSize(root string) (int64, error) {
 	return total, err
 }
 
-// managedRoots returns the distinct download directories that may contain
-// installed client folders, honoring the per-client subfolder layout.
+// managedRoots returns the distinct per-client download directories.
 func managedRoots(cfg *domain.Config) []string {
 	if cfg == nil {
 		return nil
@@ -54,10 +52,9 @@ func managedRoots(cfg *domain.Config) []string {
 	return roots
 }
 
-// DeleteInstalledVersion removes an installed version folder. It refuses any
-// path that is not strictly inside one of the managed download roots (and never
-// a root itself), so it can never delete the parent directory or anything
-// outside it.
+// DeleteInstalledVersion removes a folder only if it sits strictly inside a
+// managed download root (never a root itself), guarding against deleting the
+// parent or anything outside it.
 func DeleteInstalledVersion(cfg *domain.Config, path string) error {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -83,17 +80,13 @@ func DeleteInstalledVersion(cfg *domain.Config, path string) error {
 var nightlyDateRe = regexp.MustCompile(`^openttd-(?:19|20)\d{6}`)
 var versionRe = regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`)
 
-// nightlyDateTokenRe captures the YYYYMMDD build date of a nightly folder name
-// (the first token after "openttd-").
+// nightlyDateTokenRe captures the YYYYMMDD build date of a nightly folder name.
 var nightlyDateTokenRe = regexp.MustCompile(`^openttd-((?:19|20)\d{6})`)
 
-// osTagRe matches the trailing OS/arch tag of an OpenTTD release folder name.
-// Anchored to the end so it picks up the suffix regardless of the version/hash
-// block in front of it (e.g. "...-master-g<hash>-windows-arm64").
+// osTagRe matches the trailing OS/arch tag, anchored to the end so the version/hash block in front is ignored.
 var osTagRe = regexp.MustCompile(`(?i)-(windows-(?:win64|win32|arm64)|linux-generic-(?:amd64|arm64|i386)|macos-universal)$`)
 
-// classifyClientFolder returns the client a folder belongs to, or "" if it does
-// not look like a managed client install.
+// classifyClientFolder returns the client a folder belongs to, or "" if unrecognized.
 func classifyClientFolder(name string) string {
 	lname := strings.ToLower(name)
 	if strings.Contains(lname, "jgrpp") {
@@ -108,13 +101,11 @@ func classifyClientFolder(name string) string {
 	return ""
 }
 
-// ScanInstalledVersions walks the managed download directories and returns one
-// InstalledVersion per immediate subfolder, classified by client. Folders that
-// match no client are returned with Client == "". Size and mod-time are read
-// per folder; an unreadable size is reported as 0.
+// ScanInstalledVersions returns one InstalledVersion per immediate subfolder of
+// the managed download directories, classified by client (Client == "" if none).
 func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 	var out []domain.InstalledVersion
-	seen := map[string]bool{} // belt-and-suspenders: guard against a path appearing under two roots
+	seen := map[string]bool{} // guard against a path appearing under two roots
 	for _, root := range managedRoots(cfg) {
 		entries, err := os.ReadDir(root)
 		if err != nil {
@@ -148,20 +139,17 @@ func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 	return out
 }
 
-// parseVersionFromName makes a best-effort extraction of a version token from a
-// folder name. Used for display and for sort order within a client group. For
-// nightly folders (openttd-YYYYMMDD-master-...), it returns the build date
-// formatted as YYYY-MM-DD; otherwise it returns the dotted version (e.g. 14.1).
+// parseVersionFromName extracts a version token for display/sort: a nightly's
+// YYYYMMDD build date formatted YYYY-MM-DD, else the dotted version (e.g. 14.1).
 func parseVersionFromName(name string) string {
 	if m := nightlyDateTokenRe.FindStringSubmatch(strings.ToLower(name)); len(m) == 2 {
-		d := m[1] // YYYYMMDD
+		d := m[1]
 		return d[0:4] + "-" + d[4:6] + "-" + d[6:8]
 	}
 	return versionRe.FindString(name)
 }
 
-// parseOSTag returns the trailing OS/arch tag of a release folder name (e.g.
-// "windows-win64", "macos-universal"), lowercased, or "" if none is present.
+// parseOSTag returns the trailing OS/arch tag (lowercased), or "" if absent.
 func parseOSTag(name string) string {
 	m := osTagRe.FindStringSubmatch(name)
 	if len(m) == 2 {
@@ -170,26 +158,15 @@ func parseOSTag(name string) string {
 	return ""
 }
 
-// linuxFileManagers is the fallback list of file-manager executables tried (in
-// order) on Linux when xdg-open is unavailable or has no registered handler for
-// directories — e.g. under WSLg, which ships no desktop session or file manager.
+// linuxFileManagers are tried in order when xdg-open has no directory handler
+// (e.g. under WSLg, which ships no desktop session or file manager).
 var linuxFileManagers = []string{"nautilus", "dolphin", "thunar", "nemo", "pcmanfm", "caja"}
 
 // RevealInFileManager opens the given folder in the OS file manager.
 //
-// Note: unlike the archive-extraction helpers, this must NOT set the no-window
-// SysProcAttr. explorer/open/xdg-open are GUI launchers, and HideWindow /
-// CREATE_NO_WINDOW suppresses the very File Explorer window we want to show (the
-// launcher still exits cleanly, so Start() returns nil and the click silently
-// does nothing). These launchers don't spawn a console, so there's nothing to hide.
-//
-// On Linux we cannot use Start() alone: when xdg-open finds no handler (no
-// desktop environment / no registered file manager, as under WSLg) it still
-// starts successfully and then exits non-zero, so the click would silently do
-// nothing. We therefore Run() xdg-open (waiting for its exit code) and, if it
-// fails, fall through a list of known file managers — returning a real error if
-// none can be launched, so the caller can log it instead of leaving the user
-// with a dead button.
+// Must NOT set the no-window SysProcAttr: HideWindow/CREATE_NO_WINDOW would
+// suppress the very Explorer window we want (Start() then returns nil and the
+// click silently does nothing).
 func RevealInFileManager(path string) error {
 	switch runtime.GOOS {
 	case "windows":
@@ -201,12 +178,11 @@ func RevealInFileManager(path string) error {
 	}
 }
 
-// revealLinux tries xdg-open (waiting for its exit code) and then falls back
-// through linuxFileManagers, returning an aggregated error if nothing worked.
+// revealLinux Run()s xdg-open (so a non-zero "no handler" exit is detected, not
+// mistaken for success) and falls back through linuxFileManagers, returning an
+// error if nothing worked.
 func revealLinux(path string) error {
 	if _, err := exec.LookPath("xdg-open"); err == nil {
-		// Wait so a "no handler" exit (non-zero) is detected rather than
-		// mistaken for success, which is exactly the WSLg failure mode.
 		if err := exec.Command("xdg-open", path).Run(); err == nil {
 			return nil
 		}

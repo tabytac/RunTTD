@@ -19,8 +19,7 @@ import (
 	"runttd/internal/platform"
 )
 
-// osDisplayLabel maps a raw OS/arch tag (e.g. "windows-win64") to a friendly,
-// user-facing label. Unrecognized tags are returned as-is so nothing is hidden.
+// osDisplayLabel maps a raw OS/arch tag to a friendly label, or returns it as-is.
 func osDisplayLabel(tag string) string {
 	switch tag {
 	case "windows-win64":
@@ -78,8 +77,7 @@ var (
 	libChipFg = color.NRGBA{R: 255, G: 255, B: 255, A: 255} // white text on colored pills
 )
 
-// statusChip returns a small rounded colored pill with bold text. fg is the
-// text color (kept explicit so it stays legible on the saturated fill).
+// statusChip returns a small rounded colored pill with bold fg text on fill.
 func statusChip(text string, fill, fg color.Color) fyne.CanvasObject {
 	label := canvas.NewText(text, fg)
 	label.TextStyle = fyne.TextStyle{Bold: true}
@@ -89,8 +87,8 @@ func statusChip(text string, fill, fg color.Color) fyne.CanvasObject {
 	return container.NewStack(bg, container.NewPadded(label))
 }
 
-// showLibraryView presents the full-screen Installed Clients library. It opens
-// immediately in a scanning state and populates rows on a background goroutine.
+// showLibraryView presents the full-screen Installed Clients library, opening in
+// a scanning state and populating rows on a background goroutine.
 func (um *UIManager) showLibraryView() {
 	summary := widget.NewLabel("Scanning installed clients...")
 	summary.TextStyle = fyne.TextStyle{Bold: true}
@@ -200,21 +198,21 @@ func (um *UIManager) showLibraryView() {
 	rescan()
 }
 
-// pluralVersions returns "version"/"versions" (or "folder"/"folders" for the
-// unrecognized group) for a group header count.
+// pluralVersions returns the singular/plural noun for a group header count
+// ("versions", or "folders" for the unrecognized group).
 func pluralVersions(n int, client string) string {
 	noun := "versions"
 	if client == "" {
 		noun = "folders"
 	}
 	if n == 1 {
-		noun = noun[:len(noun)-1] // drop trailing 's'
+		noun = noun[:len(noun)-1]
 	}
 	return noun
 }
 
-// libraryRow builds one grouped row: a left status color-bar, the version as the
-// title with an inline status chip, muted size/date, and icon-only actions.
+// libraryRow builds one grouped row: status color-bar, version title with an
+// inline status chip, muted size/date, and icon-only actions.
 func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.CanvasObject {
 	// Title is the version (client is the group header); fall back to folder base.
 	titleText := e.Version
@@ -224,7 +222,6 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	titleLabel := widget.NewLabel(titleText)
 	titleLabel.TextStyle = fyne.TextStyle{Bold: true}
 
-	// Status chip + color-bar color.
 	var chipText string
 	var barColor color.Color = color.Transparent
 	var chipFill color.Color = libGrey
@@ -243,8 +240,7 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	}
 	chip := statusChip(chipText, chipFill, libChipFg)
 
-	// Title row reads: version, then a small muted OS/arch label, then the
-	// status pill at the end.
+	// Title row: version, muted OS/arch label, then the status pill.
 	titleObjects := []fyne.CanvasObject{titleLabel}
 	if e.OSTag != "" {
 		osLabel := widget.NewLabel(osDisplayLabel(e.OSTag))

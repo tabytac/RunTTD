@@ -11,19 +11,14 @@ import (
 )
 
 // BuildLibrary scans installed versions and annotates each with the profiles
-// that resolve to it. "Referenced" is computed by resolving each profile to the
-// installed folder it would launch, so an entry with empty ReferencedBy is
-// genuinely unused.
-//
-// For a "latest" profile, the referenced folder is the HIGHEST-version install
-// for that client (by version number, not file mod-time) — this matches what an
-// online launch picks when that version is installed, and is offline-safe.
-// ctx is reserved for a future network-backed build; current resolution is local/synchronous.
+// that would launch it; an empty ReferencedBy marks an unused folder. A "latest"
+// profile resolves to the HIGHEST-version install for its client (by version,
+// not mod-time), matching an online launch and staying offline-safe.
+// ctx is reserved for a future network-backed build.
 func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry {
 	scanned := platform.ScanInstalledVersions(cfg)
 
-	// latestByClient holds the path of the highest-version installed folder for
-	// each client, used to resolve "latest" profiles without a network call.
+	// highest-version installed folder per client, for resolving "latest"
 	latestByClient := map[string]domain.InstalledVersion{}
 	for _, v := range scanned {
 		if v.Client == "" {
@@ -81,8 +76,8 @@ type LibraryGroup struct {
 
 var libraryGroupOrder = []string{"jgrpp", "vanilla", "vanilla-nightly", ""}
 
-// GroupLibrary partitions entries by client into the fixed display order, with
-// each group's entries sorted by version number descending (newest first).
+// GroupLibrary partitions entries by client into libraryGroupOrder, each group
+// sorted by version descending.
 func GroupLibrary(entries []domain.LibraryEntry) []LibraryGroup {
 	byClient := map[string][]domain.LibraryEntry{}
 	for _, e := range entries {
@@ -102,9 +97,8 @@ func GroupLibrary(entries []domain.LibraryEntry) []LibraryGroup {
 	return groups
 }
 
-// compareVersions does a light numeric dotted compare. Missing components are
-// treated as 0 ("1.0" == "1.0.0"). A non-numeric component falls back to a
-// string compare of the whole version. Not a full semver implementation.
+// compareVersions does a light dotted-numeric compare (missing parts == 0, so
+// "1.0" == "1.0.0"); a non-numeric part falls back to a string compare. Not semver.
 func compareVersions(a, b string) int {
 	pa := strings.Split(a, ".")
 	pb := strings.Split(b, ".")
