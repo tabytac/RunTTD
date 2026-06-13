@@ -243,13 +243,15 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	}
 	chip := statusChip(chipText, chipFill, libChipFg)
 
-	// Small muted OS/arch label next to the version + status pill.
-	titleObjects := []fyne.CanvasObject{titleLabel, chip}
+	// Title row reads: version, then a small muted OS/arch label, then the
+	// status pill at the end.
+	titleObjects := []fyne.CanvasObject{titleLabel}
 	if e.OSTag != "" {
 		osLabel := widget.NewLabel(osDisplayLabel(e.OSTag))
 		osLabel.TextStyle = fyne.TextStyle{Italic: true}
 		titleObjects = append(titleObjects, osLabel)
 	}
+	titleObjects = append(titleObjects, chip)
 
 	meta := widget.NewLabel(fmt.Sprintf("%s · %s", humanSize(e.SizeBytes), e.ModTime.Format("2006-01-02")))
 
