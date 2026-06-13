@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"sort"
+	"strconv"
 	"strings"
 
 	"runttd/internal/domain"
@@ -46,4 +48,65 @@ func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry
 		})
 	}
 	return out
+}
+
+// LibraryGroup is a client's entries for display, pre-sorted version-desc.
+type LibraryGroup struct {
+	Client  string
+	Entries []domain.LibraryEntry
+}
+
+var libraryGroupOrder = []string{"jgrpp", "vanilla", "vanilla-nightly", ""}
+
+// GroupLibrary partitions entries by client into the fixed display order, with
+// each group's entries sorted by version number descending (newest first).
+func GroupLibrary(entries []domain.LibraryEntry) []LibraryGroup {
+	byClient := map[string][]domain.LibraryEntry{}
+	for _, e := range entries {
+		byClient[e.Client] = append(byClient[e.Client], e)
+	}
+	var groups []LibraryGroup
+	for _, client := range libraryGroupOrder {
+		es := byClient[client]
+		if len(es) == 0 {
+			continue
+		}
+		sort.SliceStable(es, func(i, j int) bool {
+			return compareVersions(es[i].Version, es[j].Version) > 0
+		})
+		groups = append(groups, LibraryGroup{Client: client, Entries: es})
+	}
+	return groups
+}
+
+// compareVersions does a light numeric dotted compare. Missing components are
+// treated as 0 ("1.0" == "1.0.0"). A non-numeric component falls back to a
+// string compare of the whole version. Not a full semver implementation.
+func compareVersions(a, b string) int {
+	pa := strings.Split(a, ".")
+	pb := strings.Split(b, ".")
+	n := len(pa)
+	if len(pb) > n {
+		n = len(pb)
+	}
+	for i := 0; i < n; i++ {
+		var ai, bi int
+		var ae, be error
+		if i < len(pa) {
+			ai, ae = strconv.Atoi(pa[i])
+		}
+		if i < len(pb) {
+			bi, be = strconv.Atoi(pb[i])
+		}
+		if ae != nil || be != nil {
+			return strings.Compare(a, b)
+		}
+		if ai != bi {
+			if ai < bi {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
 }
