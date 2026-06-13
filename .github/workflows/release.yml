@@ -42,6 +42,21 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
+      # Cache compiled objects (GOCACHE) so the Fyne/cgo stack isn't rebuilt from scratch.
+      - name: Resolve GOCACHE path
+        id: gocache
+        shell: bash
+        run: echo "dir=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.gocache.outputs.dir }}
+          key: gobuild-${{ runner.os }}-${{ matrix.goarch || 'native' }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            gobuild-${{ runner.os }}-${{ matrix.goarch || 'native' }}-
+            gobuild-${{ runner.os }}-
+
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
