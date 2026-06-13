@@ -122,7 +122,44 @@ jobs:
           cd dist
           sha256sum * > checksums.txt
 
-      - name: Create GitHub Release
+      - name: Resolve release body from annotated tag
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Read the annotated tag's message via the API. Lightweight tags have no
+          # tag object (the ref points straight at a commit), so this is empty for
+          # them; the leading bullets of an annotated message become the body.
+          SHA=$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq '.object.sha')
+          TYPE=$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq '.object.type')
+          BODY=""
+          if [ "$TYPE" = "tag" ]; then
+            BODY=$(gh api "repos/$REPO/git/tags/$SHA" --jq '.message')
+          fi
+          # Trim leading/trailing whitespace to decide if the message is meaningful.
+          TRIMMED=$(printf '%s' "$BODY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          if [ -n "$TRIMMED" ]; then
+            printf '%s\n' "$BODY" > release_body.md
+            echo "has_body=true" >> "$GITHUB_OUTPUT"
+            echo "Using annotated tag message as the release body."
+          else
+            echo "has_body=false" >> "$GITHUB_OUTPUT"
+            echo "No annotated tag message found; falling back to auto-generated notes."
+          fi
+
+      - name: Create GitHub Release (custom body)
+        if: steps.notes.outputs.has_body == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_body.md
+          generate_release_notes: false
+          files: dist/**/*
+
+      - name: Create GitHub Release (auto-generated notes)
+        if: steps.notes.outputs.has_body == 'false'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
