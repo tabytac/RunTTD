@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"path/filepath"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -48,9 +49,22 @@ func humanSize(b int64) string {
 
 // statusColors for the row color-bar and chip. Green = in use, amber = unused.
 var (
-	libGreen = color.NRGBA{R: 61, G: 153, B: 61, A: 255}  // #3D993D
-	libAmber = color.NRGBA{R: 230, G: 167, B: 0, A: 255}  // #E6A700
+	libGreen  = color.NRGBA{R: 61, G: 153, B: 61, A: 255}   // #3D993D
+	libAmber  = color.NRGBA{R: 230, G: 167, B: 0, A: 255}   // #E6A700
+	libGrey   = color.NRGBA{R: 120, G: 125, B: 130, A: 255} // neutral pill for "unrecognized"
+	libChipFg = color.NRGBA{R: 255, G: 255, B: 255, A: 255} // white text on colored pills
 )
+
+// statusChip returns a small rounded colored pill with bold text. fg is the
+// text color (kept explicit so it stays legible on the saturated fill).
+func statusChip(text string, fill, fg color.Color) fyne.CanvasObject {
+	label := canvas.NewText(text, fg)
+	label.TextStyle = fyne.TextStyle{Bold: true}
+	label.TextSize = theme.CaptionTextSize()
+	bg := canvas.NewRectangle(fill)
+	bg.CornerRadius = 8
+	return container.NewStack(bg, container.NewPadded(label))
+}
 
 // showLibraryView presents the full-screen Installed Clients library. It opens
 // immediately in a scanning state and populates rows on a background goroutine.
@@ -60,7 +74,10 @@ func (um *UIManager) showLibraryView() {
 
 	listBox := container.NewVBox()
 
+	scanGen := 0
+
 	backBtn := widget.NewButton("Back", func() {
+		scanGen++ // invalidate any in-flight scan render
 		um.Window.SetContent(um.makeMainView())
 	})
 
@@ -125,12 +142,19 @@ func (um *UIManager) showLibraryView() {
 	}
 
 	rescan = func() {
+		scanGen++
+		gen := scanGen
 		summary.SetText("Scanning installed clients...")
 		listBox.Objects = nil
 		listBox.Refresh()
 		go func() {
 			entries := apppkg.BuildLibrary(context.Background(), um.Config)
-			fyne.Do(func() { render(entries) })
+			fyne.Do(func() {
+				if gen != scanGen {
+					return // a newer scan or Back superseded this one
+				}
+				render(entries)
+			})
 		}()
 	}
 
@@ -180,18 +204,21 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	// Status chip + color-bar color.
 	var chipText string
 	var barColor color.Color = color.Transparent
+	var chipFill color.Color = libGrey
 	switch {
 	case len(e.ReferencedBy) > 0:
-		chipText = "IN USE · " + joinNames(e.ReferencedBy)
+		chipText = "IN USE · " + strings.Join(e.ReferencedBy, ", ")
 		barColor = libGreen
+		chipFill = libGreen
 	case e.Client == "":
 		chipText = "UNRECOGNIZED"
+		chipFill = libGrey
 	default:
 		chipText = "UNUSED"
 		barColor = libAmber
+		chipFill = libAmber
 	}
-	chip := widget.NewLabel(chipText)
-	chip.TextStyle = fyne.TextStyle{Bold: true}
+	chip := statusChip(chipText, chipFill, libChipFg)
 
 	meta := widget.NewLabel(fmt.Sprintf("%s · %s", humanSize(e.SizeBytes), e.ModTime.Format("2006-01-02")))
 
@@ -221,7 +248,7 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, afterChange func()) {
 	msg := fmt.Sprintf("Delete this folder?\n\n%s\n(%s)", e.Path, humanSize(e.SizeBytes))
 	if len(e.ReferencedBy) > 0 {
-		msg += "\n\nWarning: used by profile(s): " + joinNames(e.ReferencedBy)
+		msg += "\n\nWarning: used by profile(s): " + strings.Join(e.ReferencedBy, ", ")
 	}
 	dialog.NewConfirm("Delete Installed Version", msg, func(ok bool) {
 		if !ok {
@@ -263,15 +290,4 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, afterChange f
 		}
 		afterChange()
 	}, um.Window).Show()
-}
-
-func joinNames(names []string) string {
-	out := ""
-	for i, n := range names {
-		if i > 0 {
-			out += ", "
-		}
-		out += n
-	}
-	return out
 }
