@@ -593,6 +593,10 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		um.showSettingsView()
 	})
 
+	manageInstallsBtn := widget.NewButton("Manage Installs", func() {
+		um.showLibraryView()
+	})
+
 	actionsContent := container.NewVBox(
 		runBtn,
 		container.NewGridWithColumns(3, editBtn, duplicateBtn, deleteBtn),
@@ -600,7 +604,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	leftPanelObj := container.NewBorder(
 		widget.NewCard("Profiles", "", widget.NewLabel("Select a profile to edit or run it.")),
-		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, widget.NewSeparator(), seeLogsBtn, settingsBtn)),
+		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, widget.NewSeparator(), seeLogsBtn, manageInstallsBtn, settingsBtn)),
 		nil,
 		nil,
 		profileList,
