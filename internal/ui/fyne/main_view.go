@@ -208,6 +208,15 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	selectedIdx := indexOfProfileByName(um.Config.Profiles, um.SelectedProfileName)
 	detailsContainer := container.NewVBox()
 
+	// visibleIdx maps a displayed row position to the real Config.Profiles index.
+	// When the filter is empty it is the identity mapping. Quick-launch digits and
+	// the "N." prefix always use the REAL index, so filtering is purely visual.
+	visibleIdx := make([]int, len(um.Config.Profiles))
+	for i := range visibleIdx {
+		visibleIdx[i] = i
+	}
+	filterText := ""
+
 	selectionHint := widget.NewLabel("Tip: Press 1-9, or 0 to quick launch. Select a profile and press Enter / double-click.")
 	selectionHint.Wrapping = fyne.TextWrapWord
 
@@ -434,8 +443,19 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		detailsContainer.Refresh()
 	}
 
+	recomputeVisible := func() {
+		needle := strings.ToLower(strings.TrimSpace(filterText))
+		visibleIdx = visibleIdx[:0]
+		for i, p := range um.Config.Profiles {
+			if needle == "" || strings.Contains(strings.ToLower(p.Name), needle) {
+				visibleIdx = append(visibleIdx, i)
+			}
+		}
+	}
+	recomputeVisible()
+
 	profileList = fyneadvancedlist.NewList(
-		func() int { return len(um.Config.Profiles) },
+		func() int { return len(visibleIdx) },
 		func() fyne.CanvasObject {
 			btn := newRightClickButton(nil, nil)
 
@@ -459,8 +479,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			rightSide := layout.Objects[1].(*fyne.Container)
 			versionLabel := rightSide.Objects[0].(*widget.Label)
 
-			if i < len(um.Config.Profiles) {
-				profile := um.Config.Profiles[i]
+			if int(i) < len(visibleIdx) {
+				real := visibleIdx[i]
+				profile := um.Config.Profiles[real]
 				var versionText string
 				if profile.Client == "custom" {
 					versionText = "custom"
@@ -470,9 +491,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 						versionText = "latest"
 					}
 				}
-				nameLabel.SetText(fmt.Sprintf("%d. %s", i+1, profile.Name))
+				nameLabel.SetText(fmt.Sprintf("%d. %s", real+1, profile.Name))
 				versionLabel.SetText(versionText)
-				idx := int(i)
+				idx := real
 				btn.OnTapped = func() {
 					handleRowTap(idx)
 				}
@@ -513,7 +534,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 	}
 	profileList.OnSelected = func(id widget.ListItemID) {
-		selectProfile(int(id))
+		if int(id) < len(visibleIdx) {
+			selectProfile(visibleIdx[id])
+		}
 	}
 	profileList.OnUnselected = func(_ widget.ListItemID) {
 		selectProfile(-1)
@@ -602,12 +625,25 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		container.NewGridWithColumns(3, editBtn, duplicateBtn, deleteBtn),
 	)
 
+	searchEntry := widget.NewEntry()
+	searchEntry.SetPlaceHolder("Search profiles by name...")
+	searchEntry.OnChanged = func(s string) {
+		filterText = s
+		recomputeVisible()
+		// Reordering a filtered subset is ambiguous; only allow drag with no filter.
+		profileList.EnableDragging = strings.TrimSpace(s) == ""
+		profileList.UnselectAll()
+		selectProfile(-1)
+		refreshDetails()
+		profileList.Refresh()
+	}
+
 	leftPanelObj := container.NewBorder(
 		widget.NewCard("Profiles", "", widget.NewLabel("Select a profile to edit or run it.")),
 		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, widget.NewSeparator(), seeLogsBtn, manageInstallsBtn, settingsBtn)),
 		nil,
 		nil,
-		profileList,
+		container.NewBorder(container.NewPadded(searchEntry), nil, nil, nil, profileList),
 	)
 	leftPanel := NewThemedBox(ColorNameSidebar, leftPanelObj)
 
