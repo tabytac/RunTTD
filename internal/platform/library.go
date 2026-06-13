@@ -170,6 +170,11 @@ func parseOSTag(name string) string {
 	return ""
 }
 
+// linuxFileManagers is the fallback list of file-manager executables tried (in
+// order) on Linux when xdg-open is unavailable or has no registered handler for
+// directories — e.g. under WSLg, which ships no desktop session or file manager.
+var linuxFileManagers = []string{"nautilus", "dolphin", "thunar", "nemo", "pcmanfm", "caja"}
+
 // RevealInFileManager opens the given folder in the OS file manager.
 //
 // Note: unlike the archive-extraction helpers, this must NOT set the no-window
@@ -177,15 +182,43 @@ func parseOSTag(name string) string {
 // CREATE_NO_WINDOW suppresses the very File Explorer window we want to show (the
 // launcher still exits cleanly, so Start() returns nil and the click silently
 // does nothing). These launchers don't spawn a console, so there's nothing to hide.
+//
+// On Linux we cannot use Start() alone: when xdg-open finds no handler (no
+// desktop environment / no registered file manager, as under WSLg) it still
+// starts successfully and then exits non-zero, so the click would silently do
+// nothing. We therefore Run() xdg-open (waiting for its exit code) and, if it
+// fails, fall through a list of known file managers — returning a real error if
+// none can be launched, so the caller can log it instead of leaving the user
+// with a dead button.
 func RevealInFileManager(path string) error {
-	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("explorer", path)
+		return exec.Command("explorer", path).Start()
 	case "darwin":
-		cmd = exec.Command("open", path)
+		return exec.Command("open", path).Start()
 	default:
-		cmd = exec.Command("xdg-open", path)
+		return revealLinux(path)
 	}
-	return cmd.Start()
+}
+
+// revealLinux tries xdg-open (waiting for its exit code) and then falls back
+// through linuxFileManagers, returning an aggregated error if nothing worked.
+func revealLinux(path string) error {
+	if _, err := exec.LookPath("xdg-open"); err == nil {
+		// Wait so a "no handler" exit (non-zero) is detected rather than
+		// mistaken for success, which is exactly the WSLg failure mode.
+		if err := exec.Command("xdg-open", path).Run(); err == nil {
+			return nil
+		}
+	}
+	for _, fm := range linuxFileManagers {
+		if _, err := exec.LookPath(fm); err != nil {
+			continue
+		}
+		if err := exec.Command(fm, path).Start(); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("no file manager available to open %q (tried xdg-open and %s); "+
+		"under WSL no file manager is installed", path, strings.Join(linuxFileManagers, ", "))
 }
