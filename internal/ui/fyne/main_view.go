@@ -217,6 +217,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	}
 	filterText := ""
 
+	// displayPos is forward-declared so handleRowTap (defined below, but only
+	// invoked from live UI callbacks) can map a real index to its display row.
+	// It is assigned its body further down, after recomputeVisible.
+	var displayPos func(real int) int
+
 	selectionHint := widget.NewLabel("Tip: Press 1-9, or 0 to quick launch. Select a profile and press Enter / double-click.")
 	selectionHint.Wrapping = fyne.TextWrapWord
 
@@ -308,7 +313,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 		um.LastListSelectID = idx
 		um.LastListSelectAt = now
-		profileList.Select(widget.ListItemID(idx))
+		if d := displayPos(idx); d >= 0 {
+			profileList.Select(widget.ListItemID(d))
+		} else {
+			profileList.UnselectAll()
+		}
 	}
 
 	addDetail := func(c *fyne.Container, icon fyne.Resource, label, value string, mono bool) {
@@ -456,7 +465,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	// displayPos returns the row position of real profile index `real` within the
 	// current filter, or -1 if it is filtered out.
-	displayPos := func(real int) int {
+	displayPos = func(real int) int {
 		for d, r := range visibleIdx {
 			if r == real {
 				return d
