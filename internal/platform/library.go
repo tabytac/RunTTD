@@ -80,7 +80,8 @@ func DeleteInstalledVersion(cfg *domain.Config, path string) error {
 	return fmt.Errorf("refusing to delete %q: not inside a managed download directory", abs)
 }
 
-var nightlyDateRe = regexp.MustCompile(`-(?:19|20)\d{6}`)
+var nightlyDateRe = regexp.MustCompile(`^openttd-(?:19|20)\d{6}`)
+var versionRe = regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`)
 
 // classifyClientFolder returns the client a folder belongs to, or "" if it does
 // not look like a managed client install.
@@ -104,7 +105,7 @@ func classifyClientFolder(name string) string {
 // per folder; an unreadable size is reported as 0.
 func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 	var out []domain.InstalledVersion
-	seen := map[string]bool{}
+	seen := map[string]bool{} // belt-and-suspenders: guard against a path appearing under two roots
 	for _, root := range managedRoots(cfg) {
 		entries, err := os.ReadDir(root)
 		if err != nil {
@@ -140,8 +141,7 @@ func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 // parseVersionFromName makes a best-effort extraction of a version token from a
 // folder name. Used for display and for sort order within a client group.
 func parseVersionFromName(name string) string {
-	m := regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`).FindString(name)
-	return m
+	return versionRe.FindString(name)
 }
 
 // RevealInFileManager opens the given folder in the OS file manager.
