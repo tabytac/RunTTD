@@ -5,7 +5,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"runttd/internal/domain"
 )
@@ -74,4 +76,68 @@ func DeleteInstalledVersion(cfg *domain.Config, path string) error {
 		return os.RemoveAll(abs)
 	}
 	return fmt.Errorf("refusing to delete %q: not inside a managed download directory", abs)
+}
+
+var nightlyDateRe = regexp.MustCompile(`-(?:19|20)\d{6}`)
+
+// classifyClientFolder returns the client a folder belongs to, or "" if it does
+// not look like a managed client install.
+func classifyClientFolder(name string) string {
+	lname := strings.ToLower(name)
+	if strings.Contains(lname, "jgrpp") {
+		return "jgrpp"
+	}
+	if strings.Contains(lname, "openttd") {
+		if nightlyDateRe.MatchString(lname) {
+			return "vanilla-nightly"
+		}
+		return "vanilla"
+	}
+	return ""
+}
+
+// ScanInstalledVersions walks the managed download directories and returns one
+// InstalledVersion per immediate subfolder, classified by client. Folders that
+// match no client are returned with Client == "". Size and mod-time are read
+// per folder; an unreadable size is reported as 0.
+func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
+	var out []domain.InstalledVersion
+	seen := map[string]bool{}
+	for _, root := range managedRoots(cfg) {
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			path := filepath.Join(root, entry.Name())
+			if seen[path] {
+				continue
+			}
+			seen[path] = true
+			info, err := entry.Info()
+			var modTime time.Time
+			if err == nil {
+				modTime = info.ModTime()
+			}
+			size, _ := DirSize(path)
+			out = append(out, domain.InstalledVersion{
+				Path:      path,
+				Client:    classifyClientFolder(entry.Name()),
+				Version:   parseVersionFromName(entry.Name()),
+				SizeBytes: size,
+				ModTime:   modTime,
+			})
+		}
+	}
+	return out
+}
+
+// parseVersionFromName makes a best-effort extraction of a version token from a
+// folder name. Used for display and for sort order within a client group.
+func parseVersionFromName(name string) string {
+	m := regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`).FindString(name)
+	return m
 }
