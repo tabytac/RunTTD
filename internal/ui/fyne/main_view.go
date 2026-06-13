@@ -217,34 +217,42 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	var runBtn, editBtn, duplicateBtn, deleteBtn, seeLogsBtn *widget.Button
 	var updateButtonStates func()
 
-	runSelected := func() {
-		if selectedIdx >= 0 && selectedIdx < len(um.Config.Profiles) {
-			if um.Config.AutoOpenLog {
-				um.showLogView(selectedIdx)
-			} else {
-				// Background launch with feedback
-				oldText := runBtn.Text
-				runBtn.SetText("Launching...")
-				runBtn.Disable()
-
-				profile := um.Config.Profiles[selectedIdx]
-				um.showToast(fmt.Sprintf("Starting %s...", profile.Name))
-
-				go func() {
-					um.launchProfile(profile, nil, func() {
-						um.showLogView(selectedIdx)
-					})
-
-					time.Sleep(1500 * time.Millisecond)
-					fyne.Do(func() {
-						runBtn.SetText(oldText)
-						updateButtonStates()
-					})
-				}()
-			}
+	// launchIndex starts the profile at idx, honoring the AutoOpenLog setting:
+	// either open the log view or launch in the background with toast + button
+	// feedback. Used by the Run button, Enter, and the digit quick-launch keys so
+	// all three behave identically.
+	launchIndex := func(idx int) {
+		if idx < 0 || idx >= len(um.Config.Profiles) {
+			dialog.ShowError(fmt.Errorf("select a profile to launch"), um.Window)
 			return
 		}
-		dialog.ShowError(fmt.Errorf("select a profile to launch"), um.Window)
+		if um.Config.AutoOpenLog {
+			um.showLogView(idx)
+			return
+		}
+		// Background launch with feedback
+		oldText := runBtn.Text
+		runBtn.SetText("Launching...")
+		runBtn.Disable()
+
+		profile := um.Config.Profiles[idx]
+		um.showToast(fmt.Sprintf("Starting %s...", profile.Name))
+
+		go func() {
+			um.launchProfile(profile, nil, func() {
+				um.showLogView(idx)
+			})
+
+			time.Sleep(1500 * time.Millisecond)
+			fyne.Do(func() {
+				runBtn.SetText(oldText)
+				updateButtonStates()
+			})
+		}()
+	}
+
+	runSelected := func() {
+		launchIndex(selectedIdx)
 	}
 
 	updateButtonStates = func() {
@@ -647,8 +655,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			if event.Name[0] == '0' {
 				idx = 9
 			}
-			if idx < len(um.Config.Profiles) {
-				um.showLogView(idx)
+			if idx >= 0 && idx < len(um.Config.Profiles) {
+				profileList.Select(widget.ListItemID(idx))
+				launchIndex(idx)
 				return
 			}
 		}
