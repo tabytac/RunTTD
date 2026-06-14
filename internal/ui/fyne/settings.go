@@ -21,9 +21,9 @@ import (
 // revDefaultClientMap is the inverse. Default Client is a required, always-set
 // value, so there is no "(none)" option.
 var (
-	defaultClientOptions = []string{"OpenTTD (Stable)", "OpenTTD (Nightly)", "JGRPP", "Custom Executable"}
-	defaultClientMap     = map[string]string{"OpenTTD (Stable)": "vanilla", "OpenTTD (Nightly)": "vanilla-nightly", "JGRPP": "jgrpp", "Custom Executable": "custom"}
-	revDefaultClientMap  = map[string]string{"vanilla": "OpenTTD (Stable)", "vanilla-nightly": "OpenTTD (Nightly)", "jgrpp": "JGRPP", "custom": "Custom Executable"}
+	defaultClientOptions = []string{"Vanilla OpenTTD (Releases)", "Vanilla OpenTTD (Nightly)", "JGRPP", "Custom Executable"}
+	defaultClientMap     = map[string]string{"Vanilla OpenTTD (Releases)": "vanilla", "Vanilla OpenTTD (Nightly)": "vanilla-nightly", "JGRPP": "jgrpp", "Custom Executable": "custom"}
+	revDefaultClientMap  = map[string]string{"vanilla": "Vanilla OpenTTD (Releases)", "vanilla-nightly": "Vanilla OpenTTD (Nightly)", "jgrpp": "JGRPP", "custom": "Custom Executable"}
 )
 
 // A stored OSType of "" means auto-detect (resolved per machine via

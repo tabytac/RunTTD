@@ -91,9 +91,9 @@ func (v *vanillaClient) ID() string {
 }
 func (v *vanillaClient) DisplayName() string {
 	if v.nightly {
-		return "OpenTTD (Nightly)"
+		return "Vanilla OpenTTD (Nightly)"
 	}
-	return "OpenTTD (Stable)"
+	return "Vanilla OpenTTD (Releases)"
 }
 func (v *vanillaClient) FetchVersions(ctx context.Context, cfg *domain.Config) ([]string, error) {
 	return platform.FetchAvailableVersionsForClient(ctx, v.ID(), cfg)

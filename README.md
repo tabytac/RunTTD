@@ -36,7 +36,7 @@ Each profile stores:
 | Field | What it does |
 |---|---|
 | **Name** | Display name in the list |
-| **Client** | Which build to use: OpenTTD Stable, OpenTTD Nightly, JGRPP, or a Custom Executable |
+| **Client** | Which build to use: Vanilla OpenTTD (Releases), Vanilla OpenTTD (Nightly), JGRPP, or a Custom Executable |
 | **Version** | Client version to use. `latest` or a specific tag like `0.72.2` (not used for Custom) |
 | **Executable Folder** | Custom client only: folder containing your own `openttd` executable |
 | **Launch Mode** | How the game starts: load a specific save file, load the newest save in a folder, or join a multiplayer server |

@@ -47,11 +47,34 @@ func clientDisplayName(client string) string {
 	case "jgrpp":
 		return "JGRPP"
 	case "vanilla":
-		return "OpenTTD Stable"
+		return "Vanilla OpenTTD (Releases)"
 	case "vanilla-nightly":
-		return "OpenTTD Nightly"
+		return "Vanilla OpenTTD (Nightly)"
 	default:
 		return "Unrecognized"
+	}
+}
+
+// shortClientLabel returns a compact client tag for tight spaces like the
+// profile list row. An empty client resolves to the configured default.
+func shortClientLabel(client, defaultClient string) string {
+	if client == "" {
+		client = defaultClient
+		if client == "" {
+			client = "jgrpp"
+		}
+	}
+	switch client {
+	case "jgrpp":
+		return "JGRPP"
+	case "vanilla":
+		return "Vanilla"
+	case "vanilla-nightly":
+		return "Nightly"
+	case "custom":
+		return "Custom"
+	default:
+		return client
 	}
 }
 
