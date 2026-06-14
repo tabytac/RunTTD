@@ -267,6 +267,7 @@ func CheckForNewVersionForClient(ctx context.Context, client string, cfg *domain
 func CheckForNewVersionForClientTrack(ctx context.Context, client string, cfg *domain.Config, track string) string {
 	switch client {
 	case "jgrpp":
+		// Stable-only: /releases/latest excludes pre-releases. A testing track would branch on `track` here.
 		return CheckForNewVersion(ctx, cfg)
 	case "vanilla", "vanilla-nightly":
 		versions, err := FetchAvailableVersionsForClient(ctx, client, cfg)

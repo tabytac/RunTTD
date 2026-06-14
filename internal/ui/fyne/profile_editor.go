@@ -26,6 +26,21 @@ func valueOrDefault(val, def string) string {
 	return val
 }
 
+// versionTrackHintText returns the per-client note about what "latest" resolves
+// to, or "" for nightly/custom. JGRPP "latest" is stable-only by design.
+func versionTrackHintText(clientID string) string {
+	switch clientID {
+	case "vanilla":
+		return "\"latest (Stable)\" tracks final releases only.\n" +
+			"\"latest (Testing)\" also includes betas and release candidates."
+	case "jgrpp":
+		return "\"latest\" installs the newest stable release.\n" +
+			"To play a pre-release, manually pick the version."
+	default:
+		return ""
+	}
+}
+
 // showProfileEditor displays the edit modal popup for creating or updating profiles
 func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	var profile domain.Profile
@@ -51,15 +66,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	})
 	customFolderRow := container.NewBorder(nil, nil, nil, customFolderBtn, customFolderEntry)
 
-	// Stable-vs-testing note, shown only for Vanilla OpenTTD (Releases) where both
-	// tracks apply. "latest (Stable)" tracks final releases; "latest (Testing)"
-	// also tracks betas and release candidates.
-	vanillaTrackHint := NewSectionDescription(
-		"\"latest (Stable)\" tracks final releases only.\n" +
-			"\"latest (Testing)\" also includes betas and release candidates.")
-	vanillaTrackHint.Hide()
+	// Text set per client in updateClientFields via versionTrackHintText.
+	versionTrackHint := NewSectionDescription("")
+	versionTrackHint.Hide()
 
-	versionGroup := container.NewVBox(widget.NewLabel("Version"), versionEntry, vanillaTrackHint)
+	versionGroup := container.NewVBox(widget.NewLabel("Version"), versionEntry, versionTrackHint)
 	customFolderGroup := container.NewVBox(widget.NewLabel("Executable Folder"), customFolderRow)
 
 	updateClientFields := func(clientID string) {
@@ -70,10 +81,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			versionGroup.Show()
 			customFolderGroup.Hide()
 		}
-		if clientID == "vanilla" {
-			vanillaTrackHint.Show()
+		if hint := versionTrackHintText(clientID); hint != "" {
+			versionTrackHint.SetText(hint)
+			versionTrackHint.Show()
 		} else {
-			vanillaTrackHint.Hide()
+			versionTrackHint.Hide()
 		}
 	}
 
