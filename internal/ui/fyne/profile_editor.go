@@ -51,7 +51,15 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	})
 	customFolderRow := container.NewBorder(nil, nil, nil, customFolderBtn, customFolderEntry)
 
-	versionGroup := container.NewVBox(widget.NewLabel("Version"), versionEntry)
+	// Stable-vs-testing note, shown only for Vanilla OpenTTD (Releases) where both
+	// tracks apply. "latest (Stable)" tracks final releases; "latest (Testing)"
+	// also tracks betas and release candidates.
+	vanillaTrackHint := NewSectionDescription(
+		"\"latest (Stable)\" tracks final releases only.\n" +
+			"\"latest (Testing)\" also includes betas and release candidates.")
+	vanillaTrackHint.Hide()
+
+	versionGroup := container.NewVBox(widget.NewLabel("Version"), versionEntry, vanillaTrackHint)
 	customFolderGroup := container.NewVBox(widget.NewLabel("Executable Folder"), customFolderRow)
 
 	updateClientFields := func(clientID string) {
@@ -62,9 +70,14 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			versionGroup.Show()
 			customFolderGroup.Hide()
 		}
+		if clientID == "vanilla" {
+			vanillaTrackHint.Show()
+		} else {
+			vanillaTrackHint.Hide()
+		}
 	}
 
-	// Client selection (OpenTTD Stable, OpenTTD Nightly, JGRPP, Custom Executable).
+	// Client selection (Vanilla OpenTTD Stable/Nightly, JGRPP, Custom Executable).
 	// The label<->value maps are shared with the onboarding and settings views via
 	// the package-level defaultClient* vars (see settings.go).
 	defaultVersionOptions := func(clientID string) []string {
