@@ -58,18 +58,19 @@ func main() {
 		defaultParentDir := filepath.Join(docsBase, ottdDirName+clientsSuffix)
 
 		config = &domain.Config{
-			FirstRun:         true,
-			ParentDir:        defaultParentDir,
-			DocsBasePath:     defaultDocsDir,
-			JgrppApiUrl:      "https://api.github.com/repos/JGRennison/OpenTTD-patches",
-			OSType:           platform.DefaultOSType(),
-			AutoCloseOnStart: false,
-			Verbose:          false,
-			LogToFile:        false,
-			DefaultClient:    "",
-			VanillaMirror:    "https://cdn.openttd.org/openttd-releases/",
-			NightlyMirror:    "https://cdn.openttd.org/openttd-nightlies/",
-			Profiles:         []domain.Profile{{Name: "Default", Version: "latest"}},
+			FirstRun:           true,
+			ParentDir:          defaultParentDir,
+			DocsBasePath:       defaultDocsDir,
+			JgrppApiUrl:        "https://api.github.com/repos/JGRennison/OpenTTD-patches",
+			OSType:             platform.DefaultOSType(),
+			AutoCloseOnStart:   false,
+			Verbose:            false,
+			LogToFile:          false,
+			SubfolderPerClient: true,
+			DefaultClient:      "",
+			VanillaMirror:      "https://cdn.openttd.org/openttd-releases/",
+			NightlyMirror:      "https://cdn.openttd.org/openttd-nightlies/",
+			Profiles:           []domain.Profile{{Name: "Default", Version: "latest"}},
 		}
 
 		if saveErr := domain.SaveConfig(configPath, config); saveErr != nil {

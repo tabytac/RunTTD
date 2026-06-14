@@ -56,8 +56,8 @@ Create, edit, duplicate, and delete profiles from the main window. Everything li
 
 Click **Settings** at the bottom of the profile list to configure:
 
-- **Parent Directory.** Where client versions are downloaded and extracted. By default every release lands directly here in its own versioned folder (e.g. `openttd-0.72.2-windows-win64`, `jgrpp-0.65.3-...`).
-- **Per-client subfolders.** Optional. When on, installs are nested under `/jgrpp`, `/vanilla`, `/vanilla-nightly` instead of all sharing the parent directory.
+- **Parent Directory.** Where client versions are downloaded and extracted, each in its own versioned folder (e.g. `openttd-0.72.2-windows-win64`, `jgrpp-0.65.3-...`).
+- **Per-client subfolders.** On by default. Installs are nested under `/jgrpp`, `/vanilla`, `/vanilla-nightly`; turn it off to have every client share the parent directory directly.
 - **Docs Base Path.** Your OpenTTD documents folder, where `save/` and `openttd.cfg` live.
 - **Auto-close.** Close the launcher once OpenTTD starts.
 - **Verbose logging.** Detailed log messages during launch.
