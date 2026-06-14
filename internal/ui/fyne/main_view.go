@@ -498,14 +498,16 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			if int(i) < len(visibleIdx) {
 				real := visibleIdx[i]
 				profile := um.Config.Profiles[real]
+				clientTag := shortClientLabel(profile.Client, um.Config.DefaultClient)
 				var versionText string
 				if profile.Client == "custom" {
-					versionText = "custom"
+					versionText = "Custom"
 				} else {
-					versionText = profile.Version
-					if versionText == "" {
-						versionText = "latest"
+					version := profile.Version
+					if version == "" {
+						version = "latest"
 					}
+					versionText = clientTag + " · " + version
 				}
 				nameLabel.SetText(fmt.Sprintf("%d. %s", real+1, profile.Name))
 				versionLabel.SetText(versionText)
