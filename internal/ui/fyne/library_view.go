@@ -277,6 +277,7 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	revealBtn := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
 		if err := platform.RevealInFileManager(e.Path); err != nil {
 			um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", e.Path, err))
+			dialog.ShowError(fmt.Errorf("couldn't open the folder: %w", err), um.Window)
 		}
 	})
 	revealBtn.Importance = widget.LowImportance

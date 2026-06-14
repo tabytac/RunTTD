@@ -42,6 +42,26 @@ func (b *rightClickButton) TappedSecondary(_ *fyne.PointEvent) {
 	}
 }
 
+// searchEntry is an Entry that invokes onEscape when Escape is pressed.
+type searchEntry struct {
+	widget.Entry
+	onEscape func()
+}
+
+func newSearchEntry() *searchEntry {
+	e := &searchEntry{}
+	e.ExtendBaseWidget(e)
+	return e
+}
+
+func (e *searchEntry) TypedKey(key *fyne.KeyEvent) {
+	if key.Name == fyne.KeyEscape && e.onEscape != nil {
+		e.onEscape()
+		return
+	}
+	e.Entry.TypedKey(key)
+}
+
 // makeOnboardingView creates the first-run configuration screen
 func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	welcomeLabel := widget.NewLabel("Set up RunTTD")
@@ -653,7 +673,20 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		container.NewGridWithColumns(3, editBtn, duplicateBtn, deleteBtn),
 	)
 
-	searchEntry := widget.NewEntry()
+	emptyState := widget.NewLabel("No profiles match your search.")
+	emptyState.Alignment = fyne.TextAlignCenter
+	emptyState.Wrapping = fyne.TextWrapWord
+	emptyState.Hide()
+
+	updateEmptyState := func() {
+		if len(visibleIdx) == 0 && strings.TrimSpace(filterText) != "" {
+			emptyState.Show()
+		} else {
+			emptyState.Hide()
+		}
+	}
+
+	searchEntry := newSearchEntry()
 	searchEntry.SetPlaceHolder("Search profiles by name...")
 	searchEntry.OnChanged = func(s string) {
 		filterText = s
@@ -663,7 +696,14 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		profileList.UnselectAll()
 		selectProfile(-1)
 		refreshDetails()
+		updateEmptyState()
 		profileList.Refresh()
+	}
+	// Esc clears the filter and returns to the full list.
+	searchEntry.onEscape = func() {
+		if searchEntry.Text != "" {
+			searchEntry.SetText("") // triggers OnChanged, which resets the filter
+		}
 	}
 
 	leftPanelObj := container.NewBorder(
@@ -671,7 +711,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, widget.NewSeparator(), seeLogsBtn, manageInstallsBtn, settingsBtn)),
 		nil,
 		nil,
-		container.NewBorder(container.NewPadded(searchEntry), nil, nil, nil, profileList),
+		container.NewBorder(container.NewPadded(searchEntry), nil, nil, nil, container.NewStack(profileList, emptyState)),
 	)
 	leftPanel := NewThemedBox(ColorNameSidebar, leftPanelObj)
 
