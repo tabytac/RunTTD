@@ -61,15 +61,15 @@ func main() {
 			FirstRun:           true,
 			ParentDir:          defaultParentDir,
 			DocsBasePath:       defaultDocsDir,
-			JgrppApiUrl:        "https://api.github.com/repos/JGRennison/OpenTTD-patches",
+			JgrppApiUrl:        domain.DefaultJgrppApiUrl,
 			OSType:             platform.DefaultOSType(),
 			AutoCloseOnStart:   false,
 			Verbose:            false,
 			LogToFile:          false,
 			SubfolderPerClient: true,
 			DefaultClient:      "",
-			VanillaMirror:      "https://cdn.openttd.org/openttd-releases/",
-			NightlyMirror:      "https://cdn.openttd.org/openttd-nightlies/",
+			VanillaMirror:      domain.DefaultVanillaMirror,
+			NightlyMirror:      domain.DefaultNightlyMirror,
 			Profiles:           []domain.Profile{{Name: "Default", Version: "latest"}},
 		}
 

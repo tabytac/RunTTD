@@ -3,7 +3,17 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
+)
+
+// Official endpoints. A config may override these (custom mirrors), but only
+// with an https URL — see sanitizeURLs.
+const (
+	DefaultJgrppApiUrl   = "https://api.github.com/repos/JGRennison/OpenTTD-patches"
+	DefaultVanillaMirror = "https://cdn.openttd.org/openttd-releases/"
+	DefaultNightlyMirror = "https://cdn.openttd.org/openttd-nightlies/"
 )
 
 // Config represents the top-level launcher configuration
@@ -43,11 +53,30 @@ func LoadConfig(filename string) (*Config, error) {
 		config.Profiles = []Profile{{Name: "Default", Version: "latest"}}
 	}
 
+	config.sanitizeURLs()
 	return &config, nil
+}
+
+// sanitizeURLs forces the mirror/API endpoints back to their official defaults
+// unless overridden with a valid https URL. This stops a shared config from
+// silently downgrading downloads to http or redirecting them to another host.
+func (c *Config) sanitizeURLs() {
+	c.JgrppApiUrl = httpsOrDefault(c.JgrppApiUrl, DefaultJgrppApiUrl)
+	c.VanillaMirror = httpsOrDefault(c.VanillaMirror, DefaultVanillaMirror)
+	c.NightlyMirror = httpsOrDefault(c.NightlyMirror, DefaultNightlyMirror)
+}
+
+func httpsOrDefault(raw, fallback string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || !strings.EqualFold(u.Scheme, "https") || u.Host == "" {
+		return fallback
+	}
+	return raw
 }
 
 // SaveConfig writes the launcher configuration to the specified JSON file path safely
 func SaveConfig(filename string, config *Config) error {
+	config.sanitizeURLs()
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
