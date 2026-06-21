@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,10 +19,15 @@ import (
 func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry {
 	scanned := platform.ScanInstalledVersions(cfg)
 
-	// highest-version installed folder per client, for resolving "latest"
+	// Highest-version install per client for "latest", restricted to the configured
+	// platform so a launch's actual target wins over an alphabetically-earlier OS build.
+	aliases := platform.ClientPlatformAliases(cfg)
 	latestByClient := map[string]domain.InstalledVersion{}
 	for _, v := range scanned {
 		if v.Client == "" {
+			continue
+		}
+		if !platform.FolderMatchesAnyAlias(strings.ToLower(filepath.Base(v.Path)), aliases) {
 			continue
 		}
 		cur, ok := latestByClient[v.Client]
@@ -77,8 +83,10 @@ type LibraryGroup struct {
 var libraryGroupOrder = []string{"jgrpp", "vanilla", "vanilla-nightly", ""}
 
 // GroupLibrary partitions entries by client into libraryGroupOrder, each group
-// sorted by version descending.
-func GroupLibrary(entries []domain.LibraryEntry) []LibraryGroup {
+// sorted by version descending, then within a version by OS: this machine's build
+// first, other platforms next, dedicated (headless) servers last.
+func GroupLibrary(entries []domain.LibraryEntry, cfg *domain.Config) []LibraryGroup {
+	currentOS := platform.ClientPlatformAliases(cfg)[0]
 	byClient := map[string][]domain.LibraryEntry{}
 	for _, e := range entries {
 		byClient[e.Client] = append(byClient[e.Client], e)
@@ -90,11 +98,27 @@ func GroupLibrary(entries []domain.LibraryEntry) []LibraryGroup {
 			continue
 		}
 		sort.SliceStable(es, func(i, j int) bool {
-			return compareVersions(es[i].Version, es[j].Version) > 0
+			if c := compareVersions(es[i].Version, es[j].Version); c != 0 {
+				return c > 0
+			}
+			return osSortRank(es[i].OSTag, currentOS) < osSortRank(es[j].OSTag, currentOS)
 		})
 		groups = append(groups, LibraryGroup{Client: client, Entries: es})
 	}
 	return groups
+}
+
+// osSortRank orders same-version builds: current platform, then other platforms,
+// then dedicated server builds.
+func osSortRank(osTag, currentOS string) int {
+	switch {
+	case strings.Contains(osTag, "dedicated"):
+		return 2
+	case osTag == currentOS:
+		return 0
+	default:
+		return 1
+	}
 }
 
 // compareVersions does a light dotted-numeric compare (missing parts == 0, so

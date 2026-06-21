@@ -20,6 +20,8 @@ import (
 )
 
 // osDisplayLabel maps a raw OS/arch tag to a friendly label, or returns it as-is.
+// Linux is handled generically so non-generic builds (dedicated, debian, ubuntu)
+// read as "Linux x64 (dedicated)" etc. rather than going untagged.
 func osDisplayLabel(tag string) string {
 	switch tag {
 	case "windows-win64":
@@ -28,17 +30,31 @@ func osDisplayLabel(tag string) string {
 		return "Windows 32-bit"
 	case "windows-arm64":
 		return "Windows ARM64"
-	case "linux-generic-amd64":
-		return "Linux x64"
-	case "linux-generic-arm64":
-		return "Linux ARM64"
-	case "linux-generic-i386":
-		return "Linux 32-bit"
 	case "macos-universal":
 		return "macOS"
-	default:
-		return tag
 	}
+	if strings.HasPrefix(tag, "linux-") {
+		arch := "x64"
+		switch {
+		case strings.HasSuffix(tag, "-arm64"):
+			arch = "ARM64"
+		case strings.HasSuffix(tag, "-i386"):
+			arch = "32-bit"
+		}
+		variant := strings.TrimPrefix(tag, "linux-")
+		variant = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(variant, "-amd64"), "-arm64"), "-i386")
+		switch {
+		case variant == "" || variant == "generic":
+			return "Linux " + arch
+		case variant == "dedicated":
+			return "Linux dedicated server" // headless, not a playable client
+		}
+		if i := strings.IndexByte(variant, '-'); i > 0 {
+			variant = variant[:i] // "debian-bookworm" -> "debian"
+		}
+		return "Linux " + arch + " (" + variant + ")"
+	}
+	return tag
 }
 
 // clientDisplayName maps a client id to its library group header label.
@@ -158,7 +174,7 @@ func (um *UIManager) showLibraryView() {
 		}
 
 		// Render grouped by client, version-desc within each group.
-		for _, g := range apppkg.GroupLibrary(entries) {
+		for _, g := range apppkg.GroupLibrary(entries, um.Config) {
 			head := NewSectionHeader(fmt.Sprintf("%s — %d %s",
 				clientDisplayName(g.Client), len(g.Entries), pluralVersions(len(g.Entries), g.Client)))
 			listBox.Add(head)
