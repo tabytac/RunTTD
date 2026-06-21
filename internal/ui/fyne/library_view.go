@@ -36,6 +36,8 @@ func osDisplayLabel(tag string) string {
 		return "Windows 32-bit"
 	case "macos-universal":
 		return "macOS"
+	case "macosx-universal":
+		return "macOS"
 	}
 	if strings.HasPrefix(tag, "linux-") {
 		arch := "x64"
