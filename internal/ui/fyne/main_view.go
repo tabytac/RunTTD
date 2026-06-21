@@ -596,7 +596,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	duplicateBtn = widget.NewButton("Duplicate", func() {
 		if selectedIdx >= 0 {
 			dup := um.Config.Profiles[selectedIdx]
-			dup.Name = dup.Name + " Copy"
+			dup.Name = uniqueProfileName(um.Config.Profiles, dup.Name)
 			um.Config.Profiles = append(um.Config.Profiles, dup)
 			_ = domain.SaveConfig(um.ConfigPath, um.Config)
 
@@ -910,4 +910,14 @@ func indexOfProfileByName(profiles []domain.Profile, name string) int {
 		}
 	}
 	return -1
+}
+
+// uniqueProfileName returns "base Copy", or "base Copy (2)", "base Copy (3)" ...
+// if earlier candidates collide (case-insensitively) with existing profiles.
+func uniqueProfileName(profiles []domain.Profile, base string) string {
+	candidate := base + " Copy"
+	for n := 2; indexOfProfileByName(profiles, candidate) >= 0; n++ {
+		candidate = fmt.Sprintf("%s Copy (%d)", base, n)
+	}
+	return candidate
 }
