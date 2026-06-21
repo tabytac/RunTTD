@@ -109,7 +109,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 		}
 	}()
 
-	closeBtn := widget.NewButton("Return to Main", func() {
+	closeBtn := widget.NewButton("Back to Profiles", func() {
 		select {
 		case <-done:
 		default:
