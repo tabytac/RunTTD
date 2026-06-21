@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -141,39 +140,9 @@ func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, co
 		return false
 	}
 
-	dlCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-	resp, err = doGETWithRetry(dlCtx, downloadClient, downloadURL)
-	if err != nil {
-		logf("Failed to download %s: %v", assetName, err)
+	if err := downloadAndExtractTo(ctx, downloadClient, downloadURL, archivePath, downloadDir, logger); err != nil {
+		logf("Failed to install %s: %v", assetName, err)
 		return false
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		logf("Failed to download %s: HTTP %d", assetName, resp.StatusCode)
-		return false
-	}
-
-	file, err := os.Create(archivePath)
-	if err != nil {
-		logf("Failed to create %s: %v", archivePath, err)
-		return false
-	}
-
-	if _, err = io.Copy(file, resp.Body); err != nil {
-		file.Close()
-		os.Remove(archivePath)
-		logf("Failed to write %s: %v", assetName, err)
-		return false
-	}
-	file.Close()
-
-	if err := ExtractArchive(archivePath, downloadDir, logger); err != nil {
-		os.Remove(archivePath)
-		logf("Failed to extract %s: %v", assetName, err)
-		return false
-	}
-
-	os.Remove(archivePath)
 	return true
 }
