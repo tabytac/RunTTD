@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -61,10 +63,57 @@ func downloadAndExtractTo(ctx context.Context, client *http.Client, url, archive
 	}
 	file.Close()
 
-	if err := ExtractArchive(archivePath, downloadDir, logger); err != nil {
+	if err := extractIntoVersionFolder(archivePath, downloadDir, logger); err != nil {
 		os.Remove(archivePath)
 		return err
 	}
 	os.Remove(archivePath)
 	return nil
+}
+
+// extractIntoVersionFolder extracts archivePath into downloadDir as a single
+// versioned subfolder. Modern archives already wrap their files in one top-level
+// folder, which is moved up as-is. Older flat archives (some old JGRPP MINGW
+// builds) extract loose files with no enclosing folder, so they are wrapped in a
+// folder named after the archive, keeping the download dir tidy and findable.
+func extractIntoVersionFolder(archivePath, downloadDir string, logger *Logger) error {
+	tmp, err := os.MkdirTemp(downloadDir, ".extract-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+
+	if err := ExtractArchive(archivePath, tmp, logger); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("archive %s extracted no files", filepath.Base(archivePath))
+	}
+
+	src := tmp
+	name := archiveBaseName(archivePath)
+	if len(entries) == 1 && entries[0].IsDir() {
+		src = filepath.Join(tmp, entries[0].Name())
+		name = entries[0].Name()
+	}
+
+	dst := filepath.Join(downloadDir, name)
+	os.RemoveAll(dst) // replace any earlier copy
+	return os.Rename(src, dst)
+}
+
+// archiveBaseName is the archive's file name without its extension.
+func archiveBaseName(archivePath string) string {
+	n := filepath.Base(archivePath)
+	for _, ext := range []string{".tar.xz", ".zip", ".dmg"} {
+		if strings.HasSuffix(n, ext) {
+			return strings.TrimSuffix(n, ext)
+		}
+	}
+	return n
 }

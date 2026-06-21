@@ -17,16 +17,18 @@ var httpClient = &http.Client{
 	Timeout: 15 * time.Second,
 }
 
-// findReleaseAsset returns the URL and name of the archive asset matching osType
-// (which must be resolved, never blank), or empty strings if none match.
-func findReleaseAsset(assets []domain.ReleaseAsset, osType string) (url, name string) {
-	if osType == "" {
-		return "", ""
-	}
+// findReleaseAsset returns the URL and name of the archive asset whose name
+// contains any of the platform aliases, or empty strings if none match.
+func findReleaseAsset(assets []domain.ReleaseAsset, aliases []string) (url, name string) {
 	for _, a := range assets {
 		n := strings.ToLower(a.Name)
-		if strings.Contains(n, osType) && (strings.HasSuffix(n, ".zip") || strings.HasSuffix(n, ".tar.xz") || strings.HasSuffix(n, ".dmg")) {
-			return a.BrowserDownloadURL, a.Name
+		if !(strings.HasSuffix(n, ".zip") || strings.HasSuffix(n, ".tar.xz") || strings.HasSuffix(n, ".dmg")) {
+			continue
+		}
+		for _, alias := range aliases {
+			if alias != "" && strings.Contains(n, alias) {
+				return a.BrowserDownloadURL, a.Name
+			}
 		}
 	}
 	return "", ""
@@ -128,13 +130,14 @@ func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, co
 	}
 
 	osType := resolveOSType(config)
+	aliases := ClientPlatformAliases(config)
 	tagName := releaseInfo.TagName
 	extractedFolder := fmt.Sprintf("openttd-%s-%s", tagName, osType)
 	if _, err := os.Stat(filepath.Join(downloadDir, extractedFolder)); err == nil {
 		return true
 	}
 
-	downloadURL, assetName := findReleaseAsset(releaseInfo.Assets, osType)
+	downloadURL, assetName := findReleaseAsset(releaseInfo.Assets, aliases)
 	if downloadURL == "" {
 		logf("No downloadable asset found for %s (OS type %s)", tagName, osType)
 		return false

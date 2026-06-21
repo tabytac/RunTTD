@@ -85,7 +85,7 @@ var nightlyDateTokenRe = regexp.MustCompile(`^openttd-((?:19|20)\d{6})`)
 
 // osTagRe matches the trailing OS/arch tag. The linux branch covers any variant
 // (generic, dedicated, debian-*, ubuntu-*) ending in a known arch, not just generic.
-var osTagRe = regexp.MustCompile(`(?i)-(windows-(?:win64|win32|arm64)|linux-[a-z0-9-]+-(?:amd64|arm64|i386)|macos-universal)$`)
+var osTagRe = regexp.MustCompile(`(?i)-(windows-(?:win64|win32|arm64)|mingw-(?:win64|win32)|linux-[a-z0-9-]+-(?:amd64|arm64|i386)|macos-universal)$`)
 
 // classifyClientFolder returns the client a folder belongs to, or "" if unrecognized.
 func classifyClientFolder(name string) string {

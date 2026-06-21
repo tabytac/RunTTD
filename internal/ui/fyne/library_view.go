@@ -30,6 +30,10 @@ func osDisplayLabel(tag string) string {
 		return "Windows 32-bit"
 	case "windows-arm64":
 		return "Windows ARM64"
+	case "mingw-win64":
+		return "Windows 64-bit"
+	case "mingw-win32":
+		return "Windows 32-bit"
 	case "macos-universal":
 		return "macOS"
 	}

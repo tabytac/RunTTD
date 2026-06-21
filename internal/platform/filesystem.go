@@ -45,9 +45,19 @@ func resolveOSType(cfg *domain.Config) string {
 	return strings.ToLower(osType)
 }
 
-// ClientPlatformAliases resolves lowercase platform tags for filename searches based on configurations
+// ClientPlatformAliases resolves lowercase platform tags for filename searches.
+// The canonical tag is first; old JGRPP Windows builds used "mingw-winXX" instead
+// of "windows-winXX", so that variant is added as an accepted alias.
 func ClientPlatformAliases(cfg *domain.Config) []string {
-	return []string{resolveOSType(cfg)}
+	osType := resolveOSType(cfg)
+	aliases := []string{osType}
+	switch osType {
+	case "windows-win64":
+		aliases = append(aliases, "mingw-win64")
+	case "windows-win32":
+		aliases = append(aliases, "mingw-win32")
+	}
+	return aliases
 }
 
 // FolderMatchesAnyAlias verifies if a folder name contains any specified OS platform alias
