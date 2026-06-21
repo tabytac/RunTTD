@@ -137,6 +137,30 @@ func FetchNightlyManifest(ctx context.Context, base, year, version string) (doma
 	return ParseReleaseManifest(string(body)), nil
 }
 
+// FetchReleaseManifest downloads manifest.yaml for a stable release. Unlike the
+// nightly path, the URL has no year segment: {base}/{version}/manifest.yaml.
+func FetchReleaseManifest(ctx context.Context, base, version string) (domain.NightlyManifestData, error) {
+	url := fmt.Sprintf("%s/%s/manifest.yaml", strings.TrimRight(base, "/"), version)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return domain.NightlyManifestData{}, err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return domain.NightlyManifestData{}, fmt.Errorf("failed to fetch release manifest: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return domain.NightlyManifestData{}, fmt.Errorf("failed to fetch release manifest: HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return domain.NightlyManifestData{}, fmt.Errorf("failed to read release manifest: %w", err)
+	}
+	return ParseReleaseManifest(string(body)), nil
+}
+
 // FetchRecentNightlyVersions scrapes years and retrieves up to the limit of latest nightly build folders
 func FetchRecentNightlyVersions(ctx context.Context, base string, limit int) ([]string, error) {
 	if limit <= 0 {
