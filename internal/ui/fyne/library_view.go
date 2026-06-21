@@ -169,16 +169,16 @@ func (um *UIManager) showLibraryView() {
 
 		// Summary: emphasize reclaimable space.
 		if unusedCount > 0 {
-			summary.SetText(fmt.Sprintf("%d versions · %s total · %d unused · %s reclaimable",
-				len(entries), humanSize(total), unusedCount, humanSize(unusedBytes)))
+			summary.SetText(fmt.Sprintf("%d %s · %s total · %d unused · %s reclaimable",
+				len(entries), plural(len(entries), "version"), humanSize(total), unusedCount, humanSize(unusedBytes)))
 			cleanupBtn.SetText(fmt.Sprintf("Clean up %d unused · free %s", unusedCount, humanSize(unusedBytes)))
 			cleanupBtn.Enable()
 			cleanupBtn.OnTapped = func() {
 				um.confirmCleanup(orphans, rescan)
 			}
 		} else {
-			summary.SetText(fmt.Sprintf("%d versions · %s total · none unused",
-				len(entries), humanSize(total)))
+			summary.SetText(fmt.Sprintf("%d %s · %s total · none unused",
+				len(entries), plural(len(entries), "version"), humanSize(total)))
 			cleanupBtn.SetText("Clean up unused")
 			cleanupBtn.Disable()
 		}
@@ -223,15 +223,20 @@ func (um *UIManager) showLibraryView() {
 
 // pluralVersions returns the singular/plural noun for a group header count
 // ("versions", or "folders" for the unrecognized group).
-func pluralVersions(n int, client string) string {
-	noun := "versions"
-	if client == "" {
-		noun = "folders"
-	}
+// plural returns noun with an "s" appended unless n == 1.
+func plural(n int, noun string) string {
 	if n == 1 {
-		noun = noun[:len(noun)-1]
+		return noun
 	}
-	return noun
+	return noun + "s"
+}
+
+func pluralVersions(n int, client string) string {
+	noun := "version"
+	if client == "" {
+		noun = "folder"
+	}
+	return plural(n, noun)
 }
 
 // libraryRow builds one grouped row: status color-bar, version title with an
