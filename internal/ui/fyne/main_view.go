@@ -756,6 +756,15 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	mainContent := container.NewBorder(header, nil, nil, nil, split)
 	um.Window.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
+		// Escape dismisses the top modal (profile editor, settings, theme
+		// customizer), matching each modal's Cancel button which only hides it.
+		if event.Name == fyne.KeyEscape {
+			if top := um.Window.Canvas().Overlays().Top(); top != nil {
+				top.Hide()
+			}
+			return
+		}
+
 		if um.Window.Content() != mainContent || um.Window.Canvas().Overlays().Top() != nil {
 			return
 		}
