@@ -110,7 +110,7 @@ func extractIntoVersionFolder(archivePath, downloadDir string, logger *Logger) e
 // archiveBaseName is the archive's file name without its extension.
 func archiveBaseName(archivePath string) string {
 	n := filepath.Base(archivePath)
-	for _, ext := range []string{".tar.xz", ".zip", ".dmg"} {
+	for _, ext := range []string{".tar.xz", ".tar.bz2", ".tar.gz", ".zip", ".dmg"} {
 		if strings.HasSuffix(n, ext) {
 			return strings.TrimSuffix(n, ext)
 		}

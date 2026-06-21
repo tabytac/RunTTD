@@ -124,9 +124,16 @@ func runExtractor(tool, archivePath string, cmd *exec.Cmd, logger *Logger) error
 	return nil
 }
 
+// hasTarExt reports whether name is a tarball tar can auto-decompress.
+func hasTarExt(name string) bool {
+	return strings.HasSuffix(name, ".tar.xz") ||
+		strings.HasSuffix(name, ".tar.bz2") ||
+		strings.HasSuffix(name, ".tar.gz")
+}
+
 // ExtractArchive decompresses tar.xz, zip, or dmg archives depending on current operating system capabilities
 func ExtractArchive(archivePath, destDir string, logger *Logger) error {
-	if strings.HasSuffix(archivePath, ".tar.xz") {
+	if hasTarExt(archivePath) {
 		cmd := exec.Command("tar", "-xf", archivePath, "-C", destDir)
 		return runExtractor("tar", archivePath, cmd, logger)
 	}
