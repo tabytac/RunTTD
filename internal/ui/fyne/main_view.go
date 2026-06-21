@@ -961,6 +961,14 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 	})
 
+	// A "Save & Run" from the editor defers its launch to here, so it goes through
+	// the normal path (AutoOpenLog + launch band) once this view is live.
+	if um.pendingLaunchIdx >= 0 {
+		idx := um.pendingLaunchIdx
+		um.pendingLaunchIdx = -1
+		fyne.Do(func() { launchIndex(idx) })
+	}
+
 	return mainContent
 }
 

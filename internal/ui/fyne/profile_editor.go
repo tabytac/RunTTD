@@ -621,10 +621,12 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
 		editDialog.Hide()
-		um.Window.SetContent(um.makeMainView())
 		if runAfter {
-			um.showLogView(savedIdx)
+			// Launch via the rebuilt main view so it honors AutoOpenLog and shows
+			// the launch band, rather than always forcing the log view open.
+			um.pendingLaunchIdx = savedIdx
 		}
+		um.Window.SetContent(um.makeMainView())
 	}
 
 	generalScroll := container.NewVScroll(container.NewVBox(

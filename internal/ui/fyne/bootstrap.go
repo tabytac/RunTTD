@@ -31,6 +31,7 @@ type UIManager struct {
 	SelectedProfileName string
 	LastListSelectID    int
 	LastListSelectAt    time.Time
+	pendingLaunchIdx    int
 	CachedVersions      []string
 
 	LauncherService *apppkg.LauncherService
@@ -53,6 +54,7 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 		ConfigPath:       configPath,
 		Version:          version,
 		LastListSelectID: -1,
+		pendingLaunchIdx: -1,
 		LauncherService:  apppkg.NewLauncherService(),
 	}
 
