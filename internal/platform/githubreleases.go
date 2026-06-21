@@ -17,6 +17,21 @@ var httpClient = &http.Client{
 	Timeout: 15 * time.Second,
 }
 
+// findReleaseAsset returns the URL and name of the archive asset matching osType
+// (which must be resolved, never blank), or empty strings if none match.
+func findReleaseAsset(assets []domain.ReleaseAsset, osType string) (url, name string) {
+	if osType == "" {
+		return "", ""
+	}
+	for _, a := range assets {
+		n := strings.ToLower(a.Name)
+		if strings.Contains(n, osType) && (strings.HasSuffix(n, ".zip") || strings.HasSuffix(n, ".tar.xz") || strings.HasSuffix(n, ".dmg")) {
+			return a.BrowserDownloadURL, a.Name
+		}
+	}
+	return "", ""
+}
+
 // FetchAvailableVersions fetches the most recent 20 JGRPP releases from the GitHub repository API
 func FetchAvailableVersions(ctx context.Context, config *domain.Config) ([]string, error) {
 	repoURL := fmt.Sprintf("%s/releases?per_page=20", config.JgrppApiUrl)
@@ -112,23 +127,16 @@ func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, co
 		return false
 	}
 
+	osType := resolveOSType(config)
 	tagName := releaseInfo.TagName
-	extractedFolder := fmt.Sprintf("openttd-%s-%s", tagName, config.OSType)
+	extractedFolder := fmt.Sprintf("openttd-%s-%s", tagName, osType)
 	if _, err := os.Stat(filepath.Join(downloadDir, extractedFolder)); err == nil {
 		return true
 	}
 
-	var downloadURL string
-	var assetName string
-	for _, asset := range releaseInfo.Assets {
-		if strings.Contains(asset.Name, config.OSType) && (strings.HasSuffix(asset.Name, ".zip") || strings.HasSuffix(asset.Name, ".tar.xz") || strings.HasSuffix(asset.Name, ".dmg")) {
-			downloadURL = asset.BrowserDownloadURL
-			assetName = asset.Name
-			break
-		}
-	}
+	downloadURL, assetName := findReleaseAsset(releaseInfo.Assets, osType)
 	if downloadURL == "" {
-		logf("No downloadable asset found for %s (OS type %s)", tagName, config.OSType)
+		logf("No downloadable asset found for %s (OS type %s)", tagName, osType)
 		return false
 	}
 

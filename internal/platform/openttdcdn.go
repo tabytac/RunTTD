@@ -348,7 +348,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 			logf("Nightly manifest fetch failed: %v", err)
 		} else {
 			targetExt := ".zip"
-			lowerOS := strings.ToLower(strings.TrimSpace(cfg.OSType))
+			lowerOS := resolveOSType(cfg)
 			switch {
 			case strings.Contains(lowerOS, "linux"):
 				targetExt = ".tar.xz"

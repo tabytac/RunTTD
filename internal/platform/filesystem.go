@@ -31,16 +31,23 @@ func DefaultOSType() string {
 	}
 }
 
-// ClientPlatformAliases resolves lowercase platform tags for filename searches based on configurations
-func ClientPlatformAliases(cfg *domain.Config) []string {
-	if cfg == nil {
-		return []string{DefaultOSType()}
+// resolveOSType returns the OS/arch tag lowercased, falling back to the detected
+// default when blank ("Auto-detect"). Always non-empty: match assets against this,
+// never raw cfg.OSType (an empty tag substring-matches everything).
+func resolveOSType(cfg *domain.Config) string {
+	var osType string
+	if cfg != nil {
+		osType = strings.TrimSpace(cfg.OSType)
 	}
-	osType := strings.TrimSpace(cfg.OSType)
 	if osType == "" {
 		osType = DefaultOSType()
 	}
-	return []string{strings.ToLower(osType)}
+	return strings.ToLower(osType)
+}
+
+// ClientPlatformAliases resolves lowercase platform tags for filename searches based on configurations
+func ClientPlatformAliases(cfg *domain.Config) []string {
+	return []string{resolveOSType(cfg)}
 }
 
 // FolderMatchesAnyAlias verifies if a folder name contains any specified OS platform alias
