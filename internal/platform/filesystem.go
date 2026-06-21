@@ -45,19 +45,26 @@ func resolveOSType(cfg *domain.Config) string {
 	return strings.ToLower(osType)
 }
 
-// ClientPlatformAliases resolves lowercase platform tags for filename searches.
-// The canonical tag is first; old JGRPP Windows builds used "mingw-winXX" instead
-// of "windows-winXX", so that variant is added as an accepted alias.
+// ClientPlatformAliases resolves lowercase platform tags for filename/manifest
+// matching, canonical first. Windows lists include cross-arch fallbacks (64-bit
+// and ARM64 Windows run x86/x64 binaries via WOW64/emulation); macOS and Linux
+// do not (a 32-bit Linux binary often won't launch on a pure-64-bit system).
+// Matching is naive strings.Contains, so the bare "win32" token (for 0.1.0's
+// prefix-less openttd-0.1.0-win32.zip) MUST stay last or it would shadow
+// "windows-win32". Keep "win32" last.
 func ClientPlatformAliases(cfg *domain.Config) []string {
 	osType := resolveOSType(cfg)
-	aliases := []string{osType}
 	switch osType {
 	case "windows-win64":
-		aliases = append(aliases, "mingw-win64")
+		return []string{"windows-win64", "mingw-win64", "windows-win32", "win32"}
 	case "windows-win32":
-		aliases = append(aliases, "mingw-win32")
+		return []string{"windows-win32", "mingw-win32", "win32"}
+	case "windows-arm64":
+		return []string{"windows-arm64", "windows-win64", "windows-win32", "win32"}
+	case "macos-universal":
+		return []string{"macos-universal", "macosx-universal"}
 	}
-	return aliases
+	return []string{osType}
 }
 
 // FolderMatchesAnyAlias verifies if a folder name contains any specified OS platform alias
