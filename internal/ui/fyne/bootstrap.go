@@ -43,7 +43,7 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 	fyneApp.SetIcon(appIcon)
 	window := fyneApp.NewWindow("RunTTD")
 	window.SetIcon(appIcon)
-	window.Resize(fyne.NewSize(1024, 768))
+	window.Resize(fyne.NewSize(940, 860))
 
 	um := &UIManager{
 		App:              fyneApp,
