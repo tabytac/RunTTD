@@ -102,6 +102,7 @@ func extractIntoVersionFolder(archivePath, downloadDir string, logger *Logger) e
 		name = entries[0].Name()
 	}
 
+	name = normalizeWindowsFolderName(name)
 	dst := filepath.Join(downloadDir, name)
 	os.RemoveAll(dst) // replace any earlier copy
 	return os.Rename(src, dst)
@@ -116,4 +117,16 @@ func archiveBaseName(archivePath string) string {
 		}
 	}
 	return n
+}
+
+// normalizeWindowsFolderName rewrites a prefix-less "...-win32" name (only 0.1.0's
+// flat archive uses this) to the canonical "...-windows-win32" for re-discovery.
+func normalizeWindowsFolderName(name string) string {
+	if strings.Contains(name, "windows-win32") {
+		return name
+	}
+	if strings.HasSuffix(name, "-win32") {
+		return strings.TrimSuffix(name, "-win32") + "-windows-win32"
+	}
+	return name
 }
