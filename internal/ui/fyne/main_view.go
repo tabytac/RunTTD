@@ -7,6 +7,7 @@ import (
 	neturl "net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -245,6 +246,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	var profileList *fyneadvancedlist.List
 	var refreshDetails func()
+	var updateEmptyState func()
 
 	var runBtn, editBtn, duplicateBtn, deleteBtn, seeLogsBtn *widget.Button
 	var updateButtonStates func()
@@ -420,16 +422,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		detailsContainer.Objects = nil
 
 		if selectedIdx < 0 || selectedIdx >= len(um.Config.Profiles) {
-			welcomeTitle := widget.NewLabel("Welcome to RunTTD")
-			welcomeTitle.TextStyle = fyne.TextStyle{Bold: true}
-			welcomeTitle.Alignment = fyne.TextAlignCenter
-
-			welcomeBody := widget.NewLabel("Select a profile on the left to see its details and launch the game.")
-			welcomeBody.Wrapping = fyne.TextWrapWord
-			welcomeBody.Alignment = fyne.TextAlignCenter
-
-			detailsContainer.Add(welcomeTitle)
-			detailsContainer.Add(welcomeBody)
+			detailsContainer.Add(mutedCenteredLabel("Select a profile to view its details and launch."))
 			detailsContainer.Refresh()
 			return
 		}
@@ -526,25 +519,33 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		func() fyne.CanvasObject {
 			btn := newRightClickButton(nil, nil)
 
+			badge := widget.NewLabel("")
+			badge.TextStyle = fyne.TextStyle{Monospace: true}
+			badge.Importance = widget.LowImportance
+
 			nameLabel := widget.NewLabel("")
+			nameLabel.TextStyle = fyne.TextStyle{Bold: true}
+			nameLabel.Truncation = fyne.TextTruncateEllipsis
+
 			versionLabel := widget.NewLabel("")
-			versionLabel.Alignment = fyne.TextAlignTrailing
-			versionLabel.TextStyle = fyne.TextStyle{Italic: true}
+			versionLabel.Importance = widget.LowImportance
+			versionLabel.SizeName = theme.SizeNameCaptionText
+			versionLabel.Truncation = fyne.TextTruncateEllipsis
 
-			dragIcon := widget.NewIcon(theme.MenuIcon())
-
-			rightSide := container.NewHBox(versionLabel, dragIcon)
-			layout := container.NewBorder(nil, nil, nameLabel, rightSide, nil)
-			return container.NewStack(btn, container.NewPadded(layout))
+			pad := theme.Padding()
+			text := container.New(layout.NewCustomPaddedVBoxLayout(-pad/2), nameLabel, versionLabel)
+			row := container.NewBorder(nil, nil, badge, nil, text)
+			return container.NewStack(btn, container.New(layout.NewCustomPaddedLayout(0, 0, pad, pad), row))
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			stack := o.(*fyne.Container)
 			btn := stack.Objects[0].(*rightClickButton)
 			padding := stack.Objects[1].(*fyne.Container)
-			layout := padding.Objects[0].(*fyne.Container)
-			nameLabel := layout.Objects[0].(*widget.Label)
-			rightSide := layout.Objects[1].(*fyne.Container)
-			versionLabel := rightSide.Objects[0].(*widget.Label)
+			row := padding.Objects[0].(*fyne.Container)
+			text := row.Objects[0].(*fyne.Container)
+			badge := row.Objects[1].(*widget.Label)
+			nameLabel := text.Objects[0].(*widget.Label)
+			versionLabel := text.Objects[1].(*widget.Label)
 
 			if int(i) < len(visibleIdx) {
 				real := visibleIdx[i]
@@ -552,15 +553,20 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				clientTag := shortClientLabel(profile.Client, um.Config.DefaultClient)
 				var versionText string
 				if profile.Client == "custom" {
-					versionText = "Custom"
+					versionText = "Custom Client"
 				} else {
 					version := profile.Version
 					if version == "" {
-						version = "latest"
+						version = "Latest"
 					}
 					versionText = clientTag + " · " + version
 				}
-				nameLabel.SetText(fmt.Sprintf("%d. %s", real+1, profile.Name))
+				if real < 10 {
+					badge.SetText(strconv.Itoa((real + 1) % 10))
+				} else {
+					badge.SetText(" ")
+				}
+				nameLabel.SetText(profile.Name)
 				versionLabel.SetText(versionText)
 				idx := real
 				btn.OnTapped = func() {
@@ -612,7 +618,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		refreshDetails()
 	}
 
-	newBtn := widget.NewButtonWithIcon("New Profile", theme.ContentAddIcon(), func() {
+	newBtn := widget.NewButtonWithIcon("New", theme.ContentAddIcon(), func() {
 		um.showProfileEditor(-1, true)
 	})
 	newBtn.Importance = widget.HighImportance
@@ -641,6 +647,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				profileList.UnselectAll()
 			}
 			refreshDetails()
+			updateEmptyState()
 		} else {
 			dialog.ShowError(fmt.Errorf("select a profile to duplicate"), um.Window)
 		}
@@ -675,6 +682,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 							profileList.UnselectAll()
 						}
 						refreshDetails()
+						updateEmptyState()
 					},
 					um.Window,
 				).Show()
@@ -687,38 +695,77 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	runBtn = widget.NewButton("Run Selected", runSelected)
 	runBtn.Importance = widget.HighImportance
 
-	seeLogsBtn = widget.NewButton("See Logs", func() {
+	seeLogsBtn = widget.NewButtonWithIcon("Logs", theme.DocumentIcon(), func() {
 		um.showLogView(-1)
 	})
+	seeLogsBtn.Importance = widget.LowImportance
 
-	settingsBtn := widget.NewButton("Global Settings", func() {
-		um.showSettingsView()
-	})
-
-	manageInstallsBtn := widget.NewButton("Manage Installs", func() {
+	manageInstallsBtn := widget.NewButtonWithIcon("Installs", theme.StorageIcon(), func() {
 		um.showLibraryView()
 	})
+	manageInstallsBtn.Importance = widget.LowImportance
+
+	settingsBtn := widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() {
+		um.showSettingsView()
+	})
+	settingsBtn.Importance = widget.LowImportance
 
 	actionsContent := container.NewVBox(
 		runBtn,
 		container.NewGridWithColumns(3, editBtn, duplicateBtn, deleteBtn),
 	)
 
-	emptyState := widget.NewLabel("No profiles match your search.")
-	emptyState.Alignment = fyne.TextAlignCenter
-	emptyState.Wrapping = fyne.TextWrapWord
-	emptyState.Hide()
+	searchEntry := newSearchEntry()
+	searchEntry.SetPlaceHolder("Search profiles...")
 
-	updateEmptyState := func() {
-		if len(visibleIdx) == 0 && strings.TrimSpace(filterText) != "" {
-			emptyState.Show()
-		} else {
-			emptyState.Hide()
+	// Header band: title, live total count, and the primary New action.
+	title := widget.NewRichText(&widget.TextSegment{
+		Text: "Profiles",
+		Style: widget.RichTextStyle{
+			SizeName:  theme.SizeNameSubHeadingText,
+			TextStyle: fyne.TextStyle{Bold: true},
+			ColorName: theme.ColorNameForeground,
+		},
+	})
+	headerRow := container.NewBorder(nil, nil, title, newBtn)
+	headerBand := NewThemedBox(ColorNameDetailHeader, container.NewPadded(headerRow))
+
+	// No-results state (search matched nothing).
+	noResults := container.NewCenter(container.NewVBox(
+		centeredLabel("No profiles match your search."),
+		mutedCenteredLabel("Press Esc to clear."),
+	))
+	noResults.Hide()
+
+	// First-run state (no profiles exist yet).
+	firstRunBtn := widget.NewButtonWithIcon("New Profile", theme.ContentAddIcon(), func() {
+		um.showProfileEditor(-1, true)
+	})
+	firstRunBtn.Importance = widget.HighImportance
+	firstRun := container.NewCenter(container.NewVBox(
+		centeredLabel("No profiles yet."),
+		mutedCenteredLabel("Create your first profile to get started."),
+		container.NewCenter(firstRunBtn),
+	))
+	firstRun.Hide()
+
+	updateEmptyState = func() {
+		switch {
+		case len(um.Config.Profiles) == 0:
+			firstRun.Show()
+			noResults.Hide()
+			searchEntry.Hide()
+		case len(visibleIdx) == 0 && strings.TrimSpace(filterText) != "":
+			noResults.Show()
+			firstRun.Hide()
+			searchEntry.Show()
+		default:
+			firstRun.Hide()
+			noResults.Hide()
+			searchEntry.Show()
 		}
 	}
 
-	searchEntry := newSearchEntry()
-	searchEntry.SetPlaceHolder("Search profiles by name...")
 	searchEntry.OnChanged = func(s string) {
 		filterText = s
 		recomputeVisible()
@@ -736,14 +783,21 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			searchEntry.SetText("") // triggers OnChanged, which resets the filter
 		}
 	}
+	updateEmptyState()
 
-	leftPanelObj := container.NewBorder(
-		widget.NewCard("Profiles", "", widget.NewLabel("Select a profile to edit or run it.")),
-		container.NewPadded(container.NewVBox(widget.NewSeparator(), newBtn, widget.NewSeparator(), seeLogsBtn, manageInstallsBtn, settingsBtn)),
-		nil,
-		nil,
-		container.NewBorder(container.NewPadded(searchEntry), nil, nil, nil, container.NewStack(profileList, emptyState)),
-	)
+	dragHint := widget.NewLabel("Drag rows to reorder")
+	dragHint.Importance = widget.LowImportance
+	dragHint.SizeName = theme.SizeNameCaptionText
+	dragHint.Alignment = fyne.TextAlignCenter
+
+	footer := container.NewPadded(container.NewVBox(
+		dragHint,
+		container.NewGridWithColumns(3, seeLogsBtn, manageInstallsBtn, settingsBtn),
+	))
+
+	listArea := container.NewStack(profileList, noResults, firstRun)
+	top := container.NewVBox(headerBand, container.NewPadded(searchEntry))
+	leftPanelObj := container.NewBorder(top, footer, nil, nil, listArea)
 	leftPanel := NewThemedBox(ColorNameSidebar, leftPanelObj)
 
 	detailsContent := container.NewVScroll(container.NewPadded(detailsContainer))
@@ -937,6 +991,19 @@ func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 	)
 
 	widget.NewPopUp(container.NewPadded(content), um.Window.Canvas()).ShowAtPosition(pos)
+}
+
+func centeredLabel(text string) *widget.Label {
+	l := widget.NewLabel(text)
+	l.Alignment = fyne.TextAlignCenter
+	l.Wrapping = fyne.TextWrapWord
+	return l
+}
+
+func mutedCenteredLabel(text string) *widget.Label {
+	l := centeredLabel(text)
+	l.Importance = widget.LowImportance
+	return l
 }
 
 func indexOfProfileByName(profiles []domain.Profile, name string) int {
