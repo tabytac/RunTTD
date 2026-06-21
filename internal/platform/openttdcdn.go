@@ -81,8 +81,9 @@ func ParseNightlyBuildFoldersFromHTML(html string) []string {
 	return builds
 }
 
-// ParseNightlyManifest processes a YAML manifest and extracts available files
-func ParseNightlyManifest(text string) domain.NightlyManifestData {
+// ParseReleaseManifest processes a CDN manifest YAML and extracts the file IDs.
+// Used for both stable releases and nightlies; both manifests share the `- id:` shape.
+func ParseReleaseManifest(text string) domain.NightlyManifestData {
 	out := domain.NightlyManifestData{FileIDs: []string{}}
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
@@ -133,7 +134,7 @@ func FetchNightlyManifest(ctx context.Context, base, year, version string) (doma
 	if err != nil {
 		return domain.NightlyManifestData{}, fmt.Errorf("failed to read nightly manifest: %w", err)
 	}
-	return ParseNightlyManifest(string(body)), nil
+	return ParseReleaseManifest(string(body)), nil
 }
 
 // FetchRecentNightlyVersions scrapes years and retrieves up to the limit of latest nightly build folders
