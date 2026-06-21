@@ -56,7 +56,7 @@ Create, edit, duplicate, and delete profiles from the main window. Everything li
 
 Click **Settings** at the bottom of the profile list to configure:
 
-- **Parent Directory.** Where client versions are downloaded and extracted, each in its own versioned folder (e.g. `openttd-0.72.2-windows-win64`, `jgrpp-0.65.3-...`).
+- **Parent Directory.** Where client versions are downloaded and extracted, each in its own versioned folder (e.g. `openttd-15.3-windows-win64`, `openttd-jgrpp-0.72.4-windows-win64`).
 - **Per-client subfolders.** On by default. Installs are nested under `/jgrpp`, `/vanilla`, `/vanilla-nightly`; turn it off to have every client share the parent directory directly.
 - **Docs Base Path.** Your OpenTTD documents folder, where `save/` and `openttd.cfg` live.
 - **Auto-close.** Close the launcher once OpenTTD starts.
@@ -72,14 +72,15 @@ Stuff that's rough or untested:
 
 - **macOS is basically untested.** Builds are produced in the release artifacts but I can't run them. Unsigned binaries also trip Gatekeeper, see Troubleshooting.
 - **Linux is only tested via WSL on amd64.** Native Linux desktops, Wayland quirks, and other architectures might work, might not. I haven't tried.
-- **Error handling is best-effort.** If a download or extraction fails it cleans up the partial archive, logs what went wrong (with verbose logging on), and gives up rather than retrying. It does try several archive formats and URLs before giving up.
+- **On Linux, only the generic build is used.** RunTTD downloads `linux-generic-amd64`, not distro-specific (Debian/Ubuntu) or dedicated-server packages. You can still point a Custom Executable profile at another build you installed yourself, but dedicated-server builds are headless and won't run as a playable client.
+- **Error handling is best-effort.** If a download or extraction fails it cleans up the partial archive, logs what went wrong (with verbose logging on), and stops rather than retrying. It does try several archive formats and URLs first.
 - **Not heavily tested across odd config combinations.** It works for the setups I use. Unusual path, version, or profile combinations may surface bugs.
 - **Toggling per-client subfolders does not migrate existing installs.** Switching it on or off does not move already-downloaded folders, so the launcher won't find them in the new location and will re-download on next launch. The old folders are left where they are. Manually moving or deleting them is recommended.
 
 ## Troubleshooting
 
 - **Launcher exits immediately.** Enable `logToFile` manually in `runttd-config.json` and check `log.txt` in the same folder.
-- **"Executable not found".** Make sure your Parent Directory path is correct and contains extracted client folders like `openttd-...` or `jgrpp-...`.
+- **"Executable not found".** Make sure your Parent Directory path is correct and contains extracted client folders like `openttd-15.3-...` or `openttd-jgrpp-...`.
 - **Save not loading.** Check that the Save Path in your profile matches an actual folder under your OpenTTD `save/` directory. The launcher picks the newest `.sav` file in that folder.
 - **Download fails.** With verbose logging on, the log shows which URLs it tried. Usually a connectivity or mirror issue.
 - **macOS "app is damaged".** That's Gatekeeper blocking an unsigned binary. Right-click the file, choose Open, then Open again to allow it.
