@@ -85,15 +85,23 @@ func CheckForNewVersion(ctx context.Context, config *domain.Config) string {
 // DownloadAndExtractVersionWithLogger downloads a specific JGRPP version archive
 // and extracts it to the download directory, routing extractor output to the logger
 func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, config *domain.Config, logger *Logger) bool {
+	logf := func(format string, args ...any) {
+		if logger != nil {
+			logger.Append(fmt.Sprintf(format, args...))
+		}
+	}
+
 	repoURL := fmt.Sprintf("%s/releases/tags/jgrpp-%s", config.JgrppApiUrl, version)
 	downloadDir := ClientDownloadDir(config, "jgrpp")
 
 	resp, err := doGETWithRetry(ctx, httpClient, repoURL)
 	if err != nil {
+		logf("Failed to look up JGRPP release %s: %v", version, err)
 		return false
 	}
 	if resp.StatusCode != 200 {
 		resp.Body.Close()
+		logf("Failed to look up JGRPP release %s: HTTP %d", version, resp.StatusCode)
 		return false
 	}
 
@@ -101,7 +109,7 @@ func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, co
 	decodeErr := json.NewDecoder(resp.Body).Decode(&releaseInfo)
 	resp.Body.Close()
 	if decodeErr != nil {
-		fmt.Printf("Failed to parse release info: %v\n", decodeErr)
+		logf("Failed to parse JGRPP release info: %v", decodeErr)
 		return false
 	}
 
@@ -121,15 +129,15 @@ func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, co
 		}
 	}
 	if downloadURL == "" {
-		fmt.Printf("No downloadable asset found for version %s\n", tagName)
+		logf("No downloadable asset found for %s (OS type %s)", tagName, config.OSType)
 		return false
 	}
 
 	archivePath := filepath.Join(downloadDir, assetName)
-	fmt.Printf("Downloading version: %s\n", tagName)
+	logf("Downloading version: %s", tagName)
 
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
-		fmt.Printf("Failed to create download directory %s: %v\n", downloadDir, err)
+		logf("Failed to create download directory %s: %v", downloadDir, err)
 		return false
 	}
 
@@ -137,28 +145,32 @@ func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, co
 	defer cancel()
 	resp, err = doGETWithRetry(dlCtx, downloadClient, downloadURL)
 	if err != nil {
-		fmt.Printf("Failed to download file: %v\n", err)
+		logf("Failed to download %s: %v", assetName, err)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
+		logf("Failed to download %s: HTTP %d", assetName, resp.StatusCode)
 		return false
 	}
 
 	file, err := os.Create(archivePath)
 	if err != nil {
+		logf("Failed to create %s: %v", archivePath, err)
 		return false
 	}
 
 	if _, err = io.Copy(file, resp.Body); err != nil {
 		file.Close()
 		os.Remove(archivePath)
+		logf("Failed to write %s: %v", assetName, err)
 		return false
 	}
 	file.Close()
 
 	if err := ExtractArchive(archivePath, downloadDir, logger); err != nil {
 		os.Remove(archivePath)
+		logf("Failed to extract %s: %v", assetName, err)
 		return false
 	}
 
