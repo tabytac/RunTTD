@@ -54,7 +54,7 @@ func (j *jgrppClient) Latest(ctx context.Context, cfg *domain.Config) (string, e
 	return platform.CheckForNewVersion(ctx, cfg), nil
 }
 func (j *jgrppClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
-	return platform.DownloadAndExtractVersionWithLogger(ctx, version, cfg, logger), nil
+	return platform.DownloadAndExtractVersionWithLogger(ctx, version, cfg, logger, nil), nil
 }
 func (j *jgrppClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
 	folder := platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, "jgrpp"), version, "jgrpp", cfg)
@@ -103,7 +103,7 @@ func (v *vanillaClient) Latest(ctx context.Context, cfg *domain.Config) (string,
 	return latest, nil
 }
 func (v *vanillaClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
-	ok := platform.DownloadAndExtractVersionForClientWithLogger(ctx, version, v.ID(), cfg, logger)
+	ok := platform.DownloadAndExtractVersionForClientWithLogger(ctx, version, v.ID(), cfg, logger, nil)
 	return ok, nil
 }
 func (v *vanillaClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {

@@ -294,14 +294,14 @@ func CheckForNewVersionForClientTrack(ctx context.Context, client string, cfg *d
 }
 
 // DownloadAndExtractVersionForClientWithLogger downloads a client package and outputs status tracking messages
-func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, client string, cfg *domain.Config, logger *Logger) bool {
+func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, client string, cfg *domain.Config, logger *Logger, progress ProgressFunc) bool {
 	logf := func(format string, args ...any) {
 		if logger != nil {
 			logger.Append(fmt.Sprintf(format, args...))
 		}
 	}
 	if client == "jgrpp" {
-		return DownloadAndExtractVersionWithLogger(ctx, version, cfg, logger)
+		return DownloadAndExtractVersionWithLogger(ctx, version, cfg, logger, progress)
 	}
 
 	base := cfg.VanillaMirror
@@ -366,7 +366,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 				logf("Nightly selected asset: %s", url)
 				archivePath := filepath.Join(downloadDir, id)
 
-				if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, logger); err != nil {
+				if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, logger, progress); err != nil {
 					logf("Nightly asset failed (%s): %v", url, err)
 					continue
 				}
@@ -383,7 +383,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 		urlCandidates = append(urlCandidates, baseTrimmed+"/"+version+"/"+name, baseTrimmed+"/"+name)
 		for _, url := range urlCandidates {
 			archivePath := filepath.Join(downloadDir, name)
-			if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, logger); err != nil {
+			if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, logger, progress); err != nil {
 				continue
 			}
 			return true

@@ -244,6 +244,34 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	selectionHint := widget.NewLabel("Tip: Press 1-9, or 0 to quick launch. Select a profile and press Enter / double-click.")
 	selectionHint.Wrapping = fyne.TextWrapWord
 
+	// Launch status band: feedback for background launches (log auto-open off).
+	// Hidden until a launch runs; kept a constant height (sized to the View logs
+	// row) so it never resizes as it moves through phases.
+	launchLogsIdx := -1
+	launchInProgress := false
+	launchPhase := widget.NewLabel("")
+	launchPhase.Wrapping = fyne.TextWrapWord
+	launchBar := widget.NewProgressBar()
+	launchSpin := widget.NewProgressBarInfinite()
+	launchLogsBtn := widget.NewButton("View logs", func() {
+		if launchLogsIdx >= 0 {
+			um.showLogView(launchLogsIdx)
+		}
+	})
+	launchLogsBtn.Importance = widget.LowImportance
+
+	launchBars := container.NewStack(launchSpin, launchBar)
+	barsCentered := container.NewVBox(layout.NewSpacer(), launchBars, layout.NewSpacer())
+	logsRow := container.NewHBox(layout.NewSpacer(), launchLogsBtn)
+	rowPin := canvas.NewRectangle(color.Transparent)
+	rowPin.SetMinSize(fyne.NewSize(1, launchLogsBtn.MinSize().Height))
+	launchSecondRow := container.NewStack(rowPin, barsCentered, logsRow)
+	launchBand := NewThemedBox(ColorNameDetailHeader, container.NewPadded(container.NewVBox(
+		launchPhase,
+		launchSecondRow,
+	)))
+	launchBand.Hide()
+
 	var profileList *fyneadvancedlist.List
 	var refreshDetails func()
 	var updateEmptyState func()
@@ -264,23 +292,79 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			um.showLogView(idx)
 			return
 		}
-		// Background launch with feedback
-		oldText := runBtn.Text
-		runBtn.SetText("Launching...")
-		runBtn.Disable()
+		if launchInProgress {
+			return
+		}
+		launchInProgress = true
 
 		profile := um.Config.Profiles[idx]
-		um.showToast(fmt.Sprintf("Starting %s...", profile.Name))
+		launchLogsIdx = idx
 
+		// Reset the band to a fresh "working" state (marquee until download starts).
+		launchLogsBtn.Hide()
+		launchBar.Hide()
+		launchSpin.Show()
+		launchPhase.Importance = widget.MediumImportance
+		launchPhase.TextStyle = fyne.TextStyle{}
+		launchPhase.SetText("Starting " + profile.Name)
+		launchBand.Show()
+		launchBand.Refresh()
+		runBtn.Disable()
+
+		failed := false
+		lastPct := -1
 		go func() {
-			um.launchProfile(profile, nil, func() {
-				um.showLogView(idx)
-			})
+			um.launchProfile(profile,
+				func(status string) {
+					fyne.Do(func() { launchPhase.SetText(status) })
+				},
+				func(done, total int64) {
+					if total <= 0 {
+						return // unknown size: stay on the marquee
+					}
+					if done >= total {
+						fyne.Do(func() {
+							launchBar.Hide()
+							launchSpin.Show()
+							launchPhase.SetText("Extracting")
+						})
+						return
+					}
+					pct := int(done * 100 / total)
+					if pct == lastPct {
+						return // throttle to whole-percent steps
+					}
+					lastPct = pct
+					fyne.Do(func() {
+						launchSpin.Hide()
+						launchBar.Show()
+						launchBar.SetValue(float64(done) / float64(total))
+					})
+				},
+				func() { failed = true },
+			)
 
-			time.Sleep(1500 * time.Millisecond)
 			fyne.Do(func() {
-				runBtn.SetText(oldText)
+				launchInProgress = false
+				launchSpin.Hide()
+				launchBar.Hide()
+				runBtn.Enable()
 				updateButtonStates()
+				if failed {
+					launchPhase.Importance = widget.DangerImportance
+					launchPhase.SetText(strings.TrimPrefix(launchPhase.Text, "Failed: "))
+					launchPhase.Refresh()
+					launchLogsBtn.Show()
+					return
+				}
+				launchPhase.Importance = widget.MediumImportance
+				launchPhase.TextStyle = fyne.TextStyle{Bold: true}
+				launchPhase.SetText("Launched " + profile.Name)
+				launchPhase.Refresh()
+				go func() {
+					time.Sleep(6000 * time.Millisecond)
+					fyne.Do(launchBand.Hide)
+				}()
 			})
 		}()
 	}
@@ -804,7 +888,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	rightPanelObj := container.NewBorder(
 		nil,
-		container.NewVBox(widget.NewSeparator(), actionsContent, container.NewPadded(selectionHint)),
+		container.NewVBox(widget.NewSeparator(), launchBand, actionsContent, container.NewPadded(selectionHint)),
 		nil,
 		nil,
 		detailsContent,

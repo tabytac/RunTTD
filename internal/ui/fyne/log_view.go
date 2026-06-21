@@ -143,12 +143,12 @@ func (um *UIManager) showLogView(profileIdx int) {
 	if isLaunch {
 		go um.launchProfile(profile, func(status string) {
 			_ = statusBinding.Set(status)
-		}, nil)
+		}, nil, nil)
 	}
 }
 
 // launchProfile launches OpenTTD with the specified profile configuration and logging observers
-func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(status string), onError func()) {
+func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(status string), onProgress platform.ProgressFunc, onError func()) {
 	if updateStatus != nil {
 		updateStatus("Resolving profile and version")
 	}
@@ -265,11 +265,14 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			updateStatus("Version not found locally, downloading")
 		}
 		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download for client %s.", version, client))
-		if !platform.DownloadAndExtractVersionForClientWithLogger(context.Background(), version, client, um.Config, um.Logger) {
+		if !platform.DownloadAndExtractVersionForClientWithLogger(context.Background(), version, client, um.Config, um.Logger, onProgress) {
 			if updateStatus != nil {
 				updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
 			}
 			um.LogImportant(fmt.Sprintf("Failed to download version %s for client %s.", version, client))
+			if onError != nil {
+				onError()
+			}
 			return
 		}
 		if updateStatus != nil {
@@ -281,6 +284,9 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 				updateStatus("Failed: downloaded version folder could not be located")
 			}
 			um.LogImportant("Failed to locate downloaded version.")
+			if onError != nil {
+				onError()
+			}
 			return
 		}
 	}

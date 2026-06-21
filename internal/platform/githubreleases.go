@@ -98,7 +98,7 @@ func CheckForNewVersion(ctx context.Context, config *domain.Config) string {
 
 // DownloadAndExtractVersionWithLogger downloads a specific JGRPP version archive
 // and extracts it to the download directory, routing extractor output to the logger
-func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, config *domain.Config, logger *Logger) bool {
+func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, config *domain.Config, logger *Logger, progress ProgressFunc) bool {
 	logf := func(format string, args ...any) {
 		if logger != nil {
 			logger.Append(fmt.Sprintf(format, args...))
@@ -148,7 +148,7 @@ func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, co
 		return false
 	}
 
-	if err := downloadAndExtractTo(ctx, downloadClient, downloadURL, archivePath, downloadDir, logger); err != nil {
+	if err := downloadAndExtractTo(ctx, downloadClient, downloadURL, archivePath, downloadDir, logger, progress); err != nil {
 		logf("Failed to install %s: %v", assetName, err)
 		return false
 	}

@@ -9,11 +9,31 @@ import (
 	"time"
 )
 
+// ProgressFunc reports download progress; total is -1 when the size is unknown.
+type ProgressFunc func(done, total int64)
+
+// progressReader forwards byte counts to a ProgressFunc as the body is read.
+type progressReader struct {
+	r     io.Reader
+	total int64
+	done  int64
+	cb    ProgressFunc
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	if n > 0 {
+		p.done += int64(n)
+		p.cb(p.done, p.total)
+	}
+	return n, err
+}
+
 // downloadAndExtractTo fetches url into archivePath, extracts it into downloadDir,
 // and removes the archive. It owns a per-attempt timeout and cleans up the partial
 // archive on any failure, so callers can simply loop over candidate URLs and move
-// on when it returns a non-nil error.
-func downloadAndExtractTo(ctx context.Context, client *http.Client, url, archivePath, downloadDir string, logger *Logger) error {
+// on when it returns a non-nil error. progress may be nil.
+func downloadAndExtractTo(ctx context.Context, client *http.Client, url, archivePath, downloadDir string, logger *Logger, progress ProgressFunc) error {
 	dlCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
@@ -30,7 +50,11 @@ func downloadAndExtractTo(ctx context.Context, client *http.Client, url, archive
 	if err != nil {
 		return err
 	}
-	if _, err = io.Copy(file, resp.Body); err != nil {
+	var src io.Reader = resp.Body
+	if progress != nil {
+		src = &progressReader{r: resp.Body, total: resp.ContentLength, cb: progress}
+	}
+	if _, err = io.Copy(file, src); err != nil {
 		file.Close()
 		os.Remove(archivePath)
 		return err
