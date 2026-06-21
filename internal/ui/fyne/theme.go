@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	ColorNameSidebar fyne.ThemeColorName = "launcherSidebar"
-	ColorNameContent fyne.ThemeColorName = "launcherContent"
-	ColorNameHeader  fyne.ThemeColorName = "launcherHeader"
+	ColorNameSidebar      fyne.ThemeColorName = "launcherSidebar"
+	ColorNameContent      fyne.ThemeColorName = "launcherContent"
+	ColorNameHeader       fyne.ThemeColorName = "launcherHeader"
+	ColorNameDetailHeader fyne.ThemeColorName = "launcherDetailHeader"
 )
 
 // ThemePreset represents a user accent color selection
@@ -89,6 +90,8 @@ func (p *LauncherTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVarian
 			return color.NRGBA{R: 38, G: 41, B: 44, A: 255} // Dark Content #26292C
 		case ColorNameHeader:
 			return color.NRGBA{R: 43, G: 46, B: 49, A: 255} // Dark Header #2B2E31
+		case ColorNameDetailHeader:
+			return color.NRGBA{R: 49, G: 53, B: 57, A: 255} // Dark Detail Header #313539 (lighter than content)
 		case theme.ColorNameForeground:
 			return color.NRGBA{R: 230, G: 232, B: 234, A: 255} // Dark text #E6E8EA
 		case theme.ColorNameDisabled:
@@ -126,6 +129,8 @@ func (p *LauncherTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVarian
 			return color.NRGBA{R: 251, G: 252, B: 252, A: 255} // Light Content #FBFCFC
 		case ColorNameHeader:
 			return color.NRGBA{R: 221, G: 225, B: 228, A: 255} // Light Header #DDE1E4
+		case ColorNameDetailHeader:
+			return color.NRGBA{R: 236, G: 238, B: 240, A: 255} // Light Detail Header #ECEEF0 (darker than content)
 		case theme.ColorNameForeground:
 			return color.NRGBA{R: 36, G: 39, B: 42, A: 255} // Light text #24272A
 		case theme.ColorNameDisabled:

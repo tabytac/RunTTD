@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	fyneadvancedlist "github.com/dweymouth/fyne-advanced-list"
@@ -337,24 +338,81 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 	}
 
-	addDetail := func(c *fyne.Container, icon fyne.Resource, label, value string, mono bool) {
+	// Short pairs align in form; long values stack full-width in extra so wrapping
+	// can't clip (FormLayout sizes rows from the unwrapped value).
+	type section struct {
+		form  *fyne.Container
+		extra []fyne.CanvasObject
+		count int
+	}
+	newSection := func() *section {
+		return &section{form: container.New(layout.NewFormLayout())}
+	}
+	mutedLabel := func(text string) *widget.Label {
+		l := widget.NewLabel(text)
+		l.Importance = widget.LowImportance
+		return l
+	}
+	addField := func(s *section, label, value string, mono bool) {
 		if value == "" {
 			return
 		}
-
-		title := widget.NewLabel(label)
-		title.TextStyle = fyne.TextStyle{Bold: true}
-
 		val := widget.NewLabel(value)
-		val.Wrapping = fyne.TextWrapWord
+		val.Wrapping = fyne.TextWrapOff
+		val.Selectable = true
 		if mono {
 			val.TextStyle = fyne.TextStyle{Monospace: true}
 		}
-
-		iconObj := widget.NewIcon(icon)
-
-		row := container.NewBorder(nil, nil, iconObj, nil, container.NewVBox(title, val))
-		c.Add(container.NewPadded(row))
+		s.form.Add(mutedLabel(label))
+		s.form.Add(val)
+		s.count++
+	}
+	addLongField := func(s *section, label, value string, mono bool) {
+		if strings.TrimSpace(value) == "" {
+			return
+		}
+		val := widget.NewLabel(value)
+		val.Wrapping = fyne.TextWrapWord
+		val.Selectable = true
+		if mono {
+			val.TextStyle = fyne.TextStyle{Monospace: true}
+		}
+		s.extra = append(s.extra, mutedLabel(label), val)
+		s.count++
+	}
+	// addReveal adds a masked value with an eye button that toggles plaintext.
+	addReveal := func(s *section, label, value string) {
+		if value == "" {
+			return
+		}
+		val := widget.NewLabel("••••••••")
+		val.Selectable = true
+		shown := false
+		var btn *widget.Button
+		btn = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
+			shown = !shown
+			if shown {
+				val.SetText(value)
+				btn.SetIcon(theme.VisibilityOffIcon())
+			} else {
+				val.SetText("••••••••")
+				btn.SetIcon(theme.VisibilityIcon())
+			}
+		})
+		btn.Importance = widget.LowImportance
+		s.form.Add(mutedLabel(label))
+		s.form.Add(container.NewBorder(nil, nil, nil, btn, val))
+		s.count++
+	}
+	emit := func(title string, s *section) {
+		if s.count == 0 {
+			return
+		}
+		body := container.NewVBox(NewSectionHeader(title), s.form)
+		for _, o := range s.extra {
+			body.Add(o)
+		}
+		detailsContainer.Add(NewThemedBox(ColorNameContent, container.NewPadded(body)))
 	}
 
 	refreshDetails = func() {
@@ -378,93 +436,66 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 		profile := um.Config.Profiles[selectedIdx]
 
-		nameLabel := widget.NewLabel(profile.Name)
-		nameLabel.TextStyle = fyne.TextStyle{Bold: true}
-		detailsContainer.Add(nameLabel)
+		name := widget.NewRichText(&widget.TextSegment{
+			Text: profile.Name,
+			Style: widget.RichTextStyle{
+				SizeName:  theme.SizeNameHeadingText,
+				TextStyle: fyne.TextStyle{Bold: true},
+				ColorName: theme.ColorNameForeground,
+			},
+		})
+		verb, target := intentParts(profile)
+		intentSegs := []widget.RichTextSegment{&widget.TextSegment{
+			Text:  verb,
+			Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder},
+		}}
+		if target != "" {
+			intentSegs = append(intentSegs, &widget.TextSegment{
+				Text: "  " + target,
+				Style: widget.RichTextStyle{
+					Inline:    true,
+					ColorName: theme.ColorNameForeground,
+					TextStyle: fyne.TextStyle{Bold: true},
+				},
+			})
+		}
+		intent := widget.NewRichText(intentSegs...)
+		intent.Wrapping = fyne.TextWrapWord
+		header := container.NewVBox(name, intent)
+		detailsContainer.Add(NewThemedBox(ColorNameDetailHeader, container.NewPadded(header)))
 
-		intent := "Launch into Main Menu"
+		launch := newSection()
 		if profile.LaunchMode == "file" {
-			intent = fmt.Sprintf("Launch into save: %s", filepath.Base(profile.SavePath))
+			addLongField(launch, "Save file", profile.SavePath, true)
 		} else if profile.LaunchMode == "folder" {
-			intent = fmt.Sprintf("Launch newest in: %s", filepath.Base(profile.SavePath))
-		} else if profile.LaunchMode == "multiplayer" {
-			intent = fmt.Sprintf("Launch and join: %s", valueOrDefault(profile.ServerIpPort, "Server"))
+			addLongField(launch, "Save Folder", profile.SavePath, true)
+			label, value := filterDisplay(profile.AutoLatestFilter)
+			addField(launch, label, value, false)
 		}
-
-		intentLabel := widget.NewLabel(intent)
-		intentLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
-		detailsContainer.Add(container.NewPadded(intentLabel))
-		detailsContainer.Add(widget.NewSeparator())
-
-		if profile.Client == "custom" {
-			folder := strings.TrimSpace(profile.CustomExecutablePath)
-			if folder == "" {
-				folder = "(not set)"
-			}
-			addDetail(detailsContainer, theme.FolderIcon(), "Executable Folder", folder, true)
-		} else {
-			versionText := profile.Version
-			if versionText == "" {
-				versionText = "latest"
-			}
-			addDetail(detailsContainer, theme.SettingsIcon(), "Version", versionText, false)
-		}
-
-		if strings.TrimSpace(profile.ConfigFilePath) != "" {
-			addDetail(detailsContainer, theme.FileIcon(), "Config Override", profile.ConfigFilePath, true)
-		}
-		if profile.NoConfigSave {
-			addDetail(detailsContainer, theme.ConfirmIcon(), "No Config Save", "Enabled", false)
-		}
-
-		if profile.NewGRFScanMode != "" {
-			var desc string
-			switch strings.ToUpper(profile.NewGRFScanMode) {
-			case "Q":
-				desc = "Skip NewGRF loading at startup"
-			case "QQ":
-				desc = "Disable all NewGRF scanning/loading (session-wide)"
-			}
-			if desc != "" {
-				addDetail(detailsContainer, theme.InfoIcon(), "NewGRF Scan", desc, false)
-			}
-		}
-
-		if profile.LaunchMode == "file" || profile.LaunchMode == "folder" {
-			icon := theme.FolderOpenIcon()
-			label := "Folder Path"
-			if profile.LaunchMode == "file" {
-				icon = theme.FileIcon()
-				label = "File Path"
-			}
-			addDetail(detailsContainer, icon, label, profile.SavePath, false)
-
-			if profile.LaunchMode == "folder" && profile.AutoLatestFilter != "" {
-				addDetail(detailsContainer, theme.SearchIcon(), "File Filter", profile.AutoLatestFilter, true)
-			}
-		}
-
 		if profile.LaunchMode == "multiplayer" || profile.ServerIpPort != "" {
-			addDetail(detailsContainer, theme.ComputerIcon(), "Server Address", profile.ServerIpPort, false)
-
-			if profile.ServerCompanyNumber != "" {
-				addDetail(detailsContainer, theme.LoginIcon(), "Company Slot", profile.ServerCompanyNumber, false)
-			}
-			if profile.ServerPassword != "" || profile.ServerCompanyPassword != "" {
-				authInfo := ""
-				if profile.ServerPassword != "" {
-					authInfo += "Server password set. "
-				}
-				if profile.ServerCompanyPassword != "" {
-					authInfo += "Company password set."
-				}
-				addDetail(detailsContainer, theme.ConfirmIcon(), "Authentication", authInfo, false)
-			}
+			addField(launch, "Server", profile.ServerIpPort, false)
+			addField(launch, "Company Number", profile.ServerCompanyNumber, false)
+			addReveal(launch, "Server Password", profile.ServerPassword)
+			addReveal(launch, "Company Password", profile.ServerCompanyPassword)
 		}
+		emit("Launch", launch)
 
-		if profile.ExtraArgs != "" {
-			addDetail(detailsContainer, theme.InfoIcon(), "Advanced Arguments", profile.ExtraArgs, true)
+		client := newSection()
+		if profile.Client == "custom" {
+			addLongField(client, "Executable Folder", valueOrDefault(strings.TrimSpace(profile.CustomExecutablePath), "(not set)"), true)
+		} else {
+			addField(client, "Version", valueOrDefault(profile.Version, "latest"), false)
 		}
+		emit("Client", client)
+
+		adv := newSection()
+		if profile.NoConfigSave {
+			addField(adv, "No config save", "Enabled", false)
+		}
+		addField(adv, "NewGRF Loading", newGRFDesc(profile.NewGRFScanMode), false)
+		addLongField(adv, "Config", profile.ConfigFilePath, true)
+		addLongField(adv, "Arguments", profile.ExtraArgs, true)
+		emit("Advanced", adv)
 
 		detailsContainer.Refresh()
 	}
@@ -929,4 +960,54 @@ func uniqueProfileName(profiles []domain.Profile, base string) string {
 		candidate = fmt.Sprintf("%s Copy (%d)", base, n)
 	}
 	return candidate
+}
+
+// intentParts splits the launch intent into a muted verb and an accent-colored target.
+func intentParts(p domain.Profile) (verb, target string) {
+	switch p.LaunchMode {
+	case "file":
+		return "Load the selected file", filepath.Base(p.SavePath)
+	case "folder":
+		return "Load the most recent " + folderItemNoun(p.AutoLatestFilter) + " in", filepath.Base(p.SavePath)
+	case "multiplayer":
+		return "Launch and join the server at", valueOrDefault(p.ServerIpPort, "Server")
+	default:
+		return "Launch straight into the Main Menu", ""
+	}
+}
+
+// folderItemNoun names what the folder filter picks, for the launch intent line.
+func folderItemNoun(filter string) string {
+	switch filter {
+	case "sav":
+		return "save"
+	case "scn":
+		return "scenario"
+	default:
+		return "save or scenario"
+	}
+}
+
+// filterDisplay maps a stored auto-latest filter to a grammar-matched label and
+// full-name value: "File types"/"Saves & Scenarios" for both, "File type"/singular otherwise.
+func filterDisplay(filter string) (label, value string) {
+	switch filter {
+	case "sav":
+		return "File type", "Saves only"
+	case "scn":
+		return "File type", "Scenarios only"
+	default:
+		return "File types", "Saves & Scenarios"
+	}
+}
+
+func newGRFDesc(mode string) string {
+	switch strings.ToUpper(strings.TrimSpace(mode)) {
+	case "Q":
+		return "Skip NewGRF loading at startup"
+	case "QQ":
+		return "Disable all NewGRF scanning/loading (session-wide)"
+	default:
+		return ""
+	}
 }
