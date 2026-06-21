@@ -114,6 +114,54 @@ func NightlyIDMatchesPlatform(id string, aliases []string) bool {
 	return false
 }
 
+// preferredExtsForOS lists acceptable archive extensions, most-preferred first.
+// Old folders need several (Linux gained .tar.xz only at 1.4.0; macOS used .dmg
+// then .zip). .exe/.pdb/.deb/source/docs are intentionally absent.
+func preferredExtsForOS(osType string) []string {
+	switch {
+	case strings.Contains(osType, "linux"):
+		return []string{".tar.xz", ".tar.bz2", ".tar.gz", ".zip"}
+	case strings.Contains(osType, "mac") || strings.Contains(osType, "darwin"):
+		return []string{".dmg", ".zip"}
+	default:
+		return []string{".zip"}
+	}
+}
+
+// selectManifestAsset returns the first manifest id matching an alias (outer loop,
+// canonical first) and a preferred extension (inner). aliasIndex is the matched
+// alias position, or -1 if nothing matched; aliasIndex > 0 means a cross-arch
+// fallback was used and the caller should log a note.
+func selectManifestAsset(ids, aliases, exts []string) (string, int) {
+	for ai, alias := range aliases {
+		alias = strings.ToLower(strings.TrimSpace(alias))
+		if alias == "" {
+			continue
+		}
+		for _, ext := range exts {
+			for _, id := range ids {
+				lower := strings.ToLower(id)
+				if strings.Contains(lower, alias) && strings.HasSuffix(lower, ext) {
+					return id, ai
+				}
+			}
+		}
+	}
+	return "", -1
+}
+
+// osDisplayHint returns a short human-readable OS word for skip messages.
+func osDisplayHint(osType string) string {
+	switch {
+	case strings.Contains(osType, "linux"):
+		return "Linux"
+	case strings.Contains(osType, "mac") || strings.Contains(osType, "darwin"):
+		return "macOS"
+	default:
+		return "Windows"
+	}
+}
+
 // FetchNightlyManifest downloads manifest.yaml for a specific nightly tag build
 func FetchNightlyManifest(ctx context.Context, base, year, version string) (domain.NightlyManifestData, error) {
 	url := fmt.Sprintf("%s/%s/%s/manifest.yaml", strings.TrimRight(base, "/"), year, version)
@@ -397,6 +445,32 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 				}
 				return true
 			}
+		}
+	}
+
+	if client == "vanilla" {
+		manifest, err := FetchReleaseManifest(ctx, baseTrimmed, version)
+		if err != nil {
+			logf("Release manifest fetch failed (%s); trying candidate URLs: %v", version, err)
+		} else {
+			osType := resolveOSType(cfg)
+			id, aliasIdx := selectManifestAsset(manifest.FileIDs, platformAliases, preferredExtsForOS(osType))
+			if id == "" {
+				logf("No %s build exists for %s; install skipped.", osDisplayHint(osType), version)
+				return false // authoritative manifest: short-circuit, do not guess
+			}
+			if aliasIdx > 0 {
+				logf("No %s build for %s; using %s (runs via emulation on this platform).",
+					osType, version, platformAliases[aliasIdx])
+			}
+			url := baseTrimmed + "/" + version + "/" + id
+			logf("Selected asset: %s", url)
+			archivePath := filepath.Join(downloadDir, id)
+			if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, logger, progress); err != nil {
+				logf("Asset download failed (%s): %v", url, err)
+				return false
+			}
+			return true
 		}
 	}
 
