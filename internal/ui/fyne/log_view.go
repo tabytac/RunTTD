@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	apppkg "runttd/internal/app"
 	"runttd/internal/domain"
 	"runttd/internal/platform"
 )
@@ -158,14 +159,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 
 	requested := strings.TrimSpace(profile.Version)
 	version := requested
-	requestedLower := strings.ToLower(requested)
-	client := profile.Client
-	if strings.TrimSpace(client) == "" {
-		client = um.Config.DefaultClient
-		if client == "" {
-			client = "jgrpp"
-		}
-	}
+	client := apppkg.EffectiveClient(profile.Client, um.Config.DefaultClient)
 
 	if client == "custom" {
 		folder := strings.TrimSpace(profile.CustomExecutablePath)
@@ -200,19 +194,8 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 		return
 	}
 
-	isLatestRequest := false
-	latestTrack := "stable"
-	switch requestedLower {
-	case "", "latest", "latest-stable", "latest (stable)":
-		isLatestRequest = true
-		latestTrack = "stable"
-	case "latest-testing", "latest (testing)":
-		isLatestRequest = true
-		latestTrack = "testing"
-	}
-	if client == "vanilla-nightly" && isLatestRequest {
-		latestTrack = "testing"
-	}
+	isLatestRequest := apppkg.IsLatestVersion(requested)
+	latestTrack := apppkg.LatestTrack(client, requested)
 
 	if isLatestRequest {
 		if updateStatus != nil {
@@ -228,7 +211,9 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			if updateStatus != nil {
 				updateStatus("Update check unavailable (offline?), using latest local install")
 			}
-			versionFolder := platform.FindLatestFolderClientWithConfig(platform.ClientDownloadDir(um.Config, client), client, um.Config)
+			// Highest-version install (matches the online launch target and the
+			// status dot); NOT newest-by-mod-time, which a re-downloaded older build wins.
+			versionFolder := apppkg.HighestInstalledFolderInRoot(um.Config, client)
 			if versionFolder == "" {
 				if updateStatus != nil {
 					updateStatus("Failed: offline and no local installation found for client")

@@ -18,14 +18,13 @@ func NewLauncherService() *LauncherService {
 
 // ResolveVersionFolder searches for the folder of a profile version, querying the network for 'latest' tags if required
 func (s *LauncherService) ResolveVersionFolder(ctx context.Context, profile domain.Profile, cfg *domain.Config) (string, error) {
-	client := profile.Client
-	if client == "" {
-		client = "jgrpp" // default
-	}
+	client := EffectiveClient(profile.Client, cfg.DefaultClient)
 
 	version := profile.Version
-	if version == "" || version == "latest" {
-		localLatest := platform.FindLatestFolderClientWithConfig(platform.ClientDownloadDir(cfg, client), client, cfg)
+	if IsLatestVersion(version) {
+		// Highest-version local install (matches the launch path and status dot),
+		// not newest-by-mod-time.
+		localLatest := HighestInstalledFolderInRoot(cfg, client)
 		if localLatest != "" {
 			return localLatest, nil
 		}
