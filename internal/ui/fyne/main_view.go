@@ -1128,7 +1128,7 @@ func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 	updateButtons()
 
 	content := container.NewVBox(
-		widget.NewLabel("Mode"),
+		widget.NewLabel("Theme"),
 		modeSelect.Container,
 		widget.NewLabel("Accent Color"),
 		colorGrid,
