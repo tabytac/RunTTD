@@ -5,10 +5,8 @@ import (
 	"strings"
 )
 
-// VanillaNeedsBaseSetWarning reports whether a vanilla version predates the
-// bundled free graphics first shipped in 1.2.0-beta1. Pre-release suffixes
-// share the same numeric (major, minor) as the release, so they're handled
-// correctly by stripping before parsing. Unparseable inputs return false.
+// VanillaNeedsBaseSetWarning reports whether a version predates the bundled free
+// graphics first shipped in 1.2.0-beta1. Unparseable inputs return false.
 func VanillaNeedsBaseSetWarning(version string) bool {
 	v := strings.TrimSpace(version)
 	if dash := strings.IndexByte(v, '-'); dash >= 0 {
