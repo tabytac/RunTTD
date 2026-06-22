@@ -32,8 +32,9 @@ func newUpstreamCache() *upstreamCache {
 }
 
 // fresh reports whether an entry should be trusted without re-fetching. Pending
-// is always fresh (a fetch is in flight). ok is fresh within the TTL. failed and
-// absent are never fresh (allow retry). Caller must hold the lock.
+// is always fresh (a fetch is in flight). ok and failed are fresh within the TTL
+// (failure is cached as Grey; no retry until TTL expires). Absent is never fresh.
+// Caller must hold the lock.
 func (c *upstreamCache) fresh(e upstreamEntry, ok bool) bool {
 	if !ok {
 		return false
@@ -41,7 +42,7 @@ func (c *upstreamCache) fresh(e upstreamEntry, ok bool) bool {
 	switch e.state {
 	case pendingUpstream:
 		return true
-	case okUpstream:
+	case okUpstream, failedUpstream:
 		return c.now().Sub(e.fetched) < c.ttl
 	default:
 		return false
