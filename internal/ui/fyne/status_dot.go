@@ -1,12 +1,20 @@
 package fyne
 
 import (
+	"context"
 	"image/color"
+	"os"
+	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+
+	apppkg "runttd/internal/app"
+	"runttd/internal/domain"
+	"runttd/internal/platform"
 )
 
 // DotState is the resolved status of a profile's installed/upstream state,
@@ -153,3 +161,84 @@ func (r *statusDotRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (r *statusDotRenderer) Destroy() {}
+
+// resolveDotState computes a profile's dot state on the UI thread using only
+// disk reads, and enqueues a background upstream fetch when one is needed.
+// It MUST NOT call LauncherService.ResolveVersionFolder (that network-falls-
+// through for an uninstalled "latest" profile).
+func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
+	client := profile.Client
+	if client == "" {
+		client = "jgrpp"
+	}
+
+	in := dotInput{}
+	in.clientKnown = apppkg.IsKnownClient(client)
+	if !in.clientKnown {
+		return dotState(in)
+	}
+
+	if client == "custom" {
+		in.isCustom = true
+		p := strings.TrimSpace(profile.CustomExecutablePath)
+		if p != "" {
+			if _, err := os.Stat(p); err == nil {
+				in.customPathExists = true
+			}
+		}
+		return dotState(in)
+	}
+
+	in.isLatest = profile.Version == "" || profile.Version == "latest"
+
+	ctx := context.Background()
+	dir := platform.ClientDownloadDir(um.Config, client)
+	if in.isLatest {
+		in.installedFolder = platform.FindLatestFolderClientWithConfig(dir, client, um.Config)
+	} else {
+		folder, _ := apppkg.ClientFindInstalled(ctx, client, profile.Version, um.Config)
+		in.installedFolder = folder
+	}
+
+	if in.installedFolder == "" {
+		return dotState(in) // Red — nothing installed
+	}
+	if !in.isLatest {
+		return dotState(in) // Green — pinned + installed
+	}
+
+	// latest + installed: consult the cache, enqueue a fetch if needed.
+	if e, fresh := um.upstream.get(client); fresh {
+		in.cacheState = e.state
+		in.latestTagFolder = e.tagFolder
+	} else {
+		in.cacheState = pendingUpstream
+		um.startUpstreamFetch(client)
+	}
+	return dotState(in)
+}
+
+// startUpstreamFetch launches one background lookup per track (deduped). On
+// completion it stores the result and refreshes the profile list on the UI
+// thread. Errors are silent.
+func (um *UIManager) startUpstreamFetch(client string) {
+	if !um.upstream.markPending(client) {
+		return // already fresh or in flight
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		tag, err := apppkg.ClientLatest(ctx, client, um.Config)
+		if err != nil || tag == "" {
+			um.upstream.store(client, "", "", failedUpstream)
+		} else {
+			folder, _ := apppkg.ClientFindInstalled(ctx, client, tag, um.Config)
+			um.upstream.store(client, tag, folder, okUpstream)
+		}
+		fyne.Do(func() {
+			if um.profileListRefresh != nil {
+				um.profileListRefresh()
+			}
+		})
+	}()
+}

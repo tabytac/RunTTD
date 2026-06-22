@@ -33,6 +33,8 @@ type UIManager struct {
 	LastListSelectAt    time.Time
 	pendingLaunchIdx    int
 	CachedVersions      []string
+	upstream            *upstreamCache
+	profileListRefresh  func() // set by the main view; refreshes the profile list from any goroutine (via fyne.Do)
 
 	LauncherService *apppkg.LauncherService
 }
@@ -55,6 +57,7 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 		Version:          version,
 		LastListSelectID: -1,
 		pendingLaunchIdx: -1,
+		upstream:         newUpstreamCache(),
 		LauncherService:  apppkg.NewLauncherService(),
 	}
 

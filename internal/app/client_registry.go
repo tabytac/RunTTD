@@ -42,6 +42,14 @@ func GetClient(id string) Client {
 	return clientRegistry[id]
 }
 
+// IsKnownClient reports whether clientID is registered. Empty defaults to jgrpp.
+func IsKnownClient(clientID string) bool {
+	if clientID == "" {
+		clientID = "jgrpp"
+	}
+	return GetClient(clientID) != nil
+}
+
 // jgrppClient wraps platform GitHub releases helpers
 type jgrppClient struct{}
 
