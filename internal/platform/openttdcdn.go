@@ -439,7 +439,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 				logf("Nightly selected asset: %s", url)
 				archivePath := filepath.Join(downloadDir, id)
 
-				if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, logger, progress); err != nil {
+				if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, resolveOSType(cfg), logger, progress); err != nil {
 					logf("Nightly asset failed (%s): %v", url, err)
 					continue
 				}
@@ -463,10 +463,11 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 				logf("No %s build for %s; using %s (runs via emulation on this platform).",
 					osType, version, platformAliases[aliasIdx])
 			}
+			matchedTag := platformAliases[aliasIdx]
 			url := baseTrimmed + "/" + version + "/" + id
 			logf("Selected asset: %s", url)
 			archivePath := filepath.Join(downloadDir, id)
-			if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, logger, progress); err != nil {
+			if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, matchedTag, logger, progress); err != nil {
 				logf("Asset download failed (%s): %v", url, err)
 				return false
 			}
@@ -482,7 +483,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 		urlCandidates = append(urlCandidates, baseTrimmed+"/"+version+"/"+name, baseTrimmed+"/"+name)
 		for _, url := range urlCandidates {
 			archivePath := filepath.Join(downloadDir, name)
-			if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, logger, progress); err != nil {
+			if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, resolveOSType(cfg), logger, progress); err != nil {
 				continue
 			}
 			return true

@@ -35,7 +35,7 @@ func (p *progressReader) Read(b []byte) (int, error) {
 // and removes the archive. It owns a per-attempt timeout and cleans up the partial
 // archive on any failure, so callers can simply loop over candidate URLs and move
 // on when it returns a non-nil error. progress may be nil.
-func downloadAndExtractTo(ctx context.Context, client *http.Client, url, archivePath, downloadDir string, logger *Logger, progress ProgressFunc) error {
+func downloadAndExtractTo(ctx context.Context, client *http.Client, url, archivePath, downloadDir, osTag string, logger *Logger, progress ProgressFunc) error {
 	dlCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
@@ -63,7 +63,7 @@ func downloadAndExtractTo(ctx context.Context, client *http.Client, url, archive
 	}
 	file.Close()
 
-	if err := extractIntoVersionFolder(archivePath, downloadDir, logger); err != nil {
+	if err := extractIntoVersionFolder(archivePath, downloadDir, osTag, logger); err != nil {
 		os.Remove(archivePath)
 		return err
 	}
@@ -76,7 +76,7 @@ func downloadAndExtractTo(ctx context.Context, client *http.Client, url, archive
 // folder, which is moved up as-is. Older flat archives (some old JGRPP MINGW
 // builds) extract loose files with no enclosing folder, so they are wrapped in a
 // folder named after the archive, keeping the download dir tidy and findable.
-func extractIntoVersionFolder(archivePath, downloadDir string, logger *Logger) error {
+func extractIntoVersionFolder(archivePath, downloadDir, osTag string, logger *Logger) error {
 	tmp, err := os.MkdirTemp(downloadDir, ".extract-")
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func extractIntoVersionFolder(archivePath, downloadDir string, logger *Logger) e
 		name = entries[0].Name()
 	}
 
-	name = normalizeWindowsFolderName(name)
+	name = ensureOSTag(name, osTag)
 	dst := filepath.Join(downloadDir, name)
 	os.RemoveAll(dst) // replace any earlier copy
 	return os.Rename(src, dst)
@@ -119,14 +119,16 @@ func archiveBaseName(archivePath string) string {
 	return n
 }
 
-// normalizeWindowsFolderName rewrites a prefix-less "...-win32" name (only 0.1.0's
-// flat archive uses this) to the canonical "...-windows-win32" for re-discovery.
-func normalizeWindowsFolderName(name string) string {
-	if strings.Contains(name, "windows-win32") {
+// ensureOSTag appends the matched OS tag when the extracted folder name lacks one,
+// so tagless old archives (e.g. 0.1.0) are re-discoverable after installation.
+func ensureOSTag(name, osTag string) string {
+	if osTag == "" {
 		return name
 	}
-	if strings.HasSuffix(name, "-win32") {
-		return strings.TrimSuffix(name, "-win32") + "-windows-win32"
+	for _, tag := range []string{"windows-", "mingw-", "macos-universal", "macosx-universal", "linux-"} {
+		if strings.Contains(name, tag) {
+			return name
+		}
 	}
-	return name
+	return name + "-" + osTag
 }

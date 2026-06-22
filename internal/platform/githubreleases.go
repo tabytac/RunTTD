@@ -151,7 +151,7 @@ func DownloadAndExtractVersionWithLogger(ctx context.Context, version string, co
 		return false
 	}
 
-	if err := downloadAndExtractTo(ctx, downloadClient, downloadURL, archivePath, downloadDir, logger, progress); err != nil {
+	if err := downloadAndExtractTo(ctx, downloadClient, downloadURL, archivePath, downloadDir, osType, logger, progress); err != nil {
 		logf("Failed to install %s: %v", assetName, err)
 		return false
 	}
