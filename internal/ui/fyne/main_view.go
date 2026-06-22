@@ -361,6 +361,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				launchPhase.TextStyle = fyne.TextStyle{Bold: true}
 				launchPhase.SetText("Launched " + profile.Name)
 				launchPhase.Refresh()
+				if um.profileListRefresh != nil {
+					um.profileListRefresh() // a download may have changed installed state
+				}
 				go func() {
 					time.Sleep(6000 * time.Millisecond)
 					fyne.Do(launchBand.Hide)
