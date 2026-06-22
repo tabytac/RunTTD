@@ -2,6 +2,11 @@ package fyne
 
 import (
 	"image/color"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 // DotState is the resolved status of a profile's installed/upstream state,
@@ -79,3 +84,72 @@ func dotState(in dotInput) DotState {
 		return DotGrey
 	}
 }
+
+const dotDiameter = 10
+
+// statusDot is a small filled circle with a thin foreground ring (the ring
+// guarantees edge contrast on any theme/background — amber-on-light fails the
+// 3:1 bar as a bare fill).
+type statusDot struct {
+	widget.BaseWidget
+	state DotState
+}
+
+func newStatusDot() *statusDot {
+	d := &statusDot{state: DotGrey}
+	d.ExtendBaseWidget(d)
+	return d
+}
+
+// SetState recolors the dot in place.
+func (d *statusDot) SetState(s DotState) {
+	if s == d.state {
+		return
+	}
+	d.state = s
+	d.Refresh()
+}
+
+func (d *statusDot) CreateRenderer() fyne.WidgetRenderer {
+	circle := canvas.NewCircle(dotColor(d.state))
+	circle.StrokeColor = ringColor()
+	circle.StrokeWidth = 1
+	return &statusDotRenderer{dot: d, circle: circle}
+}
+
+// ringColor is the dot's outline: the theme foreground at low opacity.
+func ringColor() color.Color {
+	fg := theme.Color(theme.ColorNameForeground)
+	r, g, b, _ := fg.RGBA()
+	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 90}
+}
+
+type statusDotRenderer struct {
+	dot    *statusDot
+	circle *canvas.Circle
+}
+
+func (r *statusDotRenderer) Layout(size fyne.Size) {
+	// Center a fixed-diameter circle within whatever space we are given.
+	d := float32(dotDiameter)
+	x := (size.Width - d) / 2
+	y := (size.Height - d) / 2
+	r.circle.Move(fyne.NewPos(x, y))
+	r.circle.Resize(fyne.NewSize(d, d))
+}
+
+func (r *statusDotRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(dotDiameter, dotDiameter)
+}
+
+func (r *statusDotRenderer) Refresh() {
+	r.circle.FillColor = dotColor(r.dot.state)
+	r.circle.StrokeColor = ringColor()
+	r.circle.Refresh()
+}
+
+func (r *statusDotRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.circle}
+}
+
+func (r *statusDotRenderer) Destroy() {}
