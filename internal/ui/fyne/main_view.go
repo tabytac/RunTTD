@@ -490,6 +490,34 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		s.form.Add(container.NewBorder(nil, nil, nil, btn, val))
 		s.count++
 	}
+	// addPathField renders a full-width path value (in s.extra, like addLongField)
+	// with a reveal-in-file-browser button. isFile selects the file in its folder;
+	// otherwise the folder is opened. Empty values render nothing.
+	addPathField := func(s *section, label, value string, isFile bool) {
+		if strings.TrimSpace(value) == "" {
+			return
+		}
+		val := widget.NewLabel(value)
+		val.Wrapping = fyne.TextWrapWord
+		val.Selectable = true
+		val.TextStyle = fyne.TextStyle{Monospace: true}
+		btn := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
+			var err error
+			if isFile {
+				err = platform.RevealFileInFileManager(value)
+			} else {
+				err = platform.RevealInFileManager(value)
+			}
+			if err != nil {
+				um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", value, err))
+				dialog.ShowError(fmt.Errorf("couldn't open the location: %w", err), um.Window)
+			}
+		})
+		btn.Importance = widget.LowImportance
+		row := container.NewBorder(nil, nil, nil, btn, val)
+		s.extra = append(s.extra, mutedLabel(label), row)
+		s.count++
+	}
 	emit := func(title string, s *section) {
 		if s.count == 0 {
 			return
@@ -543,9 +571,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 		launch := newSection()
 		if profile.LaunchMode == "file" {
-			addLongField(launch, "Save file", profile.SavePath, true)
+			addPathField(launch, "Save file", profile.SavePath, true)
 		} else if profile.LaunchMode == "folder" {
-			addLongField(launch, "Save Folder", profile.SavePath, true)
+			addPathField(launch, "Save Folder", profile.SavePath, false)
 			label, value := filterDisplay(profile.AutoLatestFilter)
 			addField(launch, label, value, false)
 		}
@@ -559,7 +587,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 		client := newSection()
 		if profile.Client == "custom" {
-			addLongField(client, "Executable Folder", valueOrDefault(strings.TrimSpace(profile.CustomExecutablePath), "(not set)"), true)
+			addPathField(client, "Executable Folder", strings.TrimSpace(profile.CustomExecutablePath), false)
 		} else {
 			addField(client, "Version", valueOrDefault(profile.Version, "latest"), false)
 		}
@@ -570,7 +598,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			addField(adv, "No config save", "Enabled", false)
 		}
 		addField(adv, "NewGRF Loading", newGRFDesc(profile.NewGRFScanMode), false)
-		addLongField(adv, "Config", profile.ConfigFilePath, true)
+		addPathField(adv, "Config", profile.ConfigFilePath, true)
 		addLongField(adv, "Arguments", profile.ExtraArgs, true)
 		emit("Advanced", adv)
 
