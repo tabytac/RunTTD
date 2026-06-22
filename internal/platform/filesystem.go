@@ -82,6 +82,15 @@ func FolderMatchesAnyAlias(name string, aliases []string) bool {
 	return false
 }
 
+// canonicalOSTag maps the bare "win32" token (filename-only alias for 0.1.0's
+// prefix-less asset) to the canonical folder tag; all other tags pass through.
+func canonicalOSTag(tag string) string {
+	if tag == "win32" {
+		return "windows-win32"
+	}
+	return tag
+}
+
 // osTagStart marks where the OS tag begins in an extracted folder name; the
 // version slice is everything between "openttd-" and this boundary.
 var osTagStart = regexp.MustCompile(`-(?:windows|mingw|macos|macosx|linux)\b`)

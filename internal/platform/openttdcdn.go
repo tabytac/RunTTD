@@ -463,7 +463,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 				logf("No %s build for %s; using %s (runs via emulation on this platform).",
 					osType, version, platformAliases[aliasIdx])
 			}
-			matchedTag := platformAliases[aliasIdx]
+			matchedTag := canonicalOSTag(platformAliases[aliasIdx])
 			url := baseTrimmed + "/" + version + "/" + id
 			logf("Selected asset: %s", url)
 			archivePath := filepath.Join(downloadDir, id)
