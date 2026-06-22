@@ -176,10 +176,7 @@ func (r *statusDotRenderer) Destroy() {}
 // It MUST NOT call LauncherService.ResolveVersionFolder (that network-falls-
 // through for an uninstalled "latest" profile).
 func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
-	client := profile.Client
-	if client == "" {
-		client = "jgrpp"
-	}
+	client := apppkg.EffectiveClient(profile.Client, um.Config.DefaultClient)
 
 	in := dotInput{}
 	in.clientKnown = apppkg.IsKnownClient(client)
@@ -202,9 +199,7 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 
 	ctx := context.Background()
 	if in.isLatest {
-		// Highest-version install (matches the library view and an online launch);
-		// NOT newest-by-mod-time, which a later re-download of an older version wins.
-		in.installedFolder = apppkg.HighestInstalledFolder(um.Config, client)
+		in.installedFolder = apppkg.HighestInstalledFolderInRoot(um.Config, client)
 	} else {
 		folder, _ := apppkg.ClientFindInstalled(ctx, client, profile.Version, um.Config)
 		in.installedFolder = folder
@@ -217,36 +212,42 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 		return dotState(in) // Green — pinned + installed
 	}
 
-	// latest + installed: consult the cache, enqueue a fetch if needed. The cache
-	// holds only the upstream tag; re-resolve it to a folder against disk here so a
-	// download done after the fetch is reflected at once (not stale until the TTL).
-	if e, fresh := um.upstream.get(client); fresh {
+	// Check upstream on the profile's track, and re-resolve the cached tag to a
+	// folder here (not at fetch time) so a download is reflected at once.
+	track := apppkg.LatestTrack(client, profile.Version)
+	key := upstreamKey(client, track)
+	if e, fresh := um.upstream.get(key); fresh {
 		in.cacheState = e.state
 		if e.state == okUpstream && e.tag != "" {
 			in.latestTagFolder, _ = apppkg.ClientFindInstalled(ctx, client, e.tag, um.Config)
 		}
 	} else {
 		in.cacheState = pendingUpstream
-		um.startUpstreamFetch(client)
+		um.startUpstreamFetch(client, track)
 	}
 	return dotState(in)
 }
 
-// startUpstreamFetch launches one background lookup per track (deduped). On
-// completion it stores the result and refreshes the profile list on the UI
+// upstreamKey scopes a cache entry to a (client, track) pair so a client's
+// latest-stable and latest-testing profiles don't share one stale tag.
+func upstreamKey(client, track string) string { return client + "|" + track }
+
+// startUpstreamFetch launches one background lookup per (client, track) (deduped).
+// On completion it stores the result and refreshes the profile list on the UI
 // thread. Errors are silent.
-func (um *UIManager) startUpstreamFetch(client string) {
-	if !um.upstream.markPending(client) {
+func (um *UIManager) startUpstreamFetch(client, track string) {
+	key := upstreamKey(client, track)
+	if !um.upstream.markPending(key) {
 		return // already fresh or in flight
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		tag, err := apppkg.ClientLatest(ctx, client, um.Config)
-		if err != nil || tag == "" {
-			um.upstream.store(client, "", failedUpstream)
+		tag := apppkg.ClientLatestForTrack(ctx, client, track, um.Config)
+		if tag == "" {
+			um.upstream.store(key, "", failedUpstream)
 		} else {
-			um.upstream.store(client, tag, okUpstream)
+			um.upstream.store(key, tag, okUpstream)
 		}
 		fyne.Do(func() {
 			if um.profileListRefresh != nil {
