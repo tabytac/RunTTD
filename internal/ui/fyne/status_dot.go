@@ -27,33 +27,30 @@ const (
 	DotOrange                 // installed but a newer version is available
 )
 
-// Light-theme dot fills: the dark-theme greens/ambers wash out on the near-white
-// row background, so light mode uses darker shades that clear the 3:1 contrast bar.
-var (
-	dotGreenLight = color.NRGBA{R: 47, G: 138, B: 47, A: 255}  // #2F8A2F
-	dotAmberLight = color.NRGBA{R: 179, G: 107, B: 0, A: 255}  // #B36B00
-)
+// dotFill is a state's fill per theme. Green and amber wash out on the near-white
+// light row background, so light mode darkens them to clear the 3:1 contrast bar
+// (#2F8A2F, #B36B00); red and grey read fine on both, so dark == light there.
+type dotFill struct{ dark, light color.Color }
 
-// dotColor maps a DotState to its fill color, picking light-mode shades for the
-// states that fail contrast as the bright dark-mode color. Red and grey read
-// fine on both backgrounds, so they are shared.
+// dotFills is the source of truth for dot colors. To retune a dot, edit here.
+var dotFills = map[DotState]dotFill{
+	DotGreen:  {dark: libGreen, light: color.NRGBA{R: 47, G: 138, B: 47, A: 255}},  // #2F8A2F
+	DotOrange: {dark: libAmber, light: color.NRGBA{R: 179, G: 107, B: 0, A: 255}},  // #B36B00
+	DotRed:    {dark: dotRed, light: dotRed},
+	DotGrey:   {dark: libGrey, light: libGrey},
+}
+
+// dotColor returns a DotState's fill for the active theme. Unknown states (none
+// today) fall back to grey.
 func dotColor(s DotState, light bool) color.Color {
-	switch s {
-	case DotGreen:
-		if light {
-			return dotGreenLight
-		}
-		return libGreen
-	case DotRed:
-		return dotRed
-	case DotOrange:
-		if light {
-			return dotAmberLight
-		}
-		return libAmber
-	default:
+	f, ok := dotFills[s]
+	if !ok {
 		return libGrey
 	}
+	if light {
+		return f.light
+	}
+	return f.dark
 }
 
 // isLightTheme reports whether the active (override-aware) theme is light, by
