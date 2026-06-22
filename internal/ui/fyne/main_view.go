@@ -241,7 +241,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	// displayPos is forward-declared so handleRowTap can use it; assigned below.
 	var displayPos func(real int) int
 
-	selectionHint := widget.NewLabel("Tip: Press 1-9, or 0 to quick launch. Select a profile and press Enter / double-click.")
+	selectionHint := widget.NewLabel("Press 1–9 (0 for 10th) to quick-launch · Enter or double-click to launch selected")
+	selectionHint.Importance = widget.LowImportance
+	selectionHint.Alignment = fyne.TextAlignCenter
 	selectionHint.Wrapping = fyne.TextWrapWord
 
 	// Launch status band: feedback for background launches (log auto-open off).
@@ -907,7 +909,6 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	dragHint := widget.NewLabel("Drag rows to reorder")
 	dragHint.Importance = widget.LowImportance
-	dragHint.SizeName = theme.SizeNameCaptionText
 	dragHint.Alignment = fyne.TextAlignCenter
 
 	legendItem := func(s DotState, label string) fyne.CanvasObject {
