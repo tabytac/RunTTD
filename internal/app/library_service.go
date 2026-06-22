@@ -24,6 +24,73 @@ func IsLatestVersion(version string) bool {
 	}
 }
 
+// EffectiveClient resolves the client a profile actually uses: its own client,
+// else cfg.DefaultClient, else "jgrpp". This is the canonical fallback the launch
+// path, library, and status dot must all share (an empty Client is a shipped
+// state — the default profile has none).
+func EffectiveClient(profileClient, defaultClient string) string {
+	if c := strings.TrimSpace(profileClient); c != "" {
+		return c
+	}
+	if c := strings.TrimSpace(defaultClient); c != "" {
+		return c
+	}
+	return "jgrpp"
+}
+
+// LatestTrack maps a profile's (client, version) to the upstream track the launch
+// path resolves against: "testing" for latest-testing (or any nightly latest),
+// else "stable". Pinned versions return "stable" (the track is then unused).
+func LatestTrack(client, version string) string {
+	track := "stable"
+	switch strings.ToLower(strings.TrimSpace(version)) {
+	case "latest-testing", "latest (testing)":
+		track = "testing"
+	}
+	if client == "vanilla-nightly" && IsLatestVersion(version) {
+		track = "testing"
+	}
+	return track
+}
+
+// ClientLatestForTrack returns the newest upstream tag for a client on a given
+// track ("stable"/"testing") — the track-aware counterpart of ClientLatest,
+// which is stable-only. Returns "" on error/empty.
+func ClientLatestForTrack(ctx context.Context, clientID, track string, cfg *domain.Config) string {
+	return platform.CheckForNewVersionForClientTrack(ctx, clientID, cfg, track)
+}
+
+// HighestInstalledFolderInRoot is like HighestInstalledFolder but restricted to
+// the client's OWN download root (ClientDownloadDir), matching the single-root
+// scan FindVersionFolderClient uses. The status dot uses this so its installed
+// folder and the latest-tag folder come from the same scan and cannot diverge
+// when a folder is misplaced under another client's root.
+func HighestInstalledFolderInRoot(cfg *domain.Config, client string) string {
+	root := platform.ClientDownloadDir(cfg, client)
+	aliases := platform.ClientPlatformAliases(cfg)
+	var best domain.InstalledVersion
+	found := false
+	for _, v := range platform.ScanInstalledVersions(cfg) {
+		if v.Client != client {
+			continue
+		}
+		if filepath.Dir(v.Path) != root {
+			continue
+		}
+		if !platform.FolderMatchesAnyAlias(strings.ToLower(filepath.Base(v.Path)), aliases) {
+			continue
+		}
+		if !found || compareVersions(v.Version, best.Version) > 0 {
+			best = v
+			found = true
+		}
+	}
+	if found {
+		return best.Path
+	}
+	return ""
+}
+
 // highestInstalledByClient returns, per client, the HIGHEST-version install
 // (by version, not mod-time), restricted to the configured platform so a
 // launch's actual target wins over an alphabetically-earlier OS build.
