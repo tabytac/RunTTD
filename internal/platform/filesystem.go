@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -81,9 +82,19 @@ func FolderMatchesAnyAlias(name string, aliases []string) bool {
 	return false
 }
 
-// VersionMatchesFolder checks if the directory name matches the given version tag pattern
+// osTagStart marks where the OS tag begins in an extracted folder name; the
+// version slice is everything between "openttd-" and this boundary.
+var osTagStart = regexp.MustCompile(`-(?:windows|mingw|macos|macosx|linux)\b`)
+
+// VersionMatchesFolder reports whether a vanilla folder is exactly the requested
+// version. It compares the version slice (between the "openttd-" prefix and the
+// OS tag) for equality, so "1.2.0" never matches a "1.2.0-beta1" folder.
 func VersionMatchesFolder(name, version string) bool {
-	return strings.Contains(name, version) || strings.HasPrefix(name, version) || strings.Contains(name, "-"+version+"-") || strings.HasSuffix(name, "-"+version)
+	n := strings.TrimPrefix(name, "openttd-")
+	if loc := osTagStart.FindStringIndex(n); loc != nil {
+		n = n[:loc[0]]
+	}
+	return n == version
 }
 
 func ClientDownloadDir(cfg *domain.Config, client string) string {
