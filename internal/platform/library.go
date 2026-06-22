@@ -179,6 +179,25 @@ func RevealInFileManager(path string) error {
 	}
 }
 
+// revealFileLinuxTarget is the path to open when revealing a file on Linux: its
+// parent directory, since Linux file managers lack a portable "select" flag.
+func revealFileLinuxTarget(path string) string {
+	return filepath.Dir(path)
+}
+
+// RevealFileInFileManager opens the folder containing path with the file
+// selected (Windows/macOS); on Linux it opens the parent directory.
+func RevealFileInFileManager(path string) error {
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("explorer", "/select,"+path).Start()
+	case "darwin":
+		return exec.Command("open", "-R", path).Start()
+	default:
+		return revealLinux(revealFileLinuxTarget(path))
+	}
+}
+
 // revealLinux Run()s xdg-open (so a non-zero "no handler" exit is detected, not
 // mistaken for success) and falls back through linuxFileManagers, returning an
 // error if nothing worked.
