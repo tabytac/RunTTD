@@ -646,7 +646,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 			pad := theme.Padding()
 			text := container.New(layout.NewCustomPaddedVBoxLayout(-pad/2), nameLabel, versionLabel)
-			row := container.NewBorder(nil, nil, badge, nil, text)
+			dot := newStatusDot()
+			dotWrap := container.New(layout.NewCustomPaddedLayout(0, 0, 0, pad), dot)
+			row := container.NewBorder(nil, nil, badge, dotWrap, text)
 			return container.NewStack(btn, container.New(layout.NewCustomPaddedLayout(0, 0, pad, pad), row))
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
@@ -656,6 +658,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			row := padding.Objects[0].(*fyne.Container)
 			text := row.Objects[0].(*fyne.Container)
 			badge := row.Objects[1].(*widget.Label)
+			dot := row.Objects[2].(*fyne.Container).Objects[0].(*statusDot) // right slot wrapper -> dot
 			nameLabel := text.Objects[0].(*widget.Label)
 			versionLabel := text.Objects[1].(*widget.Label)
 
@@ -680,6 +683,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				}
 				nameLabel.SetText(profile.Name)
 				versionLabel.SetText(versionText)
+				dot.SetState(um.resolveDotState(profile))
 				idx := real
 				btn.OnTapped = func() {
 					handleRowTap(idx)
@@ -729,6 +733,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		selectProfile(-1)
 		refreshDetails()
 	}
+	um.profileListRefresh = func() { profileList.Refresh() }
 
 	newBtn := widget.NewButtonWithIcon("New", theme.ContentAddIcon(), func() {
 		um.showProfileEditor(-1, true)
