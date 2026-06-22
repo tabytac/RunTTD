@@ -75,6 +75,7 @@ Stuff that's rough or untested:
 - **On Linux, only the generic build is used.** RunTTD downloads `linux-generic-amd64`, not distro-specific (Debian/Ubuntu) or dedicated-server packages. You can still point a Custom Executable profile at another build you installed yourself, but dedicated-server builds are headless and won't run as a playable client.
 - **Error handling is best-effort.** If a download or extraction fails it cleans up the partial archive, logs what went wrong (with verbose logging on), and stops rather than retrying. It does try several archive formats and URLs first.
 - **Not heavily tested across odd config combinations.** It works for the setups I use. Unusual path, version, or profile combinations may surface bugs.
+- **No invite-code join.** The Server IP:Port field only takes a plain `host:port`. OpenTTD's invite codes `+XXXXXXXX` won't work here, so for those you'll need to join from the in-game server browser instead.
 - **Toggling per-client subfolders does not migrate existing installs.** Switching it on or off does not move already-downloaded folders, so the launcher won't find them in the new location and will re-download on next launch. The old folders are left where they are. Manually moving or deleting them is recommended.
 
 ## Troubleshooting
