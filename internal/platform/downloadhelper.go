@@ -125,8 +125,9 @@ func ensureOSTag(name, osTag string) string {
 	if osTag == "" {
 		return name
 	}
+	lower := strings.ToLower(name)
 	for _, tag := range []string{"windows-", "mingw-", "macos-universal", "macosx-universal", "linux-"} {
-		if strings.Contains(name, tag) {
+		if strings.Contains(lower, tag) {
 			return name
 		}
 	}
