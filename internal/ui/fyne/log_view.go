@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -265,6 +266,26 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			updateStatus("Version not found locally, downloading")
 		}
 		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download for client %s.", version, client))
+		// Block until user confirms before downloading a pre-1.2.0 vanilla build (no bundled graphics).
+		if (client == "vanilla" || client == "vanilla-nightly") && platform.VanillaNeedsBaseSetWarning(version) {
+			proceed := make(chan bool, 1)
+			msg := fmt.Sprintf("OpenTTD %s needs manual setup before it will run through RunTTD. "+
+				"Versions before 1.2.0 don't include free graphics, so you'll need original "+
+				"Transport Tycoon Deluxe data files to play. Some old releases also predate builds for many systems.", version)
+			fyne.Do(func() {
+				dialog.NewConfirm("Very old OpenTTD version", msg, func(ok bool) { proceed <- ok }, um.Window).Show()
+			})
+			if !<-proceed {
+				um.LogImportant(fmt.Sprintf("Cancelled: %s needs manual setup before it can run.", version))
+				if updateStatus != nil {
+					updateStatus("Cancelled (version needs manual setup)")
+				}
+				if onError != nil {
+					onError()
+				}
+				return
+			}
+		}
 		if !platform.DownloadAndExtractVersionForClientWithLogger(context.Background(), version, client, um.Config, um.Logger, onProgress) {
 			if updateStatus != nil {
 				updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
