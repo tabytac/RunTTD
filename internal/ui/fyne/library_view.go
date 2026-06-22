@@ -120,6 +120,7 @@ var (
 	libAmber  = color.NRGBA{R: 230, G: 167, B: 0, A: 255}   // #E6A700
 	libGrey   = color.NRGBA{R: 120, G: 125, B: 130, A: 255} // neutral pill for "unrecognized"
 	libChipFg = color.NRGBA{R: 255, G: 255, B: 255, A: 255} // white text on colored pills
+	dotRed    = color.NRGBA{R: 229, G: 57, B: 53, A: 255}   // #E53935 status-dot "not installed"
 )
 
 // statusChip returns a small rounded colored pill with bold fg text on fill.
