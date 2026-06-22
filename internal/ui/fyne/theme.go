@@ -116,6 +116,8 @@ func (p *LauncherTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVarian
 			return withAlpha(accent, 51) // 20% Opacity
 		case theme.ColorNamePrimary:
 			return accent
+		case theme.ColorNameWarning:
+			return libAmber // match the UNUSED library tag (#E6A700)
 		}
 	} else {
 		switch name {
@@ -155,6 +157,8 @@ func (p *LauncherTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVarian
 			return withAlpha(accent, 51) // 20% Opacity
 		case theme.ColorNamePrimary:
 			return accent
+		case theme.ColorNameWarning:
+			return libAmber // match the UNUSED library tag (#E6A700)
 		}
 	}
 	return p.Theme.Color(name, variant)

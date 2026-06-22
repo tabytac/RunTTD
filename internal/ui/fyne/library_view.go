@@ -225,7 +225,7 @@ func (um *UIManager) showLibraryView() {
 	}
 
 	cleanupBtn = widget.NewButton("Clean up unused", func() {})
-	cleanupBtn.Importance = widget.HighImportance
+	cleanupBtn.Importance = widget.WarningImportance
 	cleanupBtn.Disable()
 
 	refreshBtn := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { rescan() })
