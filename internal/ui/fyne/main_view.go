@@ -910,7 +910,23 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	dragHint.SizeName = theme.SizeNameCaptionText
 	dragHint.Alignment = fyne.TextAlignCenter
 
+	legendItem := func(s DotState, label string) fyne.CanvasObject {
+		d := newStatusDot()
+		d.SetState(s)
+		txt := widget.NewLabel(label)
+		txt.Importance = widget.LowImportance
+		txt.SizeName = theme.SizeNameCaptionText
+		return container.NewHBox(d, txt)
+	}
+	legend := container.NewCenter(container.NewHBox(
+		legendItem(DotGreen, "Ready"),
+		legendItem(DotOrange, "Update"),
+		legendItem(DotRed, "Not installed"),
+		legendItem(DotGrey, "Checking"),
+	))
+
 	footer := container.NewPadded(container.NewVBox(
+		legend,
 		dragHint,
 		container.NewGridWithColumns(3, seeLogsBtn, manageInstallsBtn, settingsBtn),
 	))
