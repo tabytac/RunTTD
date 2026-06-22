@@ -5,12 +5,14 @@ import (
 	"time"
 )
 
-// upstreamEntry is one per-client-track cache record.
+// upstreamEntry is one per-client-track cache record. It caches only the network
+// fact (the newest upstream tag); whether that tag is installed on disk is
+// re-resolved on each render, so a download is reflected immediately rather than
+// waiting for the TTL.
 type upstreamEntry struct {
-	tag       string // newest upstream tag (diagnostics only)
-	tagFolder string // the latest tag's resolved installed folder, "" if not installed
-	state     upstreamState
-	fetched   time.Time
+	tag     string // newest upstream tag
+	state   upstreamState
+	fetched time.Time
 }
 
 // upstreamCache holds the newest-upstream result per client track, keyed by
@@ -72,8 +74,8 @@ func (c *upstreamCache) markPending(track string) bool {
 }
 
 // store records a completed fetch result under the lock.
-func (c *upstreamCache) store(track, tag, tagFolder string, state upstreamState) {
+func (c *upstreamCache) store(track, tag string, state upstreamState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.m[track] = upstreamEntry{tag: tag, tagFolder: tagFolder, state: state, fetched: c.now()}
+	c.m[track] = upstreamEntry{tag: tag, state: state, fetched: c.now()}
 }

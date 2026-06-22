@@ -220,10 +220,14 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 		return dotState(in) // Green — pinned + installed
 	}
 
-	// latest + installed: consult the cache, enqueue a fetch if needed.
+	// latest + installed: consult the cache, enqueue a fetch if needed. The cache
+	// holds only the upstream tag; re-resolve it to a folder against disk here so a
+	// download done after the fetch is reflected at once (not stale until the TTL).
 	if e, fresh := um.upstream.get(client); fresh {
 		in.cacheState = e.state
-		in.latestTagFolder = e.tagFolder
+		if e.state == okUpstream && e.tag != "" {
+			in.latestTagFolder, _ = apppkg.ClientFindInstalled(ctx, client, e.tag, um.Config)
+		}
 	} else {
 		in.cacheState = pendingUpstream
 		um.startUpstreamFetch(client)
@@ -243,10 +247,9 @@ func (um *UIManager) startUpstreamFetch(client string) {
 		defer cancel()
 		tag, err := apppkg.ClientLatest(ctx, client, um.Config)
 		if err != nil || tag == "" {
-			um.upstream.store(client, "", "", failedUpstream)
+			um.upstream.store(client, "", failedUpstream)
 		} else {
-			folder, _ := apppkg.ClientFindInstalled(ctx, client, tag, um.Config)
-			um.upstream.store(client, tag, folder, okUpstream)
+			um.upstream.store(client, tag, okUpstream)
 		}
 		fyne.Do(func() {
 			if um.profileListRefresh != nil {
