@@ -24,6 +24,39 @@ func IsLatestVersion(version string) bool {
 	}
 }
 
+// highestInstalledByClient returns, per client, the HIGHEST-version install
+// (by version, not mod-time), restricted to the configured platform so a
+// launch's actual target wins over an alphabetically-earlier OS build.
+func highestInstalledByClient(cfg *domain.Config) map[string]domain.InstalledVersion {
+	aliases := platform.ClientPlatformAliases(cfg)
+	out := map[string]domain.InstalledVersion{}
+	for _, v := range platform.ScanInstalledVersions(cfg) {
+		if v.Client == "" {
+			continue
+		}
+		if !platform.FolderMatchesAnyAlias(strings.ToLower(filepath.Base(v.Path)), aliases) {
+			continue
+		}
+		cur, ok := out[v.Client]
+		if !ok || compareVersions(v.Version, cur.Version) > 0 {
+			out[v.Client] = v
+		}
+	}
+	return out
+}
+
+// HighestInstalledFolder returns the folder path of the highest-version install
+// for a client (platform-filtered), or "" if none is installed. This is how a
+// "latest" profile resolves locally — by version, matching an online launch and
+// the library view; do NOT use newest-by-mod-time, which a later re-download of
+// an older version would wrongly win.
+func HighestInstalledFolder(cfg *domain.Config, client string) string {
+	if v, ok := highestInstalledByClient(cfg)[client]; ok {
+		return v.Path
+	}
+	return ""
+}
+
 // BuildLibrary scans installed versions and annotates each with the profiles
 // that would launch it; an empty ReferencedBy marks an unused folder. A "latest"
 // profile resolves to the HIGHEST-version install for its client (by version,
@@ -32,22 +65,7 @@ func IsLatestVersion(version string) bool {
 func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry {
 	scanned := platform.ScanInstalledVersions(cfg)
 
-	// Highest-version install per client for "latest", restricted to the configured
-	// platform so a launch's actual target wins over an alphabetically-earlier OS build.
-	aliases := platform.ClientPlatformAliases(cfg)
-	latestByClient := map[string]domain.InstalledVersion{}
-	for _, v := range scanned {
-		if v.Client == "" {
-			continue
-		}
-		if !platform.FolderMatchesAnyAlias(strings.ToLower(filepath.Base(v.Path)), aliases) {
-			continue
-		}
-		cur, ok := latestByClient[v.Client]
-		if !ok || compareVersions(v.Version, cur.Version) > 0 {
-			latestByClient[v.Client] = v
-		}
-	}
+	latestByClient := highestInstalledByClient(cfg)
 
 	refs := map[string][]string{} // folder path -> profile names
 	for _, p := range cfg.Profiles {

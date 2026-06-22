@@ -14,7 +14,6 @@ import (
 
 	apppkg "runttd/internal/app"
 	"runttd/internal/domain"
-	"runttd/internal/platform"
 )
 
 // DotState is the resolved status of a profile's installed/upstream state,
@@ -205,9 +204,10 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 	in.isLatest = apppkg.IsLatestVersion(profile.Version)
 
 	ctx := context.Background()
-	dir := platform.ClientDownloadDir(um.Config, client)
 	if in.isLatest {
-		in.installedFolder = platform.FindLatestFolderClientWithConfig(dir, client, um.Config)
+		// Highest-version install (matches the library view and an online launch);
+		// NOT newest-by-mod-time, which a later re-download of an older version wins.
+		in.installedFolder = apppkg.HighestInstalledFolder(um.Config, client)
 	} else {
 		folder, _ := apppkg.ClientFindInstalled(ctx, client, profile.Version, um.Config)
 		in.installedFolder = folder
