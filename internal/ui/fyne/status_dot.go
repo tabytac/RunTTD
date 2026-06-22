@@ -202,7 +202,7 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 		return dotState(in)
 	}
 
-	in.isLatest = profile.Version == "" || profile.Version == "latest"
+	in.isLatest = apppkg.IsLatestVersion(profile.Version)
 
 	ctx := context.Background()
 	dir := platform.ClientDownloadDir(um.Config, client)

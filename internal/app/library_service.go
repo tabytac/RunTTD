@@ -11,6 +11,19 @@ import (
 	"runttd/internal/platform"
 )
 
+// IsLatestVersion reports whether a profile version string means "track the
+// newest" rather than a pinned tag. It covers every alias the launch path and
+// profile editor accept, case-insensitively: "", "latest", and the
+// stable/testing forms (dashed and parenthesized).
+func IsLatestVersion(version string) bool {
+	switch strings.ToLower(strings.TrimSpace(version)) {
+	case "", "latest", "latest-stable", "latest-testing", "latest (stable)", "latest (testing)":
+		return true
+	default:
+		return false
+	}
+}
+
 // BuildLibrary scans installed versions and annotates each with the profiles
 // that would launch it; an empty ReferencedBy marks an unused folder. A "latest"
 // profile resolves to the HIGHEST-version install for its client (by version,
@@ -49,14 +62,12 @@ func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry
 			continue
 		}
 		version := strings.TrimSpace(p.Version)
-		lower := strings.ToLower(version)
 		var folder string
-		switch lower {
-		case "", "latest", "latest-stable", "latest-testing", "latest (stable)", "latest (testing)":
+		if IsLatestVersion(version) {
 			if v, ok := latestByClient[client]; ok {
 				folder = v.Path
 			}
-		default:
+		} else {
 			folder = platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, client), version, client, cfg)
 		}
 		if folder != "" {
