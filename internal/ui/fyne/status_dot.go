@@ -28,18 +28,41 @@ const (
 	DotOrange                 // installed but a newer version is available
 )
 
-// dotColor maps a DotState to its fill color. Greys default state.
-func dotColor(s DotState) color.Color {
+// Light-theme dot fills: the dark-theme greens/ambers wash out on the near-white
+// row background, so light mode uses darker shades that clear the 3:1 contrast bar.
+var (
+	dotGreenLight = color.NRGBA{R: 47, G: 138, B: 47, A: 255}  // #2F8A2F
+	dotAmberLight = color.NRGBA{R: 179, G: 107, B: 0, A: 255}  // #B36B00
+)
+
+// dotColor maps a DotState to its fill color, picking light-mode shades for the
+// states that fail contrast as the bright dark-mode color. Red and grey read
+// fine on both backgrounds, so they are shared.
+func dotColor(s DotState, light bool) color.Color {
 	switch s {
 	case DotGreen:
+		if light {
+			return dotGreenLight
+		}
 		return libGreen
 	case DotRed:
 		return dotRed
 	case DotOrange:
+		if light {
+			return dotAmberLight
+		}
 		return libAmber
 	default:
 		return libGrey
 	}
+}
+
+// isLightTheme reports whether the active (override-aware) theme is light, by
+// the lightness of its foreground: dark text means a light background.
+func isLightTheme() bool {
+	fg := theme.Color(theme.ColorNameForeground)
+	r, g, b, _ := fg.RGBA()
+	return (r>>8)+(g>>8)+(b>>8) < 3*128
 }
 
 // upstreamState is the lifecycle of a per-track upstream-latest lookup.
@@ -95,9 +118,9 @@ func dotState(in dotInput) DotState {
 
 const dotDiameter = 10
 
-// statusDot is a small filled circle with a thin foreground ring (the ring
-// guarantees edge contrast on any theme/background — amber-on-light fails the
-// 3:1 bar as a bare fill).
+// statusDot is a small filled circle whose color encodes the profile's status.
+// Fills are picked per theme (dotColor) so each clears the contrast bar on its
+// own — no outline ring.
 type statusDot struct {
 	widget.BaseWidget
 	state DotState
@@ -119,17 +142,8 @@ func (d *statusDot) SetState(s DotState) {
 }
 
 func (d *statusDot) CreateRenderer() fyne.WidgetRenderer {
-	circle := canvas.NewCircle(dotColor(d.state))
-	circle.StrokeColor = ringColor()
-	circle.StrokeWidth = 1
+	circle := canvas.NewCircle(dotColor(d.state, isLightTheme()))
 	return &statusDotRenderer{dot: d, circle: circle}
-}
-
-// ringColor is the dot's outline: the theme foreground at low opacity.
-func ringColor() color.Color {
-	fg := theme.Color(theme.ColorNameForeground)
-	r, g, b, _ := fg.RGBA()
-	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 90}
 }
 
 type statusDotRenderer struct {
@@ -151,8 +165,7 @@ func (r *statusDotRenderer) MinSize() fyne.Size {
 }
 
 func (r *statusDotRenderer) Refresh() {
-	r.circle.FillColor = dotColor(r.dot.state)
-	r.circle.StrokeColor = ringColor()
+	r.circle.FillColor = dotColor(r.dot.state, isLightTheme())
 	r.circle.Refresh()
 }
 
