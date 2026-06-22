@@ -160,6 +160,7 @@ func (um *UIManager) showSettingsView() {
 
 	jgrppApiUrlEntry := newScrollForwardingEntry(forwardScroll)
 	jgrppApiUrlEntry.SetText(um.Config.JgrppApiUrl)
+	jgrppApiUrlEntry.SetPlaceHolder("https://api.github.com/repos/JGRennison/OpenTTD-patches")
 
 	osDetected := platform.DefaultOSType()
 	osTypeSelect := widget.NewSelect(osTypeOptions(osDetected, um.Config.OSType), func(string) {})

@@ -493,7 +493,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				return false, "Executable folder is required for custom client."
 			}
 		} else if strings.TrimSpace(versionEntry.Text) == "" {
-			return false, "Version is required or use latest."
+			return false, "Enter a version number, or use the dropdown to choose the latest or a specific release."
 		}
 
 		if strings.TrimSpace(ipPortEntry.Text) != "" && !strings.Contains(ipPortEntry.Text, ":") {
@@ -524,7 +524,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				checkPath = filepath.Join(um.Config.DocsBasePath, checkPath)
 			}
 			if _, err := os.Stat(checkPath); err != nil {
-				statusLabel.SetText(fmt.Sprintf("Warning: config file not found yet: %s", checkPath))
+				statusLabel.SetText(fmt.Sprintf("Warning: config file not found: %s", checkPath))
 				statusLabel.Refresh()
 				return
 			}
@@ -670,6 +670,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	saveBtn = widget.NewButton("Save", func() { saveProfile(false) })
 	saveAndRunBtn = widget.NewButton("Save & Run", func() { saveProfile(true) })
 	if isNew {
+		saveBtn.SetText("Create")
 		saveAndRunBtn.SetText("Create & Run")
 	}
 	cancelBtn := widget.NewButton("Cancel", func() {

@@ -576,7 +576,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 		launch := newSection()
 		if profile.LaunchMode == "file" {
-			addPathField(launch, "Save file", profile.SavePath, true)
+			addPathField(launch, "Save File", profile.SavePath, true)
 		} else if profile.LaunchMode == "folder" {
 			addPathField(launch, "Save Folder", profile.SavePath, false)
 			label, value := filterDisplay(profile.AutoLatestFilter)
