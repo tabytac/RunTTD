@@ -172,9 +172,9 @@ func (r *statusDotRenderer) Objects() []fyne.CanvasObject {
 func (r *statusDotRenderer) Destroy() {}
 
 // resolveDotState computes a profile's dot state on the UI thread using only
-// disk reads, and enqueues a background upstream fetch when one is needed.
-// It MUST NOT call LauncherService.ResolveVersionFolder (that network-falls-
-// through for an uninstalled "latest" profile).
+// disk reads, and enqueues a background upstream fetch when one is needed. It
+// MUST stay network-free on this path: the only network lookup happens in the
+// backgrounded startUpstreamFetch, never here.
 func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 	client := apppkg.EffectiveClient(profile.Client, um.Config.DefaultClient)
 

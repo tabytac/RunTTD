@@ -9,7 +9,6 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/theme"
 
-	apppkg "runttd/internal/app"
 	"runttd/internal/domain"
 	"runttd/internal/platform"
 )
@@ -35,8 +34,6 @@ type UIManager struct {
 	CachedVersions      []string
 	upstream            *upstreamCache
 	profileListRefresh  func() // set by the main view; refreshes the profile list from any goroutine (via fyne.Do)
-
-	LauncherService *apppkg.LauncherService
 }
 
 // NewUIManager creates a new UIManager instance, configuring the static app icons and custom presets theme
@@ -58,7 +55,6 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 		LastListSelectID: -1,
 		pendingLaunchIdx: -1,
 		upstream:         newUpstreamCache(),
-		LauncherService:  apppkg.NewLauncherService(),
 	}
 
 	if um.Config.ThemeVariant == "" {
