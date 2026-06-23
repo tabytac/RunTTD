@@ -121,34 +121,28 @@ func (v *vanillaClient) FindInstalled(ctx context.Context, version string, cfg *
 
 // Convenience wrappers that query the thread-safe registry with context.
 
-func ClientFetchVersions(ctx context.Context, clientID string, cfg *domain.Config) ([]string, error) {
-	c := GetClient(clientID)
-	if c == nil {
-		return nil, fmt.Errorf("%w: %s", ErrUnknownClient, clientID)
+// withClient looks up clientID and runs fn against it, returning a zero value
+// and a wrapped ErrUnknownClient if the ID is not registered.
+func withClient[T any](clientID string, fn func(Client) (T, error)) (T, error) {
+	if c := GetClient(clientID); c != nil {
+		return fn(c)
 	}
-	return c.FetchVersions(ctx, cfg)
+	var zero T
+	return zero, fmt.Errorf("%w: %s", ErrUnknownClient, clientID)
+}
+
+func ClientFetchVersions(ctx context.Context, clientID string, cfg *domain.Config) ([]string, error) {
+	return withClient(clientID, func(c Client) ([]string, error) { return c.FetchVersions(ctx, cfg) })
 }
 
 func ClientLatest(ctx context.Context, clientID string, cfg *domain.Config) (string, error) {
-	c := GetClient(clientID)
-	if c == nil {
-		return "", fmt.Errorf("%w: %s", ErrUnknownClient, clientID)
-	}
-	return c.Latest(ctx, cfg)
+	return withClient(clientID, func(c Client) (string, error) { return c.Latest(ctx, cfg) })
 }
 
 func ClientDownloadAndExtract(ctx context.Context, clientID, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
-	c := GetClient(clientID)
-	if c == nil {
-		return false, fmt.Errorf("%w: %s", ErrUnknownClient, clientID)
-	}
-	return c.DownloadAndExtract(ctx, version, cfg, logger)
+	return withClient(clientID, func(c Client) (bool, error) { return c.DownloadAndExtract(ctx, version, cfg, logger) })
 }
 
 func ClientFindInstalled(ctx context.Context, clientID, version string, cfg *domain.Config) (string, error) {
-	c := GetClient(clientID)
-	if c == nil {
-		return "", fmt.Errorf("%w: %s", ErrUnknownClient, clientID)
-	}
-	return c.FindInstalled(ctx, version, cfg)
+	return withClient(clientID, func(c Client) (string, error) { return c.FindInstalled(ctx, version, cfg) })
 }
