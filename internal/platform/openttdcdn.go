@@ -20,65 +20,42 @@ var (
 	cdnNightlyBuildRe  = regexp.MustCompile(`href="(?:https?://[^"]*/)?([0-9]{8}-[^"]+)/"`)
 )
 
-// ParseCDNVersionFoldersFromHTML extracts version numbers from the scraped HTML folder index of official OpenTTD CDN stable mirrors
-func ParseCDNVersionFoldersFromHTML(html string) []string {
+// parseHrefFolders returns the first-seen, de-duplicated capture-group-1 values
+// of re across html. clean transforms each capture before dedup; a nil clean
+// leaves it untouched. Captures that clean to "" are skipped.
+func parseHrefFolders(html string, re *regexp.Regexp, clean func(string) string) []string {
 	set := map[string]bool{}
-	versions := []string{}
-
-	matches := cdnVersionFolderRe.FindAllStringSubmatch(html, -1)
-	for _, m := range matches {
+	out := []string{}
+	for _, m := range re.FindAllStringSubmatch(html, -1) {
 		if len(m) < 2 {
 			continue
 		}
-		tag := strings.TrimSpace(m[1])
-		if tag == "" {
+		tag := m[1]
+		if clean != nil {
+			tag = clean(tag)
+		}
+		if tag == "" || set[tag] {
 			continue
 		}
-		if !set[tag] {
-			set[tag] = true
-			versions = append(versions, tag)
-		}
+		set[tag] = true
+		out = append(out, tag)
 	}
-	return versions
+	return out
+}
+
+// ParseCDNVersionFoldersFromHTML extracts version numbers from the scraped HTML folder index of official OpenTTD CDN stable mirrors
+func ParseCDNVersionFoldersFromHTML(html string) []string {
+	return parseHrefFolders(html, cdnVersionFolderRe, strings.TrimSpace)
 }
 
 // ParseCDNYearFoldersFromHTML extracts the year folder listings from the CDN root index HTML
 func ParseCDNYearFoldersFromHTML(html string) []string {
-	set := map[string]bool{}
-	years := []string{}
-	matches := cdnYearFolderRe.FindAllStringSubmatch(html, -1)
-	for _, m := range matches {
-		if len(m) < 2 {
-			continue
-		}
-		y := m[1]
-		if !set[y] {
-			set[y] = true
-			years = append(years, y)
-		}
-	}
-	return years
+	return parseHrefFolders(html, cdnYearFolderRe, nil)
 }
 
 // ParseNightlyBuildFoldersFromHTML parses HTML directory contents for nightly timestamp builds
 func ParseNightlyBuildFoldersFromHTML(html string) []string {
-	set := map[string]bool{}
-	builds := []string{}
-	matches := cdnNightlyBuildRe.FindAllStringSubmatch(html, -1)
-	for _, m := range matches {
-		if len(m) < 2 {
-			continue
-		}
-		b := strings.TrimSpace(m[1])
-		if b == "" {
-			continue
-		}
-		if !set[b] {
-			set[b] = true
-			builds = append(builds, b)
-		}
-	}
-	return builds
+	return parseHrefFolders(html, cdnNightlyBuildRe, strings.TrimSpace)
 }
 
 // ParseReleaseManifest processes a CDN manifest YAML and extracts the file IDs.
