@@ -2,6 +2,13 @@
 
 A small desktop launcher for OpenTTD and JGR's Patchpack (JGRPP). It downloads the version you want (vanilla stable, vanilla nightly, or JGRPP) and keeps your servers, saves, and launch options grouped into profiles.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-window-dark.png">
+    <img src="docs/screenshots/main-window-light.png" alt="RunTTD main window" width="820">
+  </picture>
+</p>
+
 See [Known Issues](#known-issues) for compatibility details.
 
 ## Getting Started
@@ -31,6 +38,13 @@ Tested on Windows and on Linux amd64 via WSL. macOS builds are produced in the r
 
 ## Profiles
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/profile-detail-dark.png">
+    <img src="docs/screenshots/profile-detail-light.png" alt="The profile detail panel" width="820">
+  </picture>
+</p>
+
 Each profile stores:
 
 | Field | What it does |
@@ -51,6 +65,15 @@ Each profile stores:
 | **Custom Arguments** | Extra command-line flags passed straight to the OpenTTD executable |
 
 Create, edit, duplicate, and delete profiles from the main window. Everything lives in `runttd-config.json` next to the executable. The UI covers all of it, but you can hand-edit the file too.
+
+The **Manage Installs** screen lists every downloaded version grouped by client, showing its size on disk and which profiles use it, with one-click cleanup of versions nothing uses.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/manage-installs-dark.png">
+    <img src="docs/screenshots/manage-installs-light.png" alt="The Manage Installs screen" width="820">
+  </picture>
+</p>
 
 ## Settings
 
