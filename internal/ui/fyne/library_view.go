@@ -336,7 +336,7 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, afterChange func())
 			return
 		}
 		if err := platform.DeleteInstalledVersion(um.Config, e.Path); err != nil {
-			dialog.ShowError(err, um.Window)
+			um.showErrorf("could not delete installed version: %w", err)
 			return
 		}
 		um.Logger.Append("Deleted installed version: " + e.Path)
