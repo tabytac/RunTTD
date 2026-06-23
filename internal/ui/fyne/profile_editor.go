@@ -40,6 +40,80 @@ func versionTrackHintText(clientID string) string {
 	}
 }
 
+// defaultVersionOptions returns the version dropdown presets for a client track.
+// The label<->value maps are shared with the onboarding and settings views via
+// the package-level defaultClient* vars (see settings.go).
+func defaultVersionOptions(clientID string) []string {
+	switch clientID {
+	case "vanilla":
+		return []string{"latest (Stable)", "latest (Testing)"}
+	case "vanilla-nightly":
+		return []string{"latest"}
+	default:
+		return []string{"latest"}
+	}
+}
+
+// displayVersion turns a stored profile version into the string shown in the
+// version field, normalizing the various "latest" aliases per client track.
+func displayVersion(clientID, stored string) string {
+	s := strings.TrimSpace(stored)
+	lower := strings.ToLower(s)
+	switch clientID {
+	case "vanilla", "vanilla-nightly":
+		if clientID == "vanilla-nightly" {
+			switch lower {
+			case "", "latest", "latest-stable", "latest-testing", "latest (stable)", "latest (testing)":
+				return "latest"
+			default:
+				return s
+			}
+		}
+		switch lower {
+		case "", "latest", "latest-stable", "latest (stable)":
+			return "latest (Stable)"
+		case "latest-testing", "latest (testing)":
+			return "latest (Testing)"
+		default:
+			return s
+		}
+	default:
+		if s == "" {
+			return "latest"
+		}
+		return s
+	}
+}
+
+// storedVersion is the inverse of displayVersion: it turns the version field
+// text into the canonical value persisted on the profile.
+func storedVersion(clientID, entered string) string {
+	s := strings.TrimSpace(entered)
+	lower := strings.ToLower(s)
+	switch clientID {
+	case "vanilla", "vanilla-nightly":
+		if clientID == "vanilla-nightly" {
+			if lower == "" || lower == "latest" || lower == "latest-stable" || lower == "latest-testing" || lower == "latest (stable)" || lower == "latest (testing)" {
+				return ""
+			}
+			return s
+		}
+		switch lower {
+		case "", "latest", "latest-stable", "latest (stable)":
+			return "latest-stable"
+		case "latest-testing", "latest (testing)":
+			return "latest-testing"
+		default:
+			return s
+		}
+	default:
+		if lower == "" || lower == "latest" {
+			return ""
+		}
+		return s
+	}
+}
+
 // showProfileEditor displays the edit modal popup for creating or updating profiles
 func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	var profile domain.Profile
@@ -89,72 +163,6 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 
 	// Client selection (Vanilla OpenTTD Stable/Nightly, JGRPP, Custom Executable).
-	// The label<->value maps are shared with the onboarding and settings views via
-	// the package-level defaultClient* vars (see settings.go).
-	defaultVersionOptions := func(clientID string) []string {
-		switch clientID {
-		case "vanilla":
-			return []string{"latest (Stable)", "latest (Testing)"}
-		case "vanilla-nightly":
-			return []string{"latest"}
-		default:
-			return []string{"latest"}
-		}
-	}
-	displayVersion := func(clientID, stored string) string {
-		s := strings.TrimSpace(stored)
-		lower := strings.ToLower(s)
-		switch clientID {
-		case "vanilla", "vanilla-nightly":
-			if clientID == "vanilla-nightly" {
-				switch lower {
-				case "", "latest", "latest-stable", "latest-testing", "latest (stable)", "latest (testing)":
-					return "latest"
-				default:
-					return s
-				}
-			}
-			switch lower {
-			case "", "latest", "latest-stable", "latest (stable)":
-				return "latest (Stable)"
-			case "latest-testing", "latest (testing)":
-				return "latest (Testing)"
-			default:
-				return s
-			}
-		default:
-			if s == "" {
-				return "latest"
-			}
-			return s
-		}
-	}
-	storedVersion := func(clientID, entered string) string {
-		s := strings.TrimSpace(entered)
-		lower := strings.ToLower(s)
-		switch clientID {
-		case "vanilla", "vanilla-nightly":
-			if clientID == "vanilla-nightly" {
-				if lower == "" || lower == "latest" || lower == "latest-stable" || lower == "latest-testing" || lower == "latest (stable)" || lower == "latest (testing)" {
-					return ""
-				}
-				return s
-			}
-			switch lower {
-			case "", "latest", "latest-stable", "latest (stable)":
-				return "latest-stable"
-			case "latest-testing", "latest (testing)":
-				return "latest-testing"
-			default:
-				return s
-			}
-		default:
-			if lower == "" || lower == "latest" {
-				return ""
-			}
-			return s
-		}
-	}
 	fetchVersionsForClient := func(clientID string) {
 		go func() {
 			versions, err := app.ClientFetchVersions(context.Background(), clientID, um.Config)
