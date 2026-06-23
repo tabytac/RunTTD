@@ -178,8 +178,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	// updateState is defined later, but the client radio callback may need to call it.
 	var updateState func()
 	initializingClientSelection := true
-	var clientSelect *SegmentedRadio
-	clientSelect = NewSegmentedRadio(defaultClientOptions, "", func(s string) {
+	clientSelect := NewSegmentedRadio(defaultClientOptions, "", func(s string) {
 		cli := defaultClientMap[s]
 		updateClientFields(cli)
 		if initializingClientSelection {
