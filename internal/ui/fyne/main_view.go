@@ -22,309 +22,381 @@ import (
 	"runttd/internal/platform"
 )
 
-// makeMainView creates the main profile selection view
-func (um *UIManager) makeMainView() fyne.CanvasObject {
-	selectedIdx := indexOfProfileByName(um.Config.Profiles, um.SelectedProfileName)
-	detailsContainer := container.NewVBox()
+// mainView owns the mutable state and widgets of the main profile view. One is
+// created per makeMainView call, so its launch/selection/filter state stays
+// scoped to a single view instance (matching the old function-local closures).
+type mainView struct {
+	um *UIManager
 
+	// selectedIdx is the real Config.Profiles index of the selection, or -1.
+	selectedIdx int
 	// visibleIdx maps a displayed row to the real Config.Profiles index (identity
-	// when unfiltered); quick-launch always uses the real index, so filtering is visual.
-	visibleIdx := make([]int, len(um.Config.Profiles))
-	for i := range visibleIdx {
-		visibleIdx[i] = i
+	// when unfiltered); quick-launch always uses the real index, so filtering is
+	// visual. filterText is the current search needle.
+	visibleIdx []int
+	filterText string
+
+	// Launch-band state.
+	launchLogsIdx    int
+	launchInProgress bool
+
+	detailsContainer *fyne.Container
+	profileList      *fyneadvancedlist.List
+	launchPhase      *widget.Label
+	launchBar        *widget.ProgressBar
+	launchSpin       *widget.ProgressBarInfinite
+	launchLogsBtn    *widget.Button
+	launchBand       *ThemedBox
+	runBtn           *widget.Button
+	editBtn          *widget.Button
+	duplicateBtn     *widget.Button
+	deleteBtn        *widget.Button
+	seeLogsBtn       *widget.Button
+	searchEntry      *searchEntry
+	noResults        *fyne.Container
+	firstRun         *fyne.Container
+}
+
+// displayPos returns the filtered row position of a real index, or -1 if hidden.
+func (mv *mainView) displayPos(real int) int {
+	for d, r := range mv.visibleIdx {
+		if r == real {
+			return d
+		}
 	}
-	filterText := ""
+	return -1
+}
 
-	// displayPos is forward-declared so handleRowTap can use it; assigned below.
-	var displayPos func(real int) int
-
-	selectionHint := widget.NewLabel("Press 1–9 (0 for 10th) to quick-launch · Enter or double-click to launch selected")
-	selectionHint.Importance = widget.LowImportance
-	selectionHint.Alignment = fyne.TextAlignCenter
-	selectionHint.Wrapping = fyne.TextWrapWord
-
-	// Launch status band: feedback for background launches (log auto-open off).
-	// Hidden until a launch runs; kept a constant height (sized to the View logs
-	// row) so it never resizes as it moves through phases.
-	launchLogsIdx := -1
-	launchInProgress := false
-	launchPhase := widget.NewLabel("")
-	launchPhase.Wrapping = fyne.TextWrapWord
-	launchBar := widget.NewProgressBar()
-	launchSpin := widget.NewProgressBarInfinite()
-	launchLogsBtn := widget.NewButton("View logs", func() {
-		if launchLogsIdx >= 0 {
-			um.showLogView(launchLogsIdx)
+func (mv *mainView) recomputeVisible() {
+	needle := strings.ToLower(strings.TrimSpace(mv.filterText))
+	mv.visibleIdx = mv.visibleIdx[:0]
+	for i, p := range mv.um.Config.Profiles {
+		if needle == "" || strings.Contains(strings.ToLower(p.Name), needle) {
+			mv.visibleIdx = append(mv.visibleIdx, i)
 		}
-	})
-	launchLogsBtn.Importance = widget.LowImportance
+	}
+}
 
-	launchBars := container.NewStack(launchSpin, launchBar)
-	barsCentered := container.NewVBox(layout.NewSpacer(), launchBars, layout.NewSpacer())
-	logsRow := container.NewHBox(layout.NewSpacer(), launchLogsBtn)
-	rowPin := canvas.NewRectangle(color.Transparent)
-	rowPin.SetMinSize(fyne.NewSize(1, launchLogsBtn.MinSize().Height))
-	launchSecondRow := container.NewStack(rowPin, barsCentered, logsRow)
-	launchBand := NewThemedBox(ColorNameDetailHeader, container.NewPadded(container.NewVBox(
-		launchPhase,
-		launchSecondRow,
-	)))
-	launchBand.Hide()
+func (mv *mainView) selectProfile(idx int) {
+	um := mv.um
+	if idx < 0 || idx >= len(um.Config.Profiles) {
+		mv.selectedIdx = -1
+		um.SelectedProfileName = ""
+		return
+	}
 
-	var profileList *fyneadvancedlist.List
-	var refreshDetails func()
-	var updateEmptyState func()
+	mv.selectedIdx = idx
+	um.SelectedProfileName = um.Config.Profiles[mv.selectedIdx].Name
+	mv.refreshDetails()
+}
 
-	var runBtn, editBtn, duplicateBtn, deleteBtn, seeLogsBtn *widget.Button
-	var updateButtonStates func()
+func (mv *mainView) handleRowTap(idx int) {
+	um := mv.um
+	now := time.Now()
+	if idx == mv.selectedIdx && idx == um.LastListSelectID && now.Sub(um.LastListSelectAt) < 450*time.Millisecond {
+		um.LastListSelectAt = time.Time{}
+		mv.runSelected()
+		return
+	}
 
-	// launchIndex starts the profile at idx, honoring the AutoOpenLog setting:
-	// either open the log view or launch in the background with toast + button
-	// feedback. Used by the Run button, Enter, and the digit quick-launch keys so
-	// all three behave identically.
-	launchIndex := func(idx int) {
-		if idx < 0 || idx >= len(um.Config.Profiles) {
-			um.showError("select a profile to launch")
-			return
-		}
-		if um.Config.AutoOpenLog {
-			um.showLogView(idx)
-			return
-		}
-		if launchInProgress {
-			return
-		}
-		launchInProgress = true
+	um.LastListSelectID = idx
+	um.LastListSelectAt = now
+	if d := mv.displayPos(idx); d >= 0 {
+		mv.profileList.Select(widget.ListItemID(d))
+	} else {
+		mv.profileList.UnselectAll()
+	}
+}
 
-		profile := um.Config.Profiles[idx]
-		launchLogsIdx = idx
+func (mv *mainView) runSelected() {
+	mv.launchIndex(mv.selectedIdx)
+}
 
-		// Reset the band to a fresh "working" state (marquee until download starts).
-		launchLogsBtn.Hide()
-		launchBar.Hide()
-		launchSpin.Show()
-		launchPhase.Importance = widget.MediumImportance
-		launchPhase.TextStyle = fyne.TextStyle{}
-		launchPhase.SetText("Starting " + profile.Name)
-		launchBand.Show()
-		launchBand.Refresh()
-		runBtn.Disable()
+// launchIndex starts the profile at idx, honoring the AutoOpenLog setting:
+// either open the log view or launch in the background with toast + button
+// feedback. Used by the Run button, Enter, and the digit quick-launch keys so
+// all three behave identically.
+func (mv *mainView) launchIndex(idx int) {
+	um := mv.um
+	if idx < 0 || idx >= len(um.Config.Profiles) {
+		um.showError("select a profile to launch")
+		return
+	}
+	if um.Config.AutoOpenLog {
+		um.showLogView(idx)
+		return
+	}
+	if mv.launchInProgress {
+		return
+	}
+	mv.launchInProgress = true
 
-		failed := false
-		lastPct := -1
-		go func() {
-			um.launchProfile(profile,
-				func(status string) {
-					fyne.Do(func() { launchPhase.SetText(status) })
-				},
-				func(done, total int64) {
-					if total <= 0 {
-						return // unknown size: stay on the marquee
-					}
-					if done >= total {
-						fyne.Do(func() {
-							launchBar.Hide()
-							launchSpin.Show()
-							launchPhase.SetText("Extracting")
-						})
-						return
-					}
-					pct := int(done * 100 / total)
-					if pct == lastPct {
-						return // throttle to whole-percent steps
-					}
-					lastPct = pct
+	profile := um.Config.Profiles[idx]
+	mv.launchLogsIdx = idx
+
+	// Reset the band to a fresh "working" state (marquee until download starts).
+	mv.launchLogsBtn.Hide()
+	mv.launchBar.Hide()
+	mv.launchSpin.Show()
+	mv.launchPhase.Importance = widget.MediumImportance
+	mv.launchPhase.TextStyle = fyne.TextStyle{}
+	mv.launchPhase.SetText("Starting " + profile.Name)
+	mv.launchBand.Show()
+	mv.launchBand.Refresh()
+	mv.runBtn.Disable()
+
+	failed := false
+	lastPct := -1
+	go func() {
+		um.launchProfile(profile,
+			func(status string) {
+				fyne.Do(func() { mv.launchPhase.SetText(status) })
+			},
+			func(done, total int64) {
+				if total <= 0 {
+					return // unknown size: stay on the marquee
+				}
+				if done >= total {
 					fyne.Do(func() {
-						launchSpin.Hide()
-						launchBar.Show()
-						launchBar.SetValue(float64(done) / float64(total))
+						mv.launchBar.Hide()
+						mv.launchSpin.Show()
+						mv.launchPhase.SetText("Extracting")
 					})
-				},
-				func() { failed = true },
-			)
-
-			fyne.Do(func() {
-				launchInProgress = false
-				launchSpin.Hide()
-				launchBar.Hide()
-				runBtn.Enable()
-				updateButtonStates()
-				if failed {
-					launchPhase.Importance = widget.DangerImportance
-					launchPhase.SetText(strings.TrimPrefix(launchPhase.Text, "Failed: "))
-					launchPhase.Refresh()
-					launchLogsBtn.Show()
 					return
 				}
-				launchPhase.Importance = widget.MediumImportance
-				launchPhase.TextStyle = fyne.TextStyle{Bold: true}
-				launchPhase.SetText("Launched " + profile.Name)
-				launchPhase.Refresh()
-				if um.profileListRefresh != nil {
-					um.profileListRefresh() // a download may have changed installed state
+				pct := int(done * 100 / total)
+				if pct == lastPct {
+					return // throttle to whole-percent steps
 				}
-				go func() {
-					time.Sleep(6000 * time.Millisecond)
-					fyne.Do(launchBand.Hide)
-				}()
-			})
-		}()
-	}
+				lastPct = pct
+				fyne.Do(func() {
+					mv.launchSpin.Hide()
+					mv.launchBar.Show()
+					mv.launchBar.SetValue(float64(done) / float64(total))
+				})
+			},
+			func() { failed = true },
+		)
 
-	runSelected := func() {
-		launchIndex(selectedIdx)
-	}
-
-	updateButtonStates = func() {
-		if selectedIdx >= 0 {
-			runBtn.Enable()
-			editBtn.Enable()
-			duplicateBtn.Enable()
-			deleteBtn.Enable()
-		} else {
-			runBtn.Disable()
-			editBtn.Disable()
-			duplicateBtn.Disable()
-			deleteBtn.Disable()
-		}
-
-		if seeLogsBtn != nil {
-			if um.Logger.Len() > 0 {
-				seeLogsBtn.Enable()
-			} else {
-				seeLogsBtn.Disable()
+		fyne.Do(func() {
+			mv.launchInProgress = false
+			mv.launchSpin.Hide()
+			mv.launchBar.Hide()
+			mv.runBtn.Enable()
+			mv.updateButtonStates()
+			if failed {
+				mv.launchPhase.Importance = widget.DangerImportance
+				mv.launchPhase.SetText(strings.TrimPrefix(mv.launchPhase.Text, "Failed: "))
+				mv.launchPhase.Refresh()
+				mv.launchLogsBtn.Show()
+				return
 			}
-		}
+			mv.launchPhase.Importance = widget.MediumImportance
+			mv.launchPhase.TextStyle = fyne.TextStyle{Bold: true}
+			mv.launchPhase.SetText("Launched " + profile.Name)
+			mv.launchPhase.Refresh()
+			if um.profileListRefresh != nil {
+				um.profileListRefresh() // a download may have changed installed state
+			}
+			go func() {
+				time.Sleep(6000 * time.Millisecond)
+				fyne.Do(mv.launchBand.Hide)
+			}()
+		})
+	}()
+}
+
+func (mv *mainView) updateButtonStates() {
+	if mv.selectedIdx >= 0 {
+		mv.runBtn.Enable()
+		mv.editBtn.Enable()
+		mv.duplicateBtn.Enable()
+		mv.deleteBtn.Enable()
+	} else {
+		mv.runBtn.Disable()
+		mv.editBtn.Disable()
+		mv.duplicateBtn.Disable()
+		mv.deleteBtn.Disable()
 	}
 
-	selectProfile := func(idx int) {
-		if idx < 0 || idx >= len(um.Config.Profiles) {
-			selectedIdx = -1
-			um.SelectedProfileName = ""
-			return
-		}
-
-		selectedIdx = idx
-		um.SelectedProfileName = um.Config.Profiles[selectedIdx].Name
-		refreshDetails()
-	}
-
-	handleRowTap := func(idx int) {
-		now := time.Now()
-		if idx == selectedIdx && idx == um.LastListSelectID && now.Sub(um.LastListSelectAt) < 450*time.Millisecond {
-			um.LastListSelectAt = time.Time{}
-			runSelected()
-			return
-		}
-
-		um.LastListSelectID = idx
-		um.LastListSelectAt = now
-		if d := displayPos(idx); d >= 0 {
-			profileList.Select(widget.ListItemID(d))
+	if mv.seeLogsBtn != nil {
+		if mv.um.Logger.Len() > 0 {
+			mv.seeLogsBtn.Enable()
 		} else {
-			profileList.UnselectAll()
+			mv.seeLogsBtn.Disable()
 		}
 	}
+}
 
-	refreshDetails = func() {
-		updateButtonStates()
-		detailsContainer.Objects = nil
+func (mv *mainView) refreshDetails() {
+	um := mv.um
+	mv.updateButtonStates()
+	mv.detailsContainer.Objects = nil
 
-		if selectedIdx < 0 || selectedIdx >= len(um.Config.Profiles) {
-			detailsContainer.Add(mutedCenteredLabel("Select a profile to view its details and launch."))
-			detailsContainer.Refresh()
-			return
-		}
+	if mv.selectedIdx < 0 || mv.selectedIdx >= len(um.Config.Profiles) {
+		mv.detailsContainer.Add(mutedCenteredLabel("Select a profile to view its details and launch."))
+		mv.detailsContainer.Refresh()
+		return
+	}
 
-		profile := um.Config.Profiles[selectedIdx]
+	profile := um.Config.Profiles[mv.selectedIdx]
 
-		name := widget.NewRichText(&widget.TextSegment{
-			Text: profile.Name,
+	name := widget.NewRichText(&widget.TextSegment{
+		Text: profile.Name,
+		Style: widget.RichTextStyle{
+			SizeName:  theme.SizeNameHeadingText,
+			TextStyle: fyne.TextStyle{Bold: true},
+			ColorName: theme.ColorNameForeground,
+		},
+	})
+	verb, target := intentParts(profile)
+	intentSegs := []widget.RichTextSegment{&widget.TextSegment{
+		Text:  verb,
+		Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder},
+	}}
+	if target != "" {
+		intentSegs = append(intentSegs, &widget.TextSegment{
+			Text: "  " + target,
 			Style: widget.RichTextStyle{
-				SizeName:  theme.SizeNameHeadingText,
-				TextStyle: fyne.TextStyle{Bold: true},
+				Inline:    true,
 				ColorName: theme.ColorNameForeground,
+				TextStyle: fyne.TextStyle{Bold: true},
 			},
 		})
-		verb, target := intentParts(profile)
-		intentSegs := []widget.RichTextSegment{&widget.TextSegment{
-			Text:  verb,
-			Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder},
-		}}
-		if target != "" {
-			intentSegs = append(intentSegs, &widget.TextSegment{
-				Text: "  " + target,
-				Style: widget.RichTextStyle{
-					Inline:    true,
-					ColorName: theme.ColorNameForeground,
-					TextStyle: fyne.TextStyle{Bold: true},
-				},
-			})
-		}
-		intent := widget.NewRichText(intentSegs...)
-		intent.Wrapping = fyne.TextWrapWord
-		header := container.NewVBox(name, intent)
-		detailsContainer.Add(NewThemedBox(ColorNameDetailHeader, container.NewPadded(header)))
-
-		launch := newSection()
-		if profile.LaunchMode == "file" {
-			um.addPathField(launch, "Save File", profile.SavePath, true)
-		} else if profile.LaunchMode == "folder" {
-			um.addPathField(launch, "Save Folder", profile.SavePath, false)
-			label, value := filterDisplay(profile.AutoLatestFilter)
-			launch.addField(label, value, false)
-		}
-		if profile.LaunchMode == "multiplayer" || profile.ServerIpPort != "" {
-			launch.addField("Server", profile.ServerIpPort, false)
-			launch.addField("Company Number", profile.ServerCompanyNumber, false)
-			launch.addReveal("Server Password", profile.ServerPassword)
-			launch.addReveal("Company Password", profile.ServerCompanyPassword)
-		}
-		launch.emit("Launch", detailsContainer)
-
-		client := newSection()
-		if profile.Client == "custom" {
-			um.addPathField(client, "Executable Folder", strings.TrimSpace(profile.CustomExecutablePath), false)
-		} else {
-			client.addField("Version", valueOrDefault(profile.Version, "latest"), false)
-		}
-		client.emit("Client", detailsContainer)
-
-		adv := newSection()
-		if profile.NoConfigSave {
-			adv.addField("No config save", "Enabled", false)
-		}
-		adv.addField("NewGRF Loading", newGRFDesc(profile.NewGRFScanMode), false)
-		um.addPathField(adv, "Config", profile.ConfigFilePath, true)
-		adv.addLongField("Arguments", profile.ExtraArgs, true)
-		adv.emit("Advanced", detailsContainer)
-
-		detailsContainer.Refresh()
 	}
+	intent := widget.NewRichText(intentSegs...)
+	intent.Wrapping = fyne.TextWrapWord
+	header := container.NewVBox(name, intent)
+	mv.detailsContainer.Add(NewThemedBox(ColorNameDetailHeader, container.NewPadded(header)))
 
-	recomputeVisible := func() {
-		needle := strings.ToLower(strings.TrimSpace(filterText))
-		visibleIdx = visibleIdx[:0]
-		for i, p := range um.Config.Profiles {
-			if needle == "" || strings.Contains(strings.ToLower(p.Name), needle) {
-				visibleIdx = append(visibleIdx, i)
+	launch := newSection()
+	if profile.LaunchMode == "file" {
+		um.addPathField(launch, "Save File", profile.SavePath, true)
+	} else if profile.LaunchMode == "folder" {
+		um.addPathField(launch, "Save Folder", profile.SavePath, false)
+		label, value := filterDisplay(profile.AutoLatestFilter)
+		launch.addField(label, value, false)
+	}
+	if profile.LaunchMode == "multiplayer" || profile.ServerIpPort != "" {
+		launch.addField("Server", profile.ServerIpPort, false)
+		launch.addField("Company Number", profile.ServerCompanyNumber, false)
+		launch.addReveal("Server Password", profile.ServerPassword)
+		launch.addReveal("Company Password", profile.ServerCompanyPassword)
+	}
+	launch.emit("Launch", mv.detailsContainer)
+
+	client := newSection()
+	if profile.Client == "custom" {
+		um.addPathField(client, "Executable Folder", strings.TrimSpace(profile.CustomExecutablePath), false)
+	} else {
+		client.addField("Version", valueOrDefault(profile.Version, "latest"), false)
+	}
+	client.emit("Client", mv.detailsContainer)
+
+	adv := newSection()
+	if profile.NoConfigSave {
+		adv.addField("No config save", "Enabled", false)
+	}
+	adv.addField("NewGRF Loading", newGRFDesc(profile.NewGRFScanMode), false)
+	um.addPathField(adv, "Config", profile.ConfigFilePath, true)
+	adv.addLongField("Arguments", profile.ExtraArgs, true)
+	adv.emit("Advanced", mv.detailsContainer)
+
+	mv.detailsContainer.Refresh()
+}
+
+func (mv *mainView) updateEmptyState() {
+	switch {
+	case len(mv.um.Config.Profiles) == 0:
+		mv.firstRun.Show()
+		mv.noResults.Hide()
+		mv.searchEntry.Hide()
+	case len(mv.visibleIdx) == 0 && strings.TrimSpace(mv.filterText) != "":
+		mv.noResults.Show()
+		mv.firstRun.Hide()
+		mv.searchEntry.Show()
+	default:
+		mv.firstRun.Hide()
+		mv.noResults.Hide()
+		mv.searchEntry.Show()
+	}
+}
+
+// duplicateSelected copies the selected profile, selects the copy, and refreshes.
+func (mv *mainView) duplicateSelected() {
+	um := mv.um
+	if mv.selectedIdx < 0 {
+		um.showError("select a profile to duplicate")
+		return
+	}
+	dup := um.Config.Profiles[mv.selectedIdx]
+	dup.Name = uniqueProfileName(um.Config.Profiles, dup.Name)
+	um.Config.Profiles = append(um.Config.Profiles, dup)
+	_ = domain.SaveConfig(um.ConfigPath, um.Config)
+
+	mv.selectedIdx = len(um.Config.Profiles) - 1
+	um.SelectedProfileName = um.Config.Profiles[mv.selectedIdx].Name
+	mv.recomputeVisible()
+	mv.profileList.Refresh()
+	if d := mv.displayPos(mv.selectedIdx); d >= 0 {
+		mv.profileList.Select(widget.ListItemID(d))
+	} else {
+		mv.profileList.UnselectAll()
+	}
+	mv.refreshDetails()
+	mv.updateEmptyState()
+}
+
+// deleteSelected confirms, then removes the selected profile and reselects a
+// neighbour. Refuses to delete the last remaining profile.
+func (mv *mainView) deleteSelected() {
+	um := mv.um
+	if mv.selectedIdx < 0 {
+		return
+	}
+	if len(um.Config.Profiles) <= 1 {
+		um.showError("cannot delete the last profile")
+		return
+	}
+	profileName := um.Config.Profiles[mv.selectedIdx].Name
+	dialog.NewConfirm(
+		"Delete Profile",
+		fmt.Sprintf("Are you sure you want to delete profile %q?", profileName),
+		func(confirmed bool) {
+			if !confirmed {
+				return
 			}
-		}
-	}
-	recomputeVisible()
 
-	// displayPos returns the filtered row position of a real index, or -1 if hidden.
-	displayPos = func(real int) int {
-		for d, r := range visibleIdx {
-			if r == real {
-				return d
+			um.Config.Profiles = append(um.Config.Profiles[:mv.selectedIdx], um.Config.Profiles[mv.selectedIdx+1:]...)
+			_ = domain.SaveConfig(um.ConfigPath, um.Config)
+
+			nextIdx := mv.selectedIdx
+			if nextIdx >= len(um.Config.Profiles) {
+				nextIdx = len(um.Config.Profiles) - 1
 			}
-		}
-		return -1
-	}
 
-	profileList = fyneadvancedlist.NewList(
-		func() int { return len(visibleIdx) },
+			mv.selectedIdx = nextIdx
+			um.SelectedProfileName = um.Config.Profiles[mv.selectedIdx].Name
+			mv.recomputeVisible()
+			mv.profileList.Refresh()
+			if d := mv.displayPos(mv.selectedIdx); d >= 0 {
+				mv.profileList.Select(widget.ListItemID(d))
+			} else {
+				mv.profileList.UnselectAll()
+			}
+			mv.refreshDetails()
+			mv.updateEmptyState()
+		},
+		um.Window,
+	).Show()
+}
+
+// buildProfileList creates the profile list widget and wires its row template,
+// row binding, drag-reorder, and selection callbacks.
+func (mv *mainView) buildProfileList() {
+	um := mv.um
+	mv.profileList = fyneadvancedlist.NewList(
+		func() int { return len(mv.visibleIdx) },
 		func() fyne.CanvasObject {
 			btn := newRightClickButton(nil, nil)
 
@@ -359,8 +431,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			nameLabel := text.Objects[0].(*widget.Label)
 			versionLabel := text.Objects[1].(*widget.Label)
 
-			if int(i) < len(visibleIdx) {
-				real := visibleIdx[i]
+			if int(i) < len(mv.visibleIdx) {
+				real := mv.visibleIdx[i]
 				profile := um.Config.Profiles[real]
 				clientTag := shortClientLabel(profile.Client, um.Config.DefaultClient)
 				var versionText string
@@ -383,7 +455,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				dot.SetState(um.resolveDotState(profile))
 				idx := real
 				btn.OnTapped = func() {
-					handleRowTap(idx)
+					mv.handleRowTap(idx)
 				}
 				btn.onSecondaryTapped = func() {
 					um.showProfileEditor(idx, false)
@@ -392,8 +464,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		},
 	)
 
-	profileList.EnableDragging = true
-	profileList.OnDragEnd = func(draggedFrom, draggedTo widget.ListItemID) {
+	mv.profileList.EnableDragging = true
+	mv.profileList.OnDragEnd = func(draggedFrom, draggedTo widget.ListItemID) {
 		from := int(draggedFrom)
 		to := int(draggedTo)
 
@@ -415,104 +487,94 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		um.Config.Profiles = newProfiles
 
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
-		profileList.Refresh()
+		mv.profileList.Refresh()
 
-		if from == selectedIdx {
-			profileList.Select(widget.ListItemID(to))
+		if from == mv.selectedIdx {
+			mv.profileList.Select(widget.ListItemID(to))
 		}
 	}
-	profileList.OnSelected = func(id widget.ListItemID) {
-		if int(id) < len(visibleIdx) {
-			selectProfile(visibleIdx[id])
+	mv.profileList.OnSelected = func(id widget.ListItemID) {
+		if int(id) < len(mv.visibleIdx) {
+			mv.selectProfile(mv.visibleIdx[id])
 		}
 	}
-	profileList.OnUnselected = func(_ widget.ListItemID) {
-		selectProfile(-1)
-		refreshDetails()
+	mv.profileList.OnUnselected = func(_ widget.ListItemID) {
+		mv.selectProfile(-1)
+		mv.refreshDetails()
 	}
-	um.profileListRefresh = func() { profileList.Refresh() }
+	um.profileListRefresh = func() { mv.profileList.Refresh() }
+}
+
+// makeMainView creates the main profile selection view
+func (um *UIManager) makeMainView() fyne.CanvasObject {
+	mv := &mainView{
+		um:               um,
+		selectedIdx:      indexOfProfileByName(um.Config.Profiles, um.SelectedProfileName),
+		launchLogsIdx:    -1,
+		detailsContainer: container.NewVBox(),
+	}
+
+	mv.visibleIdx = make([]int, len(um.Config.Profiles))
+	for i := range mv.visibleIdx {
+		mv.visibleIdx[i] = i
+	}
+
+	selectionHint := widget.NewLabel("Press 1–9 (0 for 10th) to quick-launch · Enter or double-click to launch selected")
+	selectionHint.Importance = widget.LowImportance
+	selectionHint.Alignment = fyne.TextAlignCenter
+	selectionHint.Wrapping = fyne.TextWrapWord
+
+	// Launch status band: feedback for background launches (log auto-open off).
+	// Hidden until a launch runs; kept a constant height (sized to the View logs
+	// row) so it never resizes as it moves through phases.
+	mv.launchPhase = widget.NewLabel("")
+	mv.launchPhase.Wrapping = fyne.TextWrapWord
+	mv.launchBar = widget.NewProgressBar()
+	mv.launchSpin = widget.NewProgressBarInfinite()
+	mv.launchLogsBtn = widget.NewButton("View logs", func() {
+		if mv.launchLogsIdx >= 0 {
+			um.showLogView(mv.launchLogsIdx)
+		}
+	})
+	mv.launchLogsBtn.Importance = widget.LowImportance
+
+	launchBars := container.NewStack(mv.launchSpin, mv.launchBar)
+	barsCentered := container.NewVBox(layout.NewSpacer(), launchBars, layout.NewSpacer())
+	logsRow := container.NewHBox(layout.NewSpacer(), mv.launchLogsBtn)
+	rowPin := canvas.NewRectangle(color.Transparent)
+	rowPin.SetMinSize(fyne.NewSize(1, mv.launchLogsBtn.MinSize().Height))
+	launchSecondRow := container.NewStack(rowPin, barsCentered, logsRow)
+	mv.launchBand = NewThemedBox(ColorNameDetailHeader, container.NewPadded(container.NewVBox(
+		mv.launchPhase,
+		launchSecondRow,
+	)))
+	mv.launchBand.Hide()
+
+	mv.recomputeVisible()
+	mv.buildProfileList()
 
 	newBtn := widget.NewButtonWithIcon("New", theme.ContentAddIcon(), func() {
 		um.showProfileEditor(-1, true)
 	})
 	newBtn.Importance = widget.HighImportance
 
-	editBtn = widget.NewButton("Edit", func() {
-		if selectedIdx >= 0 {
-			um.showProfileEditor(selectedIdx, false)
+	mv.editBtn = widget.NewButton("Edit", func() {
+		if mv.selectedIdx >= 0 {
+			um.showProfileEditor(mv.selectedIdx, false)
 		} else {
 			um.showError("select a profile to edit")
 		}
 	})
-	duplicateBtn = widget.NewButton("Duplicate", func() {
-		if selectedIdx >= 0 {
-			dup := um.Config.Profiles[selectedIdx]
-			dup.Name = uniqueProfileName(um.Config.Profiles, dup.Name)
-			um.Config.Profiles = append(um.Config.Profiles, dup)
-			_ = domain.SaveConfig(um.ConfigPath, um.Config)
+	mv.duplicateBtn = widget.NewButton("Duplicate", mv.duplicateSelected)
+	mv.deleteBtn = widget.NewButton("Delete", mv.deleteSelected)
 
-			selectedIdx = len(um.Config.Profiles) - 1
-			um.SelectedProfileName = um.Config.Profiles[selectedIdx].Name
-			recomputeVisible()
-			profileList.Refresh()
-			if d := displayPos(selectedIdx); d >= 0 {
-				profileList.Select(widget.ListItemID(d))
-			} else {
-				profileList.UnselectAll()
-			}
-			refreshDetails()
-			updateEmptyState()
-		} else {
-			um.showError("select a profile to duplicate")
-		}
-	})
-	deleteBtn = widget.NewButton("Delete", func() {
-		if selectedIdx >= 0 {
-			if len(um.Config.Profiles) > 1 {
-				profileName := um.Config.Profiles[selectedIdx].Name
-				dialog.NewConfirm(
-					"Delete Profile",
-					fmt.Sprintf("Are you sure you want to delete profile %q?", profileName),
-					func(confirmed bool) {
-						if !confirmed {
-							return
-						}
+	mv.runBtn = widget.NewButton("Run Selected", mv.runSelected)
+	mv.runBtn.Importance = widget.HighImportance
 
-						um.Config.Profiles = append(um.Config.Profiles[:selectedIdx], um.Config.Profiles[selectedIdx+1:]...)
-						_ = domain.SaveConfig(um.ConfigPath, um.Config)
-
-						nextIdx := selectedIdx
-						if nextIdx >= len(um.Config.Profiles) {
-							nextIdx = len(um.Config.Profiles) - 1
-						}
-
-						selectedIdx = nextIdx
-						um.SelectedProfileName = um.Config.Profiles[selectedIdx].Name
-						recomputeVisible()
-						profileList.Refresh()
-						if d := displayPos(selectedIdx); d >= 0 {
-							profileList.Select(widget.ListItemID(d))
-						} else {
-							profileList.UnselectAll()
-						}
-						refreshDetails()
-						updateEmptyState()
-					},
-					um.Window,
-				).Show()
-			} else {
-				um.showError("cannot delete the last profile")
-			}
-		}
-	})
-
-	runBtn = widget.NewButton("Run Selected", runSelected)
-	runBtn.Importance = widget.HighImportance
-
-	seeLogsBtn = widget.NewButtonWithIcon("Logs", theme.DocumentIcon(), func() {
+	mv.seeLogsBtn = widget.NewButtonWithIcon("Logs", theme.DocumentIcon(), func() {
 		um.showLogView(-1)
 	})
-	seeLogsBtn.Importance = widget.LowImportance
+	mv.seeLogsBtn.Importance = widget.LowImportance
 
 	manageInstallsBtn := widget.NewButtonWithIcon("Installs", theme.StorageIcon(), func() {
 		um.showLibraryView()
@@ -525,12 +587,12 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	settingsBtn.Importance = widget.LowImportance
 
 	actionsContent := container.NewVBox(
-		runBtn,
-		container.NewGridWithColumns(3, editBtn, duplicateBtn, deleteBtn),
+		mv.runBtn,
+		container.NewGridWithColumns(3, mv.editBtn, mv.duplicateBtn, mv.deleteBtn),
 	)
 
-	searchEntry := newSearchEntry()
-	searchEntry.SetPlaceHolder("Search profiles...")
+	mv.searchEntry = newSearchEntry()
+	mv.searchEntry.SetPlaceHolder("Search profiles...")
 
 	// Header band: title, live total count, and the primary New action.
 	title := widget.NewRichText(&widget.TextSegment{
@@ -545,59 +607,42 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	headerBand := NewThemedBox(ColorNameDetailHeader, container.NewPadded(headerRow))
 
 	// No-results state (search matched nothing).
-	noResults := container.NewCenter(container.NewVBox(
+	mv.noResults = container.NewCenter(container.NewVBox(
 		centeredLabel("No profiles match your search."),
 		mutedCenteredLabel("Press Esc to clear."),
 	))
-	noResults.Hide()
+	mv.noResults.Hide()
 
 	// First-run state (no profiles exist yet).
 	firstRunBtn := widget.NewButtonWithIcon("New Profile", theme.ContentAddIcon(), func() {
 		um.showProfileEditor(-1, true)
 	})
 	firstRunBtn.Importance = widget.HighImportance
-	firstRun := container.NewCenter(container.NewVBox(
+	mv.firstRun = container.NewCenter(container.NewVBox(
 		centeredLabel("No profiles yet."),
 		mutedCenteredLabel("Create your first profile to get started."),
 		container.NewCenter(firstRunBtn),
 	))
-	firstRun.Hide()
+	mv.firstRun.Hide()
 
-	updateEmptyState = func() {
-		switch {
-		case len(um.Config.Profiles) == 0:
-			firstRun.Show()
-			noResults.Hide()
-			searchEntry.Hide()
-		case len(visibleIdx) == 0 && strings.TrimSpace(filterText) != "":
-			noResults.Show()
-			firstRun.Hide()
-			searchEntry.Show()
-		default:
-			firstRun.Hide()
-			noResults.Hide()
-			searchEntry.Show()
-		}
-	}
-
-	searchEntry.OnChanged = func(s string) {
-		filterText = s
-		recomputeVisible()
+	mv.searchEntry.OnChanged = func(s string) {
+		mv.filterText = s
+		mv.recomputeVisible()
 		// Reordering a filtered subset is ambiguous; only allow drag with no filter.
-		profileList.EnableDragging = strings.TrimSpace(s) == ""
-		profileList.UnselectAll()
-		selectProfile(-1)
-		refreshDetails()
-		updateEmptyState()
-		profileList.Refresh()
+		mv.profileList.EnableDragging = strings.TrimSpace(s) == ""
+		mv.profileList.UnselectAll()
+		mv.selectProfile(-1)
+		mv.refreshDetails()
+		mv.updateEmptyState()
+		mv.profileList.Refresh()
 	}
 	// Esc clears the filter and returns to the full list.
-	searchEntry.onEscape = func() {
-		if searchEntry.Text != "" {
-			searchEntry.SetText("") // triggers OnChanged, which resets the filter
+	mv.searchEntry.onEscape = func() {
+		if mv.searchEntry.Text != "" {
+			mv.searchEntry.SetText("") // triggers OnChanged, which resets the filter
 		}
 	}
-	updateEmptyState()
+	mv.updateEmptyState()
 
 	dragHint := widget.NewLabel("Drag rows to reorder")
 	dragHint.Importance = widget.LowImportance
@@ -621,32 +666,32 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	footer := container.NewPadded(container.NewVBox(
 		legend,
 		dragHint,
-		container.NewGridWithColumns(3, seeLogsBtn, manageInstallsBtn, settingsBtn),
+		container.NewGridWithColumns(3, mv.seeLogsBtn, manageInstallsBtn, settingsBtn),
 	))
 
-	listArea := container.NewStack(profileList, noResults, firstRun)
-	top := container.NewVBox(headerBand, container.NewPadded(searchEntry))
+	listArea := container.NewStack(mv.profileList, mv.noResults, mv.firstRun)
+	top := container.NewVBox(headerBand, container.NewPadded(mv.searchEntry))
 	leftPanelObj := container.NewBorder(top, footer, nil, nil, listArea)
 	leftPanel := NewThemedBox(ColorNameSidebar, leftPanelObj)
 
-	detailsContent := container.NewVScroll(container.NewPadded(detailsContainer))
+	detailsContent := container.NewVScroll(container.NewPadded(mv.detailsContainer))
 
 	rightPanelObj := container.NewBorder(
 		nil,
-		container.NewVBox(widget.NewSeparator(), launchBand, actionsContent, container.NewPadded(selectionHint)),
+		container.NewVBox(widget.NewSeparator(), mv.launchBand, actionsContent, container.NewPadded(selectionHint)),
 		nil,
 		nil,
 		detailsContent,
 	)
 	rightPanel := NewThemedBox(ColorNameContent, rightPanelObj)
 
-	if selectedIdx >= 0 && selectedIdx < len(um.Config.Profiles) {
-		if d := displayPos(selectedIdx); d >= 0 {
-			profileList.Select(widget.ListItemID(d))
+	if mv.selectedIdx >= 0 && mv.selectedIdx < len(um.Config.Profiles) {
+		if d := mv.displayPos(mv.selectedIdx); d >= 0 {
+			mv.profileList.Select(widget.ListItemID(d))
 		}
 	}
-	updateButtonStates()
-	refreshDetails()
+	mv.updateButtonStates()
+	mv.refreshDetails()
 
 	split := container.NewHSplit(leftPanel, rightPanel)
 	split.Offset = 0.35
@@ -689,19 +734,19 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				idx = 9
 			}
 			if idx >= 0 && idx < len(um.Config.Profiles) {
-				if d := displayPos(idx); d >= 0 {
-					profileList.Select(widget.ListItemID(d))
+				if d := mv.displayPos(idx); d >= 0 {
+					mv.profileList.Select(widget.ListItemID(d))
 				} else {
-					profileList.UnselectAll()
+					mv.profileList.UnselectAll()
 				}
-				launchIndex(idx)
+				mv.launchIndex(idx)
 				return
 			}
 		}
 
 		if event.Name == fyne.KeyReturn || event.Name == fyne.KeyEnter {
-			if selectedIdx >= 0 {
-				runSelected()
+			if mv.selectedIdx >= 0 {
+				mv.runSelected()
 			}
 		}
 	})
@@ -711,7 +756,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	if um.pendingLaunchIdx >= 0 {
 		idx := um.pendingLaunchIdx
 		um.pendingLaunchIdx = -1
-		fyne.Do(func() { launchIndex(idx) })
+		fyne.Do(func() { mv.launchIndex(idx) })
 	}
 
 	return mainContent
@@ -829,4 +874,3 @@ func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 
 	widget.NewPopUp(container.NewPadded(content), um.Window.Canvas()).ShowAtPosition(pos)
 }
-
