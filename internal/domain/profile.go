@@ -14,7 +14,7 @@ type Profile struct {
 	LaunchMode            string `json:"launchMode"` // "", "file", "folder", "multiplayer"
 	AutoLatestFilter      string `json:"autoLatestFilter"`
 	ExtraArgs             string `json:"extraArgs"`
-	Client                string `json:"client"`               // "jgrpp", "vanilla", "vanilla-nightly", "custom"
+	Client                string `json:"client"`               // "jgrpp", "vanilla", "vanilla-nightly", "custom"; empty resolves via app.EffectiveClient (config default, else "jgrpp")
 	CustomExecutablePath  string `json:"customExecutablePath"` // folder containing openttd binary; only used when Client=="custom"
 	NewGRFScanMode        string `json:"newgrfScanMode"`       // "" | "Q" | "QQ"
 }
