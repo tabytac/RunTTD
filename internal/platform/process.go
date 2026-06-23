@@ -165,6 +165,15 @@ func ExecuteOpenTTD(
 	}()
 }
 
+// dedicatedConfigFlags maps each stripped flag to whether it consumes the
+// following argument (only -c, which takes a separate config-path value).
+var dedicatedConfigFlags = map[string]bool{
+	"-x":  false,
+	"-c":  true,
+	"-q":  false,
+	"-qq": false,
+}
+
 func stripDedicatedConfigArgs(fields []string) []string {
 	filtered := make([]string, 0, len(fields))
 	skipNext := false
@@ -176,21 +185,14 @@ func stripDedicatedConfigArgs(fields []string) []string {
 		}
 
 		lower := strings.ToLower(field)
-		switch {
-		case lower == "-x":
+		if takesValue, drop := dedicatedConfigFlags[lower]; drop {
+			skipNext = takesValue
 			continue
-		case lower == "-c":
-			skipNext = true
-			continue
-		case strings.HasPrefix(lower, "-c="):
-			continue
-		case lower == "-q":
-			continue
-		case lower == "-qq":
-			continue
-		default:
-			filtered = append(filtered, field)
 		}
+		if strings.HasPrefix(lower, "-c=") {
+			continue
+		}
+		filtered = append(filtered, field)
 	}
 
 	return filtered
