@@ -55,13 +55,14 @@ func (p *LauncherTheme) UpdateAccent(presetIdx int, variant string) {
 	p.AccentLight = light
 	p.AccentDark = dark
 
-	if variant == "light" {
+	switch variant {
+	case "light":
 		v := theme.VariantLight
 		p.OverrideVariant = &v
-	} else if variant == "dark" {
+	case "dark":
 		v := theme.VariantDark
 		p.OverrideVariant = &v
-	} else {
+	default:
 		p.OverrideVariant = nil
 	}
 	fyne.CurrentApp().Settings().SetTheme(p)

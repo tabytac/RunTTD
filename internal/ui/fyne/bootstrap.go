@@ -73,10 +73,11 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 		AccentDark:  dark,
 		AccentLight: light,
 	}
-	if um.Config.ThemeVariant == "light" {
+	switch um.Config.ThemeVariant {
+	case "light":
 		v := theme.VariantLight
 		pt.OverrideVariant = &v
-	} else if um.Config.ThemeVariant == "dark" {
+	case "dark":
 		v := theme.VariantDark
 		pt.OverrideVariant = &v
 	}
