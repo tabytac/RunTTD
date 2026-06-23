@@ -226,106 +226,6 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 	}
 
-	// Short pairs align in form; long values stack full-width in extra so wrapping
-	// can't clip (FormLayout sizes rows from the unwrapped value).
-	type section struct {
-		form  *fyne.Container
-		extra []fyne.CanvasObject
-		count int
-	}
-	newSection := func() *section {
-		return &section{form: container.New(layout.NewFormLayout())}
-	}
-	addField := func(s *section, label, value string, mono bool) {
-		if value == "" {
-			return
-		}
-		val := widget.NewLabel(value)
-		val.Wrapping = fyne.TextWrapOff
-		val.Selectable = true
-		if mono {
-			val.TextStyle = fyne.TextStyle{Monospace: true}
-		}
-		s.form.Add(mutedLabel(label))
-		s.form.Add(val)
-		s.count++
-	}
-	addLongField := func(s *section, label, value string, mono bool) {
-		if strings.TrimSpace(value) == "" {
-			return
-		}
-		val := widget.NewLabel(value)
-		val.Wrapping = fyne.TextWrapWord
-		val.Selectable = true
-		if mono {
-			val.TextStyle = fyne.TextStyle{Monospace: true}
-		}
-		s.extra = append(s.extra, mutedLabel(label), val)
-		s.count++
-	}
-	// addReveal adds a masked value with an eye button that toggles plaintext.
-	addReveal := func(s *section, label, value string) {
-		if value == "" {
-			return
-		}
-		val := widget.NewLabel("••••••••")
-		val.Selectable = true
-		shown := false
-		var btn *widget.Button
-		btn = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
-			shown = !shown
-			if shown {
-				val.SetText(value)
-				btn.SetIcon(theme.VisibilityOffIcon())
-			} else {
-				val.SetText("••••••••")
-				btn.SetIcon(theme.VisibilityIcon())
-			}
-		})
-		btn.Importance = widget.LowImportance
-		s.form.Add(mutedLabel(label))
-		s.form.Add(container.NewBorder(nil, nil, nil, btn, val))
-		s.count++
-	}
-	// addPathField renders a full-width path value (in s.extra, like addLongField)
-	// with a reveal-in-file-browser button. isFile selects the file in its folder;
-	// otherwise the folder is opened. Empty values render nothing.
-	addPathField := func(s *section, label, value string, isFile bool) {
-		if strings.TrimSpace(value) == "" {
-			return
-		}
-		val := widget.NewLabel(value)
-		val.Wrapping = fyne.TextWrapWord
-		val.Selectable = true
-		val.TextStyle = fyne.TextStyle{Monospace: true}
-		btn := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
-			var err error
-			if isFile {
-				err = platform.RevealFileInFileManager(value)
-			} else {
-				err = platform.RevealInFileManager(value)
-			}
-			if err != nil {
-				um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", value, err))
-				um.showErrorf("couldn't open the location: %w", err)
-			}
-		})
-		btn.Importance = widget.LowImportance
-		row := container.NewBorder(nil, nil, nil, btn, val)
-		s.extra = append(s.extra, mutedLabel(label), row)
-		s.count++
-	}
-	emit := func(title string, s *section) {
-		if s.count == 0 {
-			return
-		}
-		body := container.NewVBox(NewSectionHeader(title), s.form)
-		for _, o := range s.extra {
-			body.Add(o)
-		}
-		detailsContainer.Add(NewThemedBox(ColorNameContent, container.NewPadded(body)))
-	}
-
 	refreshDetails = func() {
 		updateButtonStates()
 		detailsContainer.Objects = nil
@@ -368,36 +268,36 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 		launch := newSection()
 		if profile.LaunchMode == "file" {
-			addPathField(launch, "Save File", profile.SavePath, true)
+			um.addPathField(launch, "Save File", profile.SavePath, true)
 		} else if profile.LaunchMode == "folder" {
-			addPathField(launch, "Save Folder", profile.SavePath, false)
+			um.addPathField(launch, "Save Folder", profile.SavePath, false)
 			label, value := filterDisplay(profile.AutoLatestFilter)
-			addField(launch, label, value, false)
+			launch.addField(label, value, false)
 		}
 		if profile.LaunchMode == "multiplayer" || profile.ServerIpPort != "" {
-			addField(launch, "Server", profile.ServerIpPort, false)
-			addField(launch, "Company Number", profile.ServerCompanyNumber, false)
-			addReveal(launch, "Server Password", profile.ServerPassword)
-			addReveal(launch, "Company Password", profile.ServerCompanyPassword)
+			launch.addField("Server", profile.ServerIpPort, false)
+			launch.addField("Company Number", profile.ServerCompanyNumber, false)
+			launch.addReveal("Server Password", profile.ServerPassword)
+			launch.addReveal("Company Password", profile.ServerCompanyPassword)
 		}
-		emit("Launch", launch)
+		launch.emit("Launch", detailsContainer)
 
 		client := newSection()
 		if profile.Client == "custom" {
-			addPathField(client, "Executable Folder", strings.TrimSpace(profile.CustomExecutablePath), false)
+			um.addPathField(client, "Executable Folder", strings.TrimSpace(profile.CustomExecutablePath), false)
 		} else {
-			addField(client, "Version", valueOrDefault(profile.Version, "latest"), false)
+			client.addField("Version", valueOrDefault(profile.Version, "latest"), false)
 		}
-		emit("Client", client)
+		client.emit("Client", detailsContainer)
 
 		adv := newSection()
 		if profile.NoConfigSave {
-			addField(adv, "No config save", "Enabled", false)
+			adv.addField("No config save", "Enabled", false)
 		}
-		addField(adv, "NewGRF Loading", newGRFDesc(profile.NewGRFScanMode), false)
-		addPathField(adv, "Config", profile.ConfigFilePath, true)
-		addLongField(adv, "Arguments", profile.ExtraArgs, true)
-		emit("Advanced", adv)
+		adv.addField("NewGRF Loading", newGRFDesc(profile.NewGRFScanMode), false)
+		um.addPathField(adv, "Config", profile.ConfigFilePath, true)
+		adv.addLongField("Arguments", profile.ExtraArgs, true)
+		adv.emit("Advanced", detailsContainer)
 
 		detailsContainer.Refresh()
 	}
