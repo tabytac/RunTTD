@@ -20,9 +20,7 @@ var (
 	cdnNightlyBuildRe  = regexp.MustCompile(`href="(?:https?://[^"]*/)?([0-9]{8}-[^"]+)/"`)
 )
 
-// parseHrefFolders returns the first-seen, de-duplicated capture-group-1 values
-// of re across html. clean transforms each capture before dedup; a nil clean
-// leaves it untouched. Captures that clean to "" are skipped.
+// parseHrefFolders returns first-seen, de-duplicated capture-group-1 values; clean is a nil-safe per-capture transform (nil = identity) and "" results are skipped.
 func parseHrefFolders(html string, re *regexp.Regexp, clean func(string) string) []string {
 	set := map[string]bool{}
 	out := []string{}

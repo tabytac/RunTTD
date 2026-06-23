@@ -121,8 +121,7 @@ func (v *vanillaClient) FindInstalled(ctx context.Context, version string, cfg *
 
 // Convenience wrappers that query the thread-safe registry with context.
 
-// withClient looks up clientID and runs fn against it, returning a zero value
-// and a wrapped ErrUnknownClient if the ID is not registered.
+// withClient runs fn against the registered clientID, or returns a zero value and wrapped ErrUnknownClient if it is unknown.
 func withClient[T any](clientID string, fn func(Client) (T, error)) (T, error) {
 	if c := GetClient(clientID); c != nil {
 		return fn(c)

@@ -13,9 +13,8 @@ import (
 	"runttd/internal/platform"
 )
 
-// section accumulates a profile-detail group. Short label/value pairs align in
-// the form; long values stack full-width in extra so wrapping can't clip
-// (FormLayout sizes rows from the unwrapped value).
+// section is a profile-detail group: short pairs align in form, long values go
+// full-width in extra so wrapping can't clip (FormLayout sizes from the unwrapped value).
 type section struct {
 	form  *fyne.Container
 	extra []fyne.CanvasObject
@@ -80,9 +79,7 @@ func (s *section) addReveal(label, value string) {
 	s.count++
 }
 
-// addPathField renders a full-width path value (in s.extra, like addLongField)
-// with a reveal-in-file-browser button. isFile selects the file in its folder;
-// otherwise the folder is opened. Empty values render nothing.
+// addPathField adds a full-width path with a reveal button (isFile selects the file, else opens the folder); empty renders nothing.
 func (um *UIManager) addPathField(s *section, label, value string, isFile bool) {
 	if strings.TrimSpace(value) == "" {
 		return
@@ -109,8 +106,7 @@ func (um *UIManager) addPathField(s *section, label, value string, isFile bool) 
 	s.count++
 }
 
-// emit appends the section's content to dst as a themed box, or nothing if the
-// section gathered no fields.
+// emit appends the section to dst as a themed box, or nothing if it gathered no fields.
 func (s *section) emit(title string, dst *fyne.Container) {
 	if s.count == 0 {
 		return

@@ -43,8 +43,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	})
 
 	// --- Preferences ---
-	// Default Client is required: the dropdown starts unselected unless the
-	// config already has a value, and Continue is gated on a selection below.
+	// Default Client is required: starts unselected (unless config has one) and gates Continue below.
 	defaultClientSelect := widget.NewSelect(defaultClientOptions, func(string) {})
 	if label, ok := revDefaultClientMap[um.Config.DefaultClient]; ok {
 		defaultClientSelect.SetSelected(label)
@@ -66,9 +65,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
 
-	// validate is a backstop for the Continue handler; the live hint and the
-	// disabled button (see updateState) are the primary guard. All three inputs
-	// (both paths and a default client) are required.
+	// validate is the Continue handler's backstop; the disabled button + live hint (updateState) are the primary guard.
 	validate := func() bool {
 		return strings.TrimSpace(parentDirEntry.Text) != "" &&
 			strings.TrimSpace(docsBasePathEntry.Text) != "" &&
@@ -111,10 +108,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		}
 	}
 
-	// updateState keeps the Continue button and the status hint in sync with the
-	// required inputs (both paths and a default client). Continue stays disabled
-	// until all are set, so the hint explains what is still needed rather than
-	// leaving the button inertly greyed out.
+	// updateState gates Continue on the required inputs, with the hint naming what's missing rather than leaving the button inertly greyed out.
 	updateState := func(_ string) {
 		switch {
 		case strings.TrimSpace(parentDirEntry.Text) == "":

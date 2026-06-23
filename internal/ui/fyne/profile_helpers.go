@@ -43,8 +43,7 @@ func indexOfProfileByName(profiles []domain.Profile, name string) int {
 	return -1
 }
 
-// uniqueProfileName returns "base Copy", or "base Copy (2)", "base Copy (3)" ...
-// if earlier candidates collide (case-insensitively) with existing profiles.
+// uniqueProfileName returns "base Copy", escalating to "base Copy (2)", "(3)"... on case-insensitive collision.
 func uniqueProfileName(profiles []domain.Profile, base string) string {
 	candidate := base + " Copy"
 	for n := 2; indexOfProfileByName(profiles, candidate) >= 0; n++ {
@@ -53,7 +52,6 @@ func uniqueProfileName(profiles []domain.Profile, base string) string {
 	return candidate
 }
 
-// intentParts splits the launch intent into a muted verb and an accent-colored target.
 func intentParts(p domain.Profile) (verb, target string) {
 	switch p.LaunchMode {
 	case "file":
@@ -67,7 +65,6 @@ func intentParts(p domain.Profile) (verb, target string) {
 	}
 }
 
-// folderItemNoun names what the folder filter picks, for the launch intent line.
 func folderItemNoun(filter string) string {
 	switch filter {
 	case "sav":
@@ -79,8 +76,7 @@ func folderItemNoun(filter string) string {
 	}
 }
 
-// filterDisplay maps a stored auto-latest filter to a grammar-matched label and
-// full-name value: "File types"/"Saves & Scenarios" for both, "File type"/singular otherwise.
+// filterDisplay maps an auto-latest filter to a grammar-matched (label, value): plural "File types" for both, singular otherwise.
 func filterDisplay(filter string) (label, value string) {
 	switch filter {
 	case "sav":

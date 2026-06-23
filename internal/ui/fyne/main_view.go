@@ -22,9 +22,7 @@ import (
 	"runttd/internal/platform"
 )
 
-// mainView owns the mutable state and widgets of the main profile view. One is
-// created per makeMainView call, so its launch/selection/filter state stays
-// scoped to a single view instance (matching the old function-local closures).
+// mainView owns one profile-view instance's state and widgets; a fresh one per makeMainView call keeps launch/selection/filter state isolated.
 type mainView struct {
 	um *UIManager
 

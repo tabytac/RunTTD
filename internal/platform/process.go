@@ -165,8 +165,7 @@ func ExecuteOpenTTD(
 	}()
 }
 
-// dedicatedConfigFlags maps each stripped flag to whether it consumes the
-// following argument (only -c, which takes a separate config-path value).
+// dedicatedConfigFlags maps each stripped flag to whether it also consumes the next arg (true only for -c's config path).
 var dedicatedConfigFlags = map[string]bool{
 	"-x":  false,
 	"-c":  true,

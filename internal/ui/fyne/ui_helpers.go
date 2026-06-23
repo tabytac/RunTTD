@@ -13,8 +13,7 @@ import (
 // showError displays a plain-message error dialog on the main window.
 func (um *UIManager) showError(msg string) { dialog.ShowError(errors.New(msg), um.Window) }
 
-// showErrorf displays an error dialog from a format string; use the %w verb to
-// keep a wrapped cause.
+// showErrorf displays an error dialog from a format string (use %w to keep a wrapped cause).
 func (um *UIManager) showErrorf(format string, a ...any) {
 	dialog.ShowError(fmt.Errorf(format, a...), um.Window)
 }

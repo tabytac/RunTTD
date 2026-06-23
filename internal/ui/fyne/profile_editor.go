@@ -41,8 +41,6 @@ func versionTrackHintText(clientID string) string {
 }
 
 // defaultVersionOptions returns the version dropdown presets for a client track.
-// The label<->value maps are shared with the onboarding and settings views via
-// the package-level defaultClient* vars (see settings.go).
 func defaultVersionOptions(clientID string) []string {
 	switch clientID {
 	case "vanilla":
@@ -54,8 +52,7 @@ func defaultVersionOptions(clientID string) []string {
 	}
 }
 
-// displayVersion turns a stored profile version into the string shown in the
-// version field, normalizing the various "latest" aliases per client track.
+// displayVersion turns a stored version into the field's display string, normalizing the "latest" aliases per track.
 func displayVersion(clientID, stored string) string {
 	s := strings.TrimSpace(stored)
 	lower := strings.ToLower(s)
@@ -85,8 +82,7 @@ func displayVersion(clientID, stored string) string {
 	}
 }
 
-// storedVersion is the inverse of displayVersion: it turns the version field
-// text into the canonical value persisted on the profile.
+// storedVersion is the inverse of displayVersion: field text to the canonical value persisted on the profile.
 func storedVersion(clientID, entered string) string {
 	s := strings.TrimSpace(entered)
 	lower := strings.ToLower(s)
