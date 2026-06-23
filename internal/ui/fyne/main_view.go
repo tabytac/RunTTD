@@ -439,11 +439,6 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	newSection := func() *section {
 		return &section{form: container.New(layout.NewFormLayout())}
 	}
-	mutedLabel := func(text string) *widget.Label {
-		l := widget.NewLabel(text)
-		l.Importance = widget.LowImportance
-		return l
-	}
 	addField := func(s *section, label, value string, mono bool) {
 		if value == "" {
 			return
@@ -1147,6 +1142,12 @@ func centeredLabel(text string) *widget.Label {
 
 func mutedCenteredLabel(text string) *widget.Label {
 	l := centeredLabel(text)
+	l.Importance = widget.LowImportance
+	return l
+}
+
+func mutedLabel(text string) *widget.Label {
+	l := widget.NewLabel(text)
 	l.Importance = widget.LowImportance
 	return l
 }
