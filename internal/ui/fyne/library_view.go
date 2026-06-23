@@ -305,7 +305,7 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	revealBtn := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
 		if err := platform.RevealInFileManager(e.Path); err != nil {
 			um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", e.Path, err))
-			dialog.ShowError(fmt.Errorf("couldn't open the folder: %w", err), um.Window)
+			um.showErrorf("couldn't open the folder: %w", err)
 		}
 	})
 	revealBtn.Importance = widget.LowImportance
@@ -367,7 +367,7 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, afterChange f
 			}
 		}
 		if failed > 0 {
-			dialog.ShowError(fmt.Errorf("%d folder(s) could not be removed; see logs", failed), um.Window)
+			um.showErrorf("%d folder(s) could not be removed; see logs", failed)
 		}
 		afterChange()
 	}, um.Window).Show()

@@ -1,10 +1,23 @@
 package fyne
 
 import (
+	"errors"
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
+
+// showError displays a plain-message error dialog on the main window.
+func (um *UIManager) showError(msg string) { dialog.ShowError(errors.New(msg), um.Window) }
+
+// showErrorf displays an error dialog from a format string; use the %w verb to
+// keep a wrapped cause.
+func (um *UIManager) showErrorf(format string, a ...any) {
+	dialog.ShowError(fmt.Errorf(format, a...), um.Window)
+}
 
 // NewSectionTitle returns a bold label for use as a section header
 func NewSectionTitle(title string) *widget.Label {

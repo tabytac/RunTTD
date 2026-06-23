@@ -287,7 +287,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	// all three behave identically.
 	launchIndex := func(idx int) {
 		if idx < 0 || idx >= len(um.Config.Profiles) {
-			dialog.ShowError(fmt.Errorf("select a profile to launch"), um.Window)
+			um.showError("select a profile to launch")
 			return
 		}
 		if um.Config.AutoOpenLog {
@@ -515,7 +515,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			}
 			if err != nil {
 				um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", value, err))
-				dialog.ShowError(fmt.Errorf("couldn't open the location: %w", err), um.Window)
+				um.showErrorf("couldn't open the location: %w", err)
 			}
 		})
 		btn.Importance = widget.LowImportance
@@ -749,7 +749,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		if selectedIdx >= 0 {
 			um.showProfileEditor(selectedIdx, false)
 		} else {
-			dialog.ShowError(fmt.Errorf("select a profile to edit"), um.Window)
+			um.showError("select a profile to edit")
 		}
 	})
 	duplicateBtn = widget.NewButton("Duplicate", func() {
@@ -771,7 +771,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			refreshDetails()
 			updateEmptyState()
 		} else {
-			dialog.ShowError(fmt.Errorf("select a profile to duplicate"), um.Window)
+			um.showError("select a profile to duplicate")
 		}
 	})
 	deleteBtn = widget.NewButton("Delete", func() {
@@ -809,7 +809,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 					um.Window,
 				).Show()
 			} else {
-				dialog.ShowError(fmt.Errorf("cannot delete the last profile"), um.Window)
+				um.showError("cannot delete the last profile")
 			}
 		}
 	})

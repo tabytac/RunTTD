@@ -10,7 +10,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -330,7 +329,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			path, err := um.browseConfigPath(startPath)
 			if err != nil {
 				fyne.Do(func() {
-					dialog.ShowError(fmt.Errorf("could not open config picker: %w", err), um.Window)
+					um.showErrorf("could not open config picker: %w", err)
 				})
 				return
 			}
@@ -396,7 +395,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			path, err := um.browseSavePath(startPath, "Select Save or Scenario", false)
 			if err != nil {
 				fyne.Do(func() {
-					dialog.ShowError(fmt.Errorf("could not open file picker: %w", err), um.Window)
+					um.showErrorf("could not open file picker: %w", err)
 				})
 				return
 			}
@@ -423,7 +422,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			path, err := um.browseSavePath(startPath, "Select Save Folder", true)
 			if err != nil {
 				fyne.Do(func() {
-					dialog.ShowError(fmt.Errorf("could not open folder picker: %w", err), um.Window)
+					um.showErrorf("could not open folder picker: %w", err)
 				})
 				return
 			}
