@@ -53,17 +53,20 @@ func resolveOSType(cfg *domain.Config) string {
 // Matching is naive strings.Contains, so the bare "win32" token (for 0.1.0's
 // prefix-less openttd-0.1.0-win32.zip) MUST stay last or it would shadow
 // "windows-win32". Keep "win32" last.
+// clientPlatformAliasOverrides lists the cross-arch fallback chains for OS types
+// that have them; every other OS type falls back to [osType]. Order is
+// significant (canonical first, bare "win32" last) — see ClientPlatformAliases.
+var clientPlatformAliasOverrides = map[string][]string{
+	"windows-win64":   {"windows-win64", "mingw-win64", "windows-win32", "win32"},
+	"windows-win32":   {"windows-win32", "mingw-win32", "win32"},
+	"windows-arm64":   {"windows-arm64", "windows-win64", "windows-win32", "win32"},
+	"macos-universal": {"macos-universal", "macosx-universal"},
+}
+
 func ClientPlatformAliases(cfg *domain.Config) []string {
 	osType := resolveOSType(cfg)
-	switch osType {
-	case "windows-win64":
-		return []string{"windows-win64", "mingw-win64", "windows-win32", "win32"}
-	case "windows-win32":
-		return []string{"windows-win32", "mingw-win32", "win32"}
-	case "windows-arm64":
-		return []string{"windows-arm64", "windows-win64", "windows-win32", "win32"}
-	case "macos-universal":
-		return []string{"macos-universal", "macosx-universal"}
+	if aliases, ok := clientPlatformAliasOverrides[osType]; ok {
+		return aliases
 	}
 	return []string{osType}
 }
