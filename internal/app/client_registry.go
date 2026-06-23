@@ -29,8 +29,8 @@ func RegisterClient(c Client) {
 // RegisterBuiltInClients registers the standard built-in engine tracks (JGRPP, Stable Vanilla, Nightly Vanilla, and Custom)
 func RegisterBuiltInClients() {
 	RegisterClient(&jgrppClient{})
-	RegisterClient(&vanillaClient{nightly: false})
-	RegisterClient(&vanillaClient{nightly: true})
+	RegisterClient(&vanillaClient{isNightly: false})
+	RegisterClient(&vanillaClient{isNightly: true})
 	RegisterClient(&customClient{})
 }
 
@@ -89,16 +89,16 @@ func (c *customClient) FindInstalled(ctx context.Context, version string, cfg *d
 }
 
 // vanillaClient uses CDN mirrors
-type vanillaClient struct{ nightly bool }
+type vanillaClient struct{ isNightly bool }
 
 func (v *vanillaClient) ID() string {
-	if v.nightly {
+	if v.isNightly {
 		return "vanilla-nightly"
 	}
 	return "vanilla"
 }
 func (v *vanillaClient) DisplayName() string {
-	if v.nightly {
+	if v.isNightly {
 		return "Vanilla OpenTTD (Nightly)"
 	}
 	return "Vanilla OpenTTD (Releases)"
