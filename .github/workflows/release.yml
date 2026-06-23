@@ -49,7 +49,7 @@ jobs:
         run: echo "dir=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Go build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.gocache.outputs.dir }}
           key: gobuild-${{ runner.os }}-${{ matrix.goarch || 'native' }}-${{ hashFiles('go.sum') }}
@@ -113,7 +113,7 @@ jobs:
           echo "RELEASE_FILE=$RELEASE_FILE" >> $GITHUB_ENV
 
       - name: Upload release artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.platform }}
           path: dist/${{ env.RELEASE_FILE }}
@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: release-*

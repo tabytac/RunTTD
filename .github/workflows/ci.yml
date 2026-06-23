@@ -30,7 +30,7 @@ jobs:
         run: echo "dir=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Go build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.gocache.outputs.dir }}
           key: gobuild-${{ runner.os }}-test-${{ hashFiles('go.sum') }}
