@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -140,12 +139,7 @@ func osDisplayHint(osType string) string {
 // FetchNightlyManifest downloads manifest.yaml for a specific nightly tag build
 func FetchNightlyManifest(ctx context.Context, base, year, version string) (domain.NightlyManifestData, error) {
 	url := fmt.Sprintf("%s/%s/%s/manifest.yaml", strings.TrimRight(base, "/"), year, version)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return domain.NightlyManifestData{}, err
-	}
-
-	resp, err := httpClient.Do(req)
+	resp, err := doGETWithRetry(ctx, httpClient, url)
 	if err != nil {
 		return domain.NightlyManifestData{}, fmt.Errorf("failed to fetch nightly manifest: %w", err)
 	}
@@ -164,12 +158,7 @@ func FetchNightlyManifest(ctx context.Context, base, year, version string) (doma
 // nightly path, the URL has no year segment: {base}/{version}/manifest.yaml.
 func FetchReleaseManifest(ctx context.Context, base, version string) (domain.NightlyManifestData, error) {
 	url := fmt.Sprintf("%s/%s/manifest.yaml", strings.TrimRight(base, "/"), version)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return domain.NightlyManifestData{}, err
-	}
-
-	resp, err := httpClient.Do(req)
+	resp, err := doGETWithRetry(ctx, httpClient, url)
 	if err != nil {
 		return domain.NightlyManifestData{}, fmt.Errorf("failed to fetch release manifest: %w", err)
 	}
@@ -191,12 +180,7 @@ func FetchRecentNightlyVersions(ctx context.Context, base string, limit int) ([]
 	}
 	baseTrimmed := strings.TrimRight(base, "/")
 
-	req, err := http.NewRequestWithContext(ctx, "GET", baseTrimmed+"/", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := httpClient.Do(req)
+	resp, err := doGETWithRetry(ctx, httpClient, baseTrimmed+"/")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch nightly root index: %w", err)
 	}
@@ -219,11 +203,7 @@ func FetchRecentNightlyVersions(ctx context.Context, base string, limit int) ([]
 	seen := map[string]bool{}
 	for _, year := range years {
 		yearURL := fmt.Sprintf("%s/%s/", baseTrimmed, year)
-		yReq, err := http.NewRequestWithContext(ctx, "GET", yearURL, nil)
-		if err != nil {
-			continue
-		}
-		yResp, err := httpClient.Do(yReq)
+		yResp, err := doGETWithRetry(ctx, httpClient, yearURL)
 		if err != nil {
 			continue
 		}
@@ -280,11 +260,7 @@ func FetchAvailableVersionsForClient(ctx context.Context, client string, cfg *do
 		if base == "" {
 			base = "https://cdn.openttd.org/openttd-releases/"
 		}
-		req, err := http.NewRequestWithContext(ctx, "GET", base, nil)
-		if err != nil {
-			return nil, err
-		}
-		resp, err := httpClient.Do(req)
+		resp, err := doGETWithRetry(ctx, httpClient, base)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch vanilla index: %w", err)
 		}

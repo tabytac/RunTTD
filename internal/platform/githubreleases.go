@@ -38,12 +38,7 @@ func findReleaseAsset(assets []domain.ReleaseAsset, aliases []string) (url, name
 func FetchAvailableVersions(ctx context.Context, config *domain.Config) ([]string, error) {
 	repoURL := fmt.Sprintf("%s/releases?per_page=20", config.JgrppApiUrl)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", repoURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := httpClient.Do(req)
+	resp, err := doGETWithRetry(ctx, httpClient, repoURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get release info: %w", err)
 	}
@@ -69,12 +64,7 @@ func FetchAvailableVersions(ctx context.Context, config *domain.Config) ([]strin
 func CheckForNewVersion(ctx context.Context, config *domain.Config) string {
 	repoURL := fmt.Sprintf("%s/releases/latest", config.JgrppApiUrl)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", repoURL, nil)
-	if err != nil {
-		return ""
-	}
-
-	resp, err := httpClient.Do(req)
+	resp, err := doGETWithRetry(ctx, httpClient, repoURL)
 	if err != nil {
 		fmt.Printf("Failed to get latest release info: %v\n", err)
 		return ""
