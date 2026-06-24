@@ -37,6 +37,14 @@ type Config struct {
 	Profiles []Profile `json:"profiles"`
 }
 
+// ConfigParseError marks a config file that exists but isn't valid JSON, so the
+// caller can recover (back it up + reset) instead of treating it like any load
+// failure. Distinct from a read error, which wraps os.ErrNotExist.
+type ConfigParseError struct{ err error }
+
+func (e *ConfigParseError) Error() string { return "failed to parse config file: " + e.err.Error() }
+func (e *ConfigParseError) Unwrap() error { return e.err }
+
 // LoadConfig reads launcher configuration from the specified JSON file path
 func LoadConfig(filename string) (*Config, error) {
 	data, err := os.ReadFile(filename)
@@ -46,7 +54,7 @@ func LoadConfig(filename string) (*Config, error) {
 
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
+		return nil, &ConfigParseError{err: err}
 	}
 
 	if len(config.Profiles) == 0 {

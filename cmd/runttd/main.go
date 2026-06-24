@@ -29,6 +29,37 @@ func setupGuiOutput() {
 	}
 }
 
+// buildDefaultConfig returns a fresh FirstRun config with platform-appropriate
+// OpenTTD directory names. Used for both a missing and a recovered-corrupt config.
+func buildDefaultConfig() *domain.Config {
+	docsBase := platform.GetDocumentsDir()
+	ottdDirName := "OpenTTD"
+	clientsSuffix := "-Clients"
+	if runtime.GOOS == "linux" {
+		ottdDirName = "openttd"
+		clientsSuffix = "-clients"
+	}
+	return &domain.Config{
+		FirstRun:           true,
+		ParentDir:          filepath.Join(docsBase, ottdDirName+clientsSuffix),
+		DocsBasePath:       filepath.Join(docsBase, ottdDirName),
+		JgrppApiUrl:        domain.DefaultJgrppApiUrl,
+		OSType:             platform.DefaultOSType(),
+		SubfolderPerClient: true,
+		VanillaMirror:      domain.DefaultVanillaMirror,
+		NightlyMirror:      domain.DefaultNightlyMirror,
+		Profiles:           []domain.Profile{{Name: "Default", Version: "latest"}},
+	}
+}
+
+// recoverCorruptConfig moves an unreadable config aside to <path>.broken
+// (overwriting any earlier one) so it is preserved but can't keep failing.
+func recoverCorruptConfig(path string) error {
+	broken := path + ".broken"
+	os.Remove(broken)
+	return os.Rename(path, broken)
+}
+
 func main() {
 	setupGuiOutput()
 
@@ -43,42 +74,29 @@ func main() {
 	config, err := domain.LoadConfig(configPath)
 	bootstrapFileLog := false
 
-	if err == nil {
+	var parseErr *domain.ConfigParseError
+	switch {
+	case err == nil:
 		bootstrapFileLog = config.LogToFile
-	} else if errors.Is(err, os.ErrNotExist) {
-		// Default config values if runttd-config.json does not exist.
-		docsBase := platform.GetDocumentsDir()
-		ottdDirName := "OpenTTD"
-		clientsSuffix := "-Clients"
-		if runtime.GOOS == "linux" {
-			ottdDirName = "openttd"
-			clientsSuffix = "-clients"
-		}
-		defaultDocsDir := filepath.Join(docsBase, ottdDirName)
-		defaultParentDir := filepath.Join(docsBase, ottdDirName+clientsSuffix)
-
-		config = &domain.Config{
-			FirstRun:           true,
-			ParentDir:          defaultParentDir,
-			DocsBasePath:       defaultDocsDir,
-			JgrppApiUrl:        domain.DefaultJgrppApiUrl,
-			OSType:             platform.DefaultOSType(),
-			AutoCloseOnStart:   false,
-			Verbose:            false,
-			LogToFile:          false,
-			SubfolderPerClient: true,
-			DefaultClient:      "",
-			VanillaMirror:      domain.DefaultVanillaMirror,
-			NightlyMirror:      domain.DefaultNightlyMirror,
-			Profiles:           []domain.Profile{{Name: "Default", Version: "latest"}},
+	case errors.Is(err, os.ErrNotExist), errors.As(err, &parseErr):
+		// Missing OR corrupt config -> start from defaults. A corrupt file is moved
+		// aside to .broken first (preserved for recovery) so it can't keep failing;
+		// FirstRun then runs onboarding, signalling the reset without a dialog.
+		if errors.As(err, &parseErr) {
+			if recErr := recoverCorruptConfig(configPath); recErr != nil {
+				fmt.Fprintf(os.Stderr, "Config at %s was unreadable and could not be backed up: %v\n", configPath, recErr)
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "Config at %s was unreadable; backed up to %s.broken and reset to defaults.\n", configPath, configPath)
 		}
 
+		config = buildDefaultConfig()
 		if saveErr := domain.SaveConfig(configPath, config); saveErr != nil {
 			fmt.Fprintf(os.Stderr, "Failed to create default config at %s: %v\n", configPath, saveErr)
 			os.Exit(1)
 		}
 		bootstrapFileLog = config.LogToFile
-	} else {
+	default:
 		fmt.Fprintf(os.Stderr, "Startup failed while loading config: %v\n", err)
 		os.Exit(1)
 	}
