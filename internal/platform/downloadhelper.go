@@ -104,8 +104,40 @@ func extractIntoVersionFolder(archivePath, downloadDir, osTag string, logger *Lo
 
 	name = ensureOSTag(name, osTag)
 	dst := filepath.Join(downloadDir, name)
-	os.RemoveAll(dst) // replace any earlier copy
-	return os.Rename(src, dst)
+	return swapInVersionFolder(src, dst, downloadDir, os.Rename, logger)
+}
+
+// swapInVersionFolder moves src into place at dst without destroying an existing
+// install before the replacement is in place: the old folder is renamed into a
+// dot-prefixed backup first (scans skip dot-prefixed dirs), restored if the move
+// fails, and removed only on success. rename is injectable for testing.
+func swapInVersionFolder(src, dst, downloadDir string, rename func(string, string) error, logger *Logger) error {
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		return rename(src, dst)
+	}
+
+	backupDir, err := os.MkdirTemp(downloadDir, ".bak-")
+	if err != nil {
+		return err
+	}
+	backup := filepath.Join(backupDir, filepath.Base(dst))
+	// Abort without touching the old install if it can't be backed up (e.g. locked).
+	if err := rename(dst, backup); err != nil {
+		os.RemoveAll(backupDir)
+		return fmt.Errorf("could not back up existing install: %w", err)
+	}
+
+	if err := rename(src, dst); err != nil {
+		_ = rename(backup, dst) // restore the old install
+		os.RemoveAll(backupDir)
+		return err
+	}
+
+	// Leftover backup is cosmetic (the new install is correct); log and move on.
+	if err := os.RemoveAll(backupDir); err != nil && logger != nil {
+		logger.Append(fmt.Sprintf("Could not remove backup of replaced install: %v", err))
+	}
+	return nil
 }
 
 // archiveBaseName is the archive's file name without its extension.

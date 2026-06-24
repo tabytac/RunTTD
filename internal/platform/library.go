@@ -113,8 +113,8 @@ func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 			continue
 		}
 		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
+			if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+				continue // skip dot-prefixed temp/backup dirs (.extract-, .bak-)
 			}
 			path := filepath.Join(root, entry.Name())
 			if seen[path] {
