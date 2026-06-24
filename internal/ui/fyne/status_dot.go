@@ -2,6 +2,7 @@ package fyne
 
 import (
 	"context"
+	"fmt"
 	"image/color"
 	"os"
 	"strings"
@@ -245,6 +246,7 @@ func (um *UIManager) startUpstreamFetch(client, track string) {
 		defer cancel()
 		tag := apppkg.ClientLatestForTrack(ctx, client, track, um.Config)
 		if tag == "" {
+			um.LogVerbose(fmt.Sprintf("Upstream version check failed for %s (%s); status unknown (offline?)", client, track))
 			um.upstream.store(key, "", failedUpstream)
 		} else {
 			um.upstream.store(key, tag, okUpstream)
