@@ -282,8 +282,8 @@ func FindLatestFolderClientWithConfig(parentDir, client string, cfg *domain.Conf
 	platformAliases := ClientPlatformAliases(cfg)
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue // skip dot-prefixed temp/backup dirs (.extract-, .bak-)
 		}
 		name := strings.ToLower(entry.Name())
 		switch client {

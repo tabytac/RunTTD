@@ -112,8 +112,13 @@ func extractIntoVersionFolder(archivePath, downloadDir, osTag string, logger *Lo
 // dot-prefixed backup first (scans skip dot-prefixed dirs), restored if the move
 // fails, and removed only on success. rename is injectable for testing.
 func swapInVersionFolder(src, dst, downloadDir string, rename func(string, string) error, logger *Logger) error {
-	if _, err := os.Stat(dst); os.IsNotExist(err) {
+	_, statErr := os.Stat(dst)
+	if os.IsNotExist(statErr) {
 		return rename(src, dst)
+	}
+	// Don't guess on an ambiguous stat (permission/I/O); never risk the old install.
+	if statErr != nil {
+		return fmt.Errorf("could not check existing install: %w", statErr)
 	}
 
 	backupDir, err := os.MkdirTemp(downloadDir, ".bak-")
@@ -128,7 +133,11 @@ func swapInVersionFolder(src, dst, downloadDir string, rename func(string, strin
 	}
 
 	if err := rename(src, dst); err != nil {
-		_ = rename(backup, dst) // restore the old install
+		// Restore the old install. If even that fails, the only intact copy is the
+		// backup — keep it and tell the user where, rather than deleting it.
+		if restoreErr := rename(backup, dst); restoreErr != nil {
+			return fmt.Errorf("install update failed (%w) and the previous version could not be restored (%v); it is preserved at %s", err, restoreErr, backup)
+		}
 		os.RemoveAll(backupDir)
 		return err
 	}
