@@ -37,6 +37,7 @@ type mainView struct {
 	// Launch-band state.
 	launchLogsIdx    int
 	launchInProgress bool
+	launchGen        int // bumped per launch; guards the stale success auto-hide
 
 	detailsContainer *fyne.Container
 	profileList      *fyneadvancedlist.List
@@ -128,6 +129,7 @@ func (mv *mainView) launchIndex(idx int) {
 		return
 	}
 	mv.launchInProgress = true
+	mv.launchGen++
 
 	profile := um.Config.Profiles[idx]
 	mv.launchLogsIdx = idx
@@ -196,12 +198,24 @@ func (mv *mainView) launchIndex(idx int) {
 			if um.profileListRefresh != nil {
 				um.profileListRefresh() // a download may have changed installed state
 			}
+			gen := mv.launchGen
 			go func() {
 				time.Sleep(6000 * time.Millisecond)
-				fyne.Do(mv.launchBand.Hide)
+				fyne.Do(func() {
+					if mv.shouldAutoHide(gen) {
+						mv.launchBand.Hide()
+					}
+				})
 			}()
 		})
 	}()
+}
+
+// shouldAutoHide reports whether a success auto-hide timer started for gen may
+// still hide the band: only if no newer launch has bumped launchGen and none is
+// in flight.
+func (mv *mainView) shouldAutoHide(gen int) bool {
+	return gen == mv.launchGen && !mv.launchInProgress
 }
 
 func (mv *mainView) updateButtonStates() {
