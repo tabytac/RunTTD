@@ -25,6 +25,37 @@ func valueOrDefault(val, def string) string {
 	return val
 }
 
+// trimSavePrefix strips any leading save/ or save\ segments; the launch path
+// re-joins SavePath against docs/save, so a stored "save/" prefix would double up.
+func trimSavePrefix(p string) string {
+	for {
+		lowered := strings.ToLower(p)
+		if strings.HasPrefix(lowered, "save/") || strings.HasPrefix(lowered, "save\\") {
+			p = p[5:]
+			continue
+		}
+		return p
+	}
+}
+
+// pathExistsWarning returns a "<label> not found" warning if raw resolves to a
+// missing path, or "" when empty or present. Relative paths resolve against base
+// (the same resolution the launch path uses), so the warning matches what would
+// actually happen at launch.
+func pathExistsWarning(label, raw, base string) string {
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return ""
+	}
+	if !filepath.IsAbs(p) && base != "" {
+		p = filepath.Join(base, p)
+	}
+	if _, err := os.Stat(p); err != nil {
+		return fmt.Sprintf("Warning: %s not found: %s", label, p)
+	}
+	return ""
+}
+
 // versionTrackHintText returns the per-client note about what "latest" resolves
 // to, or "" for nightly/custom. JGRPP "latest" is stable-only by design.
 func versionTrackHintText(clientID string) string {
@@ -519,21 +550,26 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			return
 		}
 
-		configPath := strings.TrimSpace(configFileEntry.Text)
-		if configPath != "" {
-			checkPath := configPath
-			if !filepath.IsAbs(checkPath) && um.Config.DocsBasePath != "" {
-				checkPath = filepath.Join(um.Config.DocsBasePath, checkPath)
-			}
-			if _, err := os.Stat(checkPath); err != nil {
-				statusLabel.SetText(fmt.Sprintf("Warning: config file not found: %s", checkPath))
+		if warn := pathExistsWarning("config file", configFileEntry.Text, um.Config.DocsBasePath); warn != "" {
+			statusLabel.SetText(warn)
+			statusLabel.Refresh()
+			return
+		}
+
+		// Save path is only used in file/folder mode; resolve it the way launch
+		// does (relative to docs/save, after stripping a leading save/ prefix).
+		mode := modeMap[modeSelect.Selected]
+		if mode == "file" || mode == "folder" {
+			rawSave := trimSavePrefix(strings.TrimSpace(savePathEntry.Text))
+			saveBase := filepath.Join(um.Config.DocsBasePath, "save")
+			if warn := pathExistsWarning("save path", rawSave, saveBase); warn != "" {
+				statusLabel.SetText(warn)
 				statusLabel.Refresh()
 				return
 			}
 		}
 
 		statusLabel.SetText("")
-		_ = ok
 		statusLabel.Refresh()
 	}
 
@@ -564,16 +600,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			profile.CustomExecutablePath = ""
 		}
 
-		rawSavePath := strings.TrimSpace(savePathEntry.Text)
-		for {
-			lowered := strings.ToLower(rawSavePath)
-			if strings.HasPrefix(lowered, "save/") || strings.HasPrefix(lowered, "save\\") {
-				rawSavePath = rawSavePath[5:]
-				continue
-			}
-			break
-		}
-		profile.SavePath = rawSavePath
+		profile.SavePath = trimSavePrefix(strings.TrimSpace(savePathEntry.Text))
 		profile.ServerIpPort = strings.TrimSpace(ipPortEntry.Text)
 		profile.ServerPassword = serverPassEntry.Text
 		profile.ServerCompanyNumber = strings.TrimSpace(companyNumEntry.Text)
