@@ -29,14 +29,12 @@ func ExecuteOpenTTD(
 	versionFolder string,
 	profile domain.Profile,
 	docsBasePath string,
+	allowCompanyPassword bool,
 	obs ProcessObserver,
 ) {
 	var saveFile string
-	var finalIpPort string
 
 	switch profile.LaunchMode {
-	case "multiplayer":
-		finalIpPort = profile.ServerIpPort
 	case "file", "folder":
 		if profile.SavePath != "" {
 			gamePath := profile.SavePath
@@ -78,52 +76,12 @@ func ExecuteOpenTTD(
 		}
 	}
 
-	var args []string
-
-	if finalIpPort != "" {
-		nArg := finalIpPort
-		if profile.ServerCompanyNumber != "" {
-			nArg = fmt.Sprintf("%s#%s", finalIpPort, profile.ServerCompanyNumber)
-		}
-		args = append(args, "-n", nArg)
-
-		if profile.ServerPassword != "" {
-			args = append(args, "-p", profile.ServerPassword)
-		}
-		if profile.ServerCompanyPassword != "" {
-			args = append(args, "-P", profile.ServerCompanyPassword)
-		}
-	}
-
-	if saveFile != "" {
-		args = append(args, "-g", saveFile)
-	}
-
 	configPath := strings.TrimSpace(profile.ConfigFilePath)
-	if configPath != "" {
-		if !filepath.IsAbs(configPath) && docsBasePath != "" {
-			configPath = filepath.Join(docsBasePath, configPath)
-		}
-		args = append(args, "-c", configPath)
+	if configPath != "" && !filepath.IsAbs(configPath) && docsBasePath != "" {
+		configPath = filepath.Join(docsBasePath, configPath)
 	}
 
-	if profile.NoConfigSave {
-		args = append(args, "-x")
-	}
-
-	// NewGRF scan mode dedicated flags
-	switch strings.ToUpper(strings.TrimSpace(profile.NewGRFScanMode)) {
-	case "Q":
-		args = append(args, "-Q")
-	case "QQ":
-		args = append(args, "-QQ")
-	}
-
-	// Append extra arguments from the Advanced tab
-	if profile.ExtraArgs != "" {
-		fields := stripDedicatedConfigArgs(strings.Fields(profile.ExtraArgs))
-		args = append(args, fields...)
-	}
+	args := buildLaunchArgs(profile, saveFile, configPath, allowCompanyPassword)
 
 	cmd := exec.CommandContext(ctx, exePath, args...)
 	if len(args) > 0 {
@@ -163,6 +121,61 @@ func ExecuteOpenTTD(
 			obs.LogVerbose("OpenTTD exited normally")
 		}
 	}()
+}
+
+// buildLaunchArgs assembles the OpenTTD CLI arguments for a profile. saveFile and
+// configPath are pre-resolved absolute/relative strings; allowCompanyPassword gates
+// the JGRPP-only -P flag (callers pass app.ClientSupportsCompanyPassword(effClient)).
+func buildLaunchArgs(profile domain.Profile, saveFile, configPath string, allowCompanyPassword bool) []string {
+	var args []string
+
+	var finalIpPort string
+	if profile.LaunchMode == "multiplayer" {
+		finalIpPort = profile.ServerIpPort
+	}
+
+	if finalIpPort != "" {
+		nArg := finalIpPort
+		if profile.ServerCompanyNumber != "" {
+			nArg = fmt.Sprintf("%s#%s", finalIpPort, profile.ServerCompanyNumber)
+		}
+		args = append(args, "-n", nArg)
+
+		if profile.ServerPassword != "" {
+			args = append(args, "-p", profile.ServerPassword)
+		}
+		if profile.ServerCompanyPassword != "" && allowCompanyPassword {
+			args = append(args, "-P", profile.ServerCompanyPassword)
+		}
+	}
+
+	if saveFile != "" {
+		args = append(args, "-g", saveFile)
+	}
+
+	if configPath != "" {
+		args = append(args, "-c", configPath)
+	}
+
+	if profile.NoConfigSave {
+		args = append(args, "-x")
+	}
+
+	// NewGRF scan mode dedicated flags
+	switch strings.ToUpper(strings.TrimSpace(profile.NewGRFScanMode)) {
+	case "Q":
+		args = append(args, "-Q")
+	case "QQ":
+		args = append(args, "-QQ")
+	}
+
+	// Append extra arguments from the Advanced tab
+	if profile.ExtraArgs != "" {
+		fields := stripDedicatedConfigArgs(strings.Fields(profile.ExtraArgs))
+		args = append(args, fields...)
+	}
+
+	return args
 }
 
 // dedicatedConfigFlags maps each stripped flag to whether it also consumes the next arg (true only for -c's config path).

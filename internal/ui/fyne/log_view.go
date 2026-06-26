@@ -187,7 +187,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 		if updateStatus != nil {
 			updateStatus("Starting OpenTTD from custom folder")
 		}
-		platform.ExecuteOpenTTD(context.Background(), folder, profile, um.Config.DocsBasePath, um)
+		platform.ExecuteOpenTTD(context.Background(), folder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
 		if updateStatus != nil {
 			updateStatus("Launch command sent")
 		}
@@ -228,7 +228,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			if updateStatus != nil {
 				updateStatus("Starting OpenTTD from latest local installation")
 			}
-			platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, um)
+			platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
 			if updateStatus != nil {
 				updateStatus("Launch command sent")
 			}
@@ -301,7 +301,7 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 	if updateStatus != nil {
 		updateStatus("Starting OpenTTD")
 	}
-	platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, um)
+	platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
 	if updateStatus != nil {
 		updateStatus("Launch command sent")
 	}
