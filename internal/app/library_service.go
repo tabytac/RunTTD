@@ -38,6 +38,18 @@ func EffectiveClient(profileClient, defaultClient string) string {
 	return "jgrpp"
 }
 
+// ClientSupportsCompanyPassword reports whether a client accepts OpenTTD's
+// JGRPP-only -P company-password flag. Custom is permissive: the user's binary
+// may be a JGRPP build, and suppressing -P would silently break that.
+func ClientSupportsCompanyPassword(clientID string) bool {
+	switch clientID {
+	case "jgrpp", "custom":
+		return true
+	default: // vanilla, vanilla-nightly, empty, unknown
+		return false
+	}
+}
+
 // LatestTrack maps a profile's (client, version) to the upstream track the launch
 // path resolves against: "testing" for latest-testing (or any nightly latest),
 // else "stable". Pinned versions return "stable" (the track is then unused).
