@@ -141,6 +141,14 @@ func storedVersion(clientID, entered string) string {
 	}
 }
 
+// Empty selection means jgrpp (save-handler default), not Config.DefaultClient — don't route this through EffectiveClient.
+func companyPasswordClientID(cli string) string {
+	if cli == "" {
+		return "jgrpp"
+	}
+	return cli
+}
+
 // showProfileEditor displays the edit modal popup for creating or updating profiles
 func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	var profile domain.Profile
@@ -204,10 +212,12 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 	// updateState is defined later, but the client radio callback may need to call it.
 	var updateState func()
+	var setCompanyPasswordVisible func(visible bool)
 	initializingClientSelection := true
 	clientSelect := NewSegmentedRadio(defaultClientOptions, "", func(s string) {
 		cli := defaultClientMap[s]
 		updateClientFields(cli)
+		setCompanyPasswordVisible(app.ClientSupportsCompanyPassword(companyPasswordClientID(cli)))
 		if initializingClientSelection {
 			versionEntry.SetOptions(defaultVersionOptions(cli))
 			versionEntry.Refresh()
@@ -487,16 +497,31 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		widget.NewLabel("Path (Relative or Absolute)"),
 		savePathEntry,
 	}
+	companyNumGroup := container.NewVBox(widget.NewLabel("Company Number"), companyNumEntry)
+	companyPassGroup := container.NewVBox(widget.NewLabel("Company Password"), companyPassEntry)
+	companyDetailsRow := container.NewStack()
+
+	// Rebuild as 1 column when -P is unsupported; hiding alone strands Company Number in a half-width grid.
+	setCompanyPasswordVisible = func(visible bool) {
+		companyDetailsRow.Objects = nil
+		if visible {
+			companyDetailsRow.Add(container.NewGridWithColumns(2, companyNumGroup, companyPassGroup))
+		} else {
+			companyDetailsRow.Add(container.NewGridWithColumns(1, companyNumGroup))
+		}
+		companyDetailsRow.Refresh()
+	}
+	// Set initial visibility now that the helper is assigned (companyNumEntry/
+	// companyPassEntry are constructed above, so this can't run any earlier).
+	setCompanyPasswordVisible(app.ClientSupportsCompanyPassword(companyPasswordClientID(currentClient)))
+
 	multiplayerOption.Objects = []fyne.CanvasObject{
 		NewSectionTitle("Server Connection"),
 		widget.NewLabel("Server IP:Port"), ipPortEntry,
 		widget.NewLabel("Server Password"), serverPassEntry,
 		widget.NewSeparator(),
 		NewSectionTitle("Company Details"),
-		container.NewGridWithColumns(2,
-			container.NewVBox(widget.NewLabel("Company Number"), companyNumEntry),
-			container.NewVBox(widget.NewLabel("Company Password"), companyPassEntry),
-		),
+		companyDetailsRow,
 	}
 
 	updateVisibility(revModeMap[profile.LaunchMode])

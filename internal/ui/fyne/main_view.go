@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	fyneadvancedlist "github.com/dweymouth/fyne-advanced-list"
 
+	apppkg "runttd/internal/app"
 	"runttd/internal/domain"
 	"runttd/internal/platform"
 )
@@ -293,7 +294,10 @@ func (mv *mainView) refreshDetails() {
 		launch.addField("Server", profile.ServerIpPort, false)
 		launch.addField("Company Number", profile.ServerCompanyNumber, false)
 		launch.addReveal("Server Password", profile.ServerPassword)
-		launch.addReveal("Company Password", profile.ServerCompanyPassword)
+		effClient := apppkg.EffectiveClient(profile.Client, um.Config.DefaultClient)
+		if apppkg.ClientSupportsCompanyPassword(effClient) {
+			launch.addReveal("Company Password", profile.ServerCompanyPassword)
+		}
 	}
 	launch.emit("Launch", mv.detailsContainer)
 
