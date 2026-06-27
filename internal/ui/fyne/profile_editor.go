@@ -56,6 +56,14 @@ func pathExistsWarning(label, raw, base string) string {
 	return ""
 }
 
+// carryForwardAutoLaunch updates the stored auto-launch name when its profile is renamed.
+func carryForwardAutoLaunch(oldName, newName, stored string) string {
+	if stored != "" && stored == oldName {
+		return newName
+	}
+	return stored
+}
+
 // versionTrackHintText returns the per-client note about what "latest" resolves
 // to, or "" for nightly/custom. JGRPP "latest" is stable-only by design.
 func versionTrackHintText(clientID string) string {
@@ -608,6 +616,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			return
 		}
 
+		oldProfileName := profile.Name
 		profile.Name = strings.TrimSpace(nameEntry.Text)
 
 		selectedClient := "jgrpp"
@@ -671,6 +680,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		} else {
 			um.Config.Profiles[profileIdx] = profile
 		}
+		um.Config.AutoLaunchProfile = carryForwardAutoLaunch(oldProfileName, profile.Name, um.Config.AutoLaunchProfile)
 		um.SelectedProfileName = profile.Name
 
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
