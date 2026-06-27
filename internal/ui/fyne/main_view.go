@@ -109,6 +109,7 @@ func (mv *mainView) handleRowTap(idx int) {
 }
 
 func (mv *mainView) runSelected() {
+	mv.um.suppressAutoCloseOnce = false
 	mv.launchIndex(mv.selectedIdx)
 }
 
@@ -755,6 +756,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				} else {
 					mv.profileList.UnselectAll()
 				}
+				mv.um.suppressAutoCloseOnce = false
 				mv.launchIndex(idx)
 				return
 			}
