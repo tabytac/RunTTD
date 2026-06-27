@@ -92,7 +92,7 @@ const autoLaunchOffLabel = "Off (don't auto-launch)"
 
 // autoLaunchOptions builds the Behavior-tab dropdown options. Index 0 is the
 // "off" sentinel; each profile is prefixed with its 1-based position so a
-// profile named exactly like the sentinel can't collide with it.
+// profile named exactly like the sentinel can't collide with it (Fyne's Select keys purely on the option string).
 func autoLaunchOptions(profiles []domain.Profile) ([]string, map[string]int) {
 	opts := []string{autoLaunchOffLabel}
 	labelToIdx := make(map[string]int, len(profiles))

@@ -688,6 +688,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		if runAfter {
 			// Launch via the rebuilt main view so it honors AutoOpenLog and shows
 			// the launch band, rather than always forcing the log view open.
+			um.suppressAutoCloseOnce = false // Save & Run is a manual launch; don't inherit a stale startup-suppression.
 			um.pendingLaunchIdx = savedIdx
 		}
 		um.Window.SetContent(um.makeMainView())
