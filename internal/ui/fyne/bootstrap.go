@@ -112,11 +112,26 @@ func (um *UIManager) LogImportant(msg string) {
 	um.Logger.Append(msg)
 }
 
+// armAutoLaunch queues the configured startup profile through pendingLaunchIdx and suppresses auto-close for that one launch.
+func (um *UIManager) armAutoLaunch() {
+	if um.Config.AutoLaunchProfile == "" {
+		return
+	}
+	for i, p := range um.Config.Profiles {
+		if p.Name == um.Config.AutoLaunchProfile {
+			um.pendingLaunchIdx = i
+			um.suppressAutoCloseOnce = true
+			return
+		}
+	}
+}
+
 // Show renders either the first-run onboarding screen or standard profile panel depending on loaded configs
 func (um *UIManager) Show() {
 	if um.Config.FirstRun {
 		um.Window.SetContent(um.makeOnboardingView())
 	} else {
+		um.armAutoLaunch()
 		um.Window.SetContent(um.makeMainView())
 	}
 	um.Window.ShowAndRun()
