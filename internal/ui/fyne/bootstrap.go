@@ -30,8 +30,10 @@ type UIManager struct {
 	SelectedProfileName string
 	LastListSelectID    int
 	LastListSelectAt    time.Time
-	pendingLaunchIdx    int
-	CachedVersions      []string
+	pendingLaunchIdx      int
+	suppressAutoCloseOnce bool // Skip auto-close for the one startup auto-launch
+	quit                  func()
+	CachedVersions        []string
 	upstream            *upstreamCache
 	profileListRefresh  func() // set by the main view; refreshes the profile list from any goroutine (via fyne.Do)
 }
@@ -83,6 +85,7 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 		pt.OverrideVariant = &v
 	}
 
+	um.quit = um.App.Quit
 	um.App.Settings().SetTheme(pt)
 
 	// Persist the window size on close so the next launch reopens at it. Canvas
@@ -119,9 +122,13 @@ func (um *UIManager) Show() {
 	um.Window.ShowAndRun()
 }
 
-// OnOpenTTDStarted terminates the launcher UI if auto-close is configured on startup
+// OnOpenTTDStarted terminates the launcher UI if auto-close is configured, unless suppressed for the startup auto-launch.
 func (um *UIManager) OnOpenTTDStarted() {
+	if um.suppressAutoCloseOnce {
+		um.suppressAutoCloseOnce = false
+		return
+	}
 	if um.Config.AutoCloseOnStart {
-		um.App.Quit()
+		um.quit()
 	}
 }
