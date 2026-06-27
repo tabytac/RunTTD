@@ -16,6 +16,16 @@ const (
 	DefaultNightlyMirror = "https://cdn.openttd.org/openttd-nightlies/"
 )
 
+// Window size bounds. The min floor rejects an unset (0) or implausibly small
+// saved size — e.g. a value mis-captured during teardown — so the next launch
+// falls back to a usable default rather than an unusable sliver.
+const (
+	DefaultWindowWidth  = 940
+	DefaultWindowHeight = 860
+	minWindowWidth      = 640
+	minWindowHeight     = 480
+)
+
 // Config represents the top-level launcher configuration
 type Config struct {
 	FirstRun           bool   `json:"-"`
@@ -33,8 +43,20 @@ type Config struct {
 	DefaultClient      string `json:"defaultClient"`
 	VanillaMirror      string `json:"vanillaMirror"`
 	NightlyMirror      string `json:"nightlyMirror"`
+	WindowWidth        int    `json:"windowWidth"`
+	WindowHeight       int    `json:"windowHeight"`
 
 	Profiles []Profile `json:"profiles"`
+}
+
+// WindowSize returns the saved main-window size, or the default when unset or
+// below the minimum (the floor guards against a garbage value persisting an
+// unusable window).
+func (c *Config) WindowSize() (w, h float32) {
+	if c.WindowWidth < minWindowWidth || c.WindowHeight < minWindowHeight {
+		return DefaultWindowWidth, DefaultWindowHeight
+	}
+	return float32(c.WindowWidth), float32(c.WindowHeight)
 }
 
 // ConfigParseError marks a config file that exists but isn't valid JSON, so the

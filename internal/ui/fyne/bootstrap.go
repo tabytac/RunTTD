@@ -43,7 +43,8 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 	fyneApp.SetIcon(appIcon)
 	window := fyneApp.NewWindow("RunTTD")
 	window.SetIcon(appIcon)
-	window.Resize(fyne.NewSize(940, 860))
+	w, h := config.WindowSize()
+	window.Resize(fyne.NewSize(w, h))
 
 	um := &UIManager{
 		App:              fyneApp,
@@ -83,6 +84,15 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 	}
 
 	um.App.Settings().SetTheme(pt)
+
+	// Persist the window size on close so the next launch reopens at it. Canvas
+	// size is the readable content size; the WindowSize floor guards a bad value.
+	window.SetOnClosed(func() {
+		sz := window.Canvas().Size()
+		um.Config.WindowWidth = int(sz.Width)
+		um.Config.WindowHeight = int(sz.Height)
+		_ = domain.SaveConfig(um.ConfigPath, um.Config)
+	})
 
 	return um
 }
