@@ -43,6 +43,7 @@ type Config struct {
 	DefaultClient      string `json:"defaultClient"`
 	VanillaMirror      string `json:"vanillaMirror"`
 	NightlyMirror      string `json:"nightlyMirror"`
+	AutoLaunchProfile  string `json:"autoLaunchProfile"`
 	WindowWidth        int    `json:"windowWidth"`
 	WindowHeight       int    `json:"windowHeight"`
 
