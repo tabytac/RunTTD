@@ -88,6 +88,36 @@ func osTypeLabelToValue(detected, label string) string {
 	return label
 }
 
+const autoLaunchOffLabel = "Off (don't auto-launch)"
+
+// autoLaunchOptions builds the Behavior-tab dropdown options. Index 0 is the
+// "off" sentinel; each profile is prefixed with its 1-based position so a
+// profile named exactly like the sentinel can't collide with it.
+func autoLaunchOptions(profiles []domain.Profile) ([]string, map[string]int) {
+	opts := []string{autoLaunchOffLabel}
+	labelToIdx := make(map[string]int, len(profiles))
+	for i, p := range profiles {
+		label := fmt.Sprintf("%d. %s", i+1, p.Name)
+		opts = append(opts, label)
+		labelToIdx[label] = i
+	}
+	return opts, labelToIdx
+}
+
+// autoLaunchSelectedLabel returns the decorated label for the stored profile
+// name, or the off sentinel when stored is empty or no longer matches.
+func autoLaunchSelectedLabel(profiles []domain.Profile, stored string) string {
+	if stored == "" {
+		return autoLaunchOffLabel
+	}
+	for i, p := range profiles {
+		if p.Name == stored {
+			return fmt.Sprintf("%d. %s", i+1, p.Name)
+		}
+	}
+	return autoLaunchOffLabel
+}
+
 // scrollForwardingEntry forwards scroll events to parent containers
 type scrollForwardingEntry struct {
 	widget.Entry
@@ -193,6 +223,10 @@ func (um *UIManager) showSettingsView() {
 		um.Config.Verbose,
 	)
 
+	autoLaunchOpts, autoLaunchLabelToIdx := autoLaunchOptions(um.Config.Profiles)
+	autoLaunchSelect := widget.NewSelect(autoLaunchOpts, func(string) {})
+	autoLaunchSelect.SetSelected(autoLaunchSelectedLabel(um.Config.Profiles, um.Config.AutoLaunchProfile))
+
 	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(
 		"Organize downloaded clients into per-client subfolders",
 		"Keeps each client's downloaded files in a separate folder, instead of all sharing the parent folder. "+
@@ -216,6 +250,10 @@ func (um *UIManager) showSettingsView() {
 		autoCloseCheck,
 		autoOpenLogCheck,
 		verboseGroup,
+		widget.NewLabel("Auto-launch profile on startup"),
+		autoLaunchSelect,
+		NewSectionDescription("Launches the selected profile when RunTTD opens. "+
+			"The launcher stays open for this startup launch even if auto-close is enabled."),
 	)
 	behaviorScroll := container.NewVScroll(behaviorContent)
 	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), behaviorScroll)
@@ -263,6 +301,12 @@ func (um *UIManager) showSettingsView() {
 			if mapped, ok := defaultClientMap[sel]; ok {
 				um.Config.DefaultClient = mapped
 			}
+		}
+
+		if sel := autoLaunchSelect.Selected; sel == autoLaunchOffLabel || sel == "" {
+			um.Config.AutoLaunchProfile = ""
+		} else if idx, ok := autoLaunchLabelToIdx[sel]; ok {
+			um.Config.AutoLaunchProfile = um.Config.Profiles[idx].Name
 		}
 
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
