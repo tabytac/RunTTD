@@ -184,6 +184,24 @@ func (um *UIManager) buildAppearanceTab() fyne.CanvasObject {
 	return container.NewBorder(nil, nil, nil, nil, container.NewVScroll(content))
 }
 
+// findTitleLabel locates the modal's title label by text so refreshDirty can
+// retitle it; matching by text avoids coupling to NewModalDialog's frame layout.
+func findTitleLabel(root fyne.CanvasObject, text string) *widget.Label {
+	switch o := root.(type) {
+	case *widget.Label:
+		if o.Text == text {
+			return o
+		}
+	case *fyne.Container:
+		for _, child := range o.Objects {
+			if l := findTitleLabel(child, text); l != nil {
+				return l
+			}
+		}
+	}
+	return nil
+}
+
 // showSettingsView shows a dialog to edit global settings
 func (um *UIManager) showSettingsView() {
 	parentDirEntry := widget.NewEntry()
@@ -307,6 +325,28 @@ func (um *UIManager) showSettingsView() {
 		um.Config.SubfolderPerClient,
 	)
 
+	// Dirty-state compares live widget values to a baseline snapshot, never an
+	// OnChanged flag (Entry.OnChanged fires on SetText). Appearance is excluded
+	// from the snapshot because it persists live on click.
+	type settingsSnapshot struct {
+		parentDir, docsBasePath                    string
+		subfolder, autoClose, autoOpenLog, verbose bool
+		defaultClient, autoLaunch, osType          string
+		vanillaMirror, nightlyMirror, jgrppApiURL  string
+	}
+	current := func() settingsSnapshot {
+		return settingsSnapshot{
+			parentDir: parentDirEntry.Text, docsBasePath: docsBasePathEntry.Text,
+			subfolder: subfolderCheck.Checked, autoClose: autoCloseCheck.Checked,
+			autoOpenLog: autoOpenLogCheck.Checked, verbose: verboseCheck.Checked,
+			defaultClient: defaultClientSelect.Selected, autoLaunch: autoLaunchSelect.Selected,
+			osType:        osTypeSelect.Selected,
+			vanillaMirror: vanillaMirrorEntry.Text, nightlyMirror: nightlyMirrorEntry.Text, jgrppApiURL: jgrppApiUrlEntry.Text,
+		}
+	}
+	baseline := current()
+	isDirty := func() bool { return current() != baseline }
+
 	// Files & Storage: the install/save anchors plus the subfolder layout switch.
 	filesContent := container.NewVBox(
 		NewSectionHeader("Installation Paths"),
@@ -422,18 +462,64 @@ func (um *UIManager) showSettingsView() {
 			saveBtn.Enable()
 		}
 	}
-	parentDirEntry.OnChanged = updateState
-	docsBasePathEntry.OnChanged = func(s string) { updateDocsValidation(s); updateState(s) }
-	updateState("")
-
-	cancelBtn := widget.NewButton("Cancel", func() {
-		settingsDialog.Hide()
-	})
+	// cancelOrConfirm closes the dialog directly when clean, else asks before discarding.
+	// Reused by the Cancel button and (Task 11) the scoped Escape handler.
+	cancelOrConfirm := func() {
+		if !isDirty() {
+			settingsDialog.Hide()
+			return
+		}
+		dialog.ShowCustomConfirm("Discard changes?",
+			"Discard", "Keep editing",
+			widget.NewLabel("You have unsaved changes. Theme and accent changes are kept (they apply immediately)."),
+			func(discard bool) {
+				if discard {
+					settingsDialog.Hide()
+				}
+			}, um.Window)
+	}
+	cancelBtn := widget.NewButton("Cancel", cancelOrConfirm)
 
 	// statusLabel sits below the tabs (above the toolbar) so the blocking hint is visible from any tab.
 	content := container.NewBorder(nil, statusLabel, nil, nil, tabs)
 	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", content, cancelBtn, saveBtn)
 	// ModalPopUp isn't drag-resizable; this is the initial size, kept honest by the Border-centred scrolls.
 	settingsDialog.Resize(fyne.NewSize(760, 560))
+
+	titleLabel := findTitleLabel(settingsDialog.Content, "Global Settings")
+	// refreshDirty reflects unsaved edits: Save turns high-importance and the title gains " *".
+	refreshDirty := func() {
+		dirty := isDirty()
+		if dirty {
+			saveBtn.Importance = widget.HighImportance
+		} else {
+			saveBtn.Importance = widget.MediumImportance
+		}
+		saveBtn.Refresh()
+		if titleLabel != nil {
+			if dirty {
+				titleLabel.SetText("Global Settings *")
+			} else {
+				titleLabel.SetText("Global Settings")
+			}
+		}
+	}
+
+	parentDirEntry.OnChanged = func(s string) { updateState(s); refreshDirty() }
+	docsBasePathEntry.OnChanged = func(s string) { updateDocsValidation(s); updateState(s); refreshDirty() }
+	dirtyOnChanged := func(string) { refreshDirty() }
+	subfolderCheck.OnChanged = func(bool) { refreshDirty() }
+	autoCloseCheck.OnChanged = func(bool) { refreshDirty() }
+	autoOpenLogCheck.OnChanged = func(bool) { refreshDirty() }
+	verboseCheck.OnChanged = func(bool) { refreshDirty() }
+	defaultClientSelect.OnChanged = dirtyOnChanged
+	autoLaunchSelect.OnChanged = dirtyOnChanged
+	osTypeSelect.OnChanged = dirtyOnChanged
+	vanillaMirrorEntry.OnChanged = dirtyOnChanged
+	nightlyMirrorEntry.OnChanged = dirtyOnChanged
+	jgrppApiUrlEntry.OnChanged = dirtyOnChanged
+	updateState("")
+	refreshDirty()
+
 	settingsDialog.Show()
 }
