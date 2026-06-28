@@ -97,12 +97,19 @@ func (c *Config) sanitizeURLs() {
 	c.NightlyMirror = httpsOrDefault(c.NightlyMirror, DefaultNightlyMirror)
 }
 
+// IsValidHTTPSURL reports whether s is a usable https URL (scheme https, non-empty host).
+// Surrounding whitespace is ignored. Shared by httpsOrDefault and the settings UI so the
+// client-side check can't drift from the stored-config guard.
+func IsValidHTTPSURL(s string) bool {
+	u, err := url.Parse(strings.TrimSpace(s))
+	return err == nil && strings.EqualFold(u.Scheme, "https") && u.Host != ""
+}
+
 func httpsOrDefault(raw, fallback string) string {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || !strings.EqualFold(u.Scheme, "https") || u.Host == "" {
-		return fallback
+	if IsValidHTTPSURL(raw) {
+		return raw // returns the untrimmed raw unchanged when valid (behaviour preserved)
 	}
-	return raw
+	return fallback
 }
 
 // SaveConfig writes the launcher configuration to the specified JSON file path safely
