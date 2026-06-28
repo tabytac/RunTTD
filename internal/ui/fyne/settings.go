@@ -121,6 +121,21 @@ func autoLaunchSelectedLabel(profiles []domain.Profile, stored string) string {
 	return autoLaunchOffLabel
 }
 
+type mirrorField struct{ name, preSave, stored string }
+
+// mirrorResetDiff returns the display names of URL fields whose non-empty pre-save
+// text differs from the value the config kept after sanitizeURLs ran (i.e. it was
+// rejected and reset). Empty/blank input is never reported — blank means "use default".
+func mirrorResetDiff(fields []mirrorField) []string {
+	var reset []string
+	for _, f := range fields {
+		if strings.TrimSpace(f.preSave) != "" && f.preSave != f.stored {
+			reset = append(reset, f.name)
+		}
+	}
+	return reset
+}
+
 // buildAppearanceTab builds the settings Appearance pane, reusing the theme/accent
 // widgets from showThemeCustomizer. Both routes call um.applyAppearance so they can't drift;
 // changes persist on click and are excluded from the dialog's dirty-state.
@@ -381,9 +396,14 @@ func (um *UIManager) showSettingsView() {
 
 	appearanceTab := container.NewTabItemWithIcon("Appearance", theme.ColorPaletteIcon(), um.buildAppearanceTab())
 
+	mirrorBanner := widget.NewLabel("Expert overrides. A value that isn't a valid https:// address is reset to the official default. Leave blank to use the default.")
+	mirrorBanner.Wrapping = fyne.TextWrapWord
+	mirrorBanner.Importance = widget.LowImportance
+
 	// Network & System: expert-only download overrides + the build target.
 	networkContent := container.NewVBox(
 		NewSectionHeader("Download Sources"),
+		mirrorBanner,
 		NewLabeledField("Vanilla CDN (stable) base URL", "Where stable releases are fetched from.", vanillaMirrorEntry),
 		NewLabeledField("Vanilla Nightly CDN base URL", "Where nightly builds are fetched from.", nightlyMirrorEntry),
 		NewLabeledField("JGRPP GitHub API URL", "Where JGR's Patchpack releases are looked up.", jgrppApiUrlEntry),
@@ -406,6 +426,7 @@ func (um *UIManager) showSettingsView() {
 			return // backstop; the disabled button is the primary guard
 		}
 		prevSubfolderPerClient := um.Config.SubfolderPerClient
+		preVanilla, preNightly, preJgrpp := vanillaMirrorEntry.Text, nightlyMirrorEntry.Text, jgrppApiUrlEntry.Text
 
 		um.Config.ParentDir = strings.TrimSpace(parentDirEntry.Text)
 		um.Config.DocsBasePath = strings.TrimSpace(docsBasePathEntry.Text)
@@ -441,6 +462,20 @@ func (um *UIManager) showSettingsView() {
 				"The launcher will now look for clients in the new location and may re-download them. Existing downloads are left in place — move or delete them manually if you no longer need them.",
 				um.Window,
 			)
+		}
+
+		// sanitizeURLs (in SaveConfig) silently resets invalid mirror URLs; surface that.
+		reset := mirrorResetDiff([]mirrorField{
+			{"Vanilla CDN (stable)", preVanilla, um.Config.VanillaMirror},
+			{"Vanilla Nightly CDN", preNightly, um.Config.NightlyMirror},
+			{"JGRPP GitHub API URL", preJgrpp, um.Config.JgrppApiUrl},
+		})
+		if len(reset) > 0 {
+			vanillaMirrorEntry.SetText(um.Config.VanillaMirror)
+			nightlyMirrorEntry.SetText(um.Config.NightlyMirror)
+			jgrppApiUrlEntry.SetText(um.Config.JgrppApiUrl)
+			dialog.ShowInformation("Download sources reset",
+				"These weren't valid https URLs and were restored to their official defaults:\n  - "+strings.Join(reset, "\n  - "), um.Window)
 		}
 	})
 
