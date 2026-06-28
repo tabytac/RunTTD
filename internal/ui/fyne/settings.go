@@ -118,46 +118,17 @@ func autoLaunchSelectedLabel(profiles []domain.Profile, stored string) string {
 	return autoLaunchOffLabel
 }
 
-// scrollForwardingEntry forwards scroll events to parent containers
-type scrollForwardingEntry struct {
-	widget.Entry
-	forward func(ev *fyne.ScrollEvent)
-}
-
-func newScrollForwardingEntry(forward func(ev *fyne.ScrollEvent)) *scrollForwardingEntry {
-	e := &scrollForwardingEntry{forward: forward}
-	e.ExtendBaseWidget(e)
-	return e
-}
-
-func (e *scrollForwardingEntry) Scrolled(ev *fyne.ScrollEvent) {
-	if e.forward != nil {
-		e.forward(ev)
-	}
-}
-
 // showSettingsView shows a dialog to edit global settings
 func (um *UIManager) showSettingsView() {
-	var scrolls map[*container.TabItem]*container.Scroll
-	var tabs *container.AppTabs
-	forwardScroll := func(ev *fyne.ScrollEvent) {
-		if scrolls == nil || tabs == nil {
-			return
-		}
-		if s, ok := scrolls[tabs.Selected()]; ok {
-			s.Scrolled(ev)
-		}
-	}
-
-	parentDirEntry := newScrollForwardingEntry(forwardScroll)
+	parentDirEntry := widget.NewEntry()
 	parentDirEntry.SetText(um.Config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where game files / executables will be automatically installed")
 
 	parentDirBtn := widget.NewButton("Browse...", func() {
-		um.browseDirectory(&parentDirEntry.Entry, "Select Parent Directory", "Parent Directory (Settings)")
+		um.browseDirectory(parentDirEntry, "Select Parent Directory", "Parent Directory (Settings)")
 	})
 
-	docsBasePathEntry := newScrollForwardingEntry(forwardScroll)
+	docsBasePathEntry := widget.NewEntry()
 	docsBasePathEntry.SetText(um.Config.DocsBasePath)
 	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
 
@@ -165,7 +136,7 @@ func (um *UIManager) showSettingsView() {
 	validationIcon.Hide()
 
 	docsBasePathBtn := widget.NewButton("Browse...", func() {
-		um.browseDirectory(&docsBasePathEntry.Entry, "Select Docs Base Path", "Docs Base Path (Settings)")
+		um.browseDirectory(docsBasePathEntry, "Select Docs Base Path", "Docs Base Path (Settings)")
 	})
 
 	updateDocsValidation := func(path string) {
@@ -188,7 +159,7 @@ func (um *UIManager) showSettingsView() {
 	}
 	updateDocsValidation(docsBasePathEntry.Text)
 
-	jgrppApiUrlEntry := newScrollForwardingEntry(forwardScroll)
+	jgrppApiUrlEntry := widget.NewEntry()
 	jgrppApiUrlEntry.SetText(um.Config.JgrppApiUrl)
 	jgrppApiUrlEntry.SetPlaceHolder("https://api.github.com/repos/JGRennison/OpenTTD-patches")
 
@@ -196,11 +167,11 @@ func (um *UIManager) showSettingsView() {
 	osTypeSelect := widget.NewSelect(osTypeOptions(osDetected, um.Config.OSType), func(string) {})
 	osTypeSelect.SetSelected(osTypeValueToLabel(osDetected, um.Config.OSType))
 
-	vanillaMirrorEntry := newScrollForwardingEntry(forwardScroll)
+	vanillaMirrorEntry := widget.NewEntry()
 	vanillaMirrorEntry.SetText(um.Config.VanillaMirror)
 	vanillaMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-releases/")
 
-	nightlyMirrorEntry := newScrollForwardingEntry(forwardScroll)
+	nightlyMirrorEntry := widget.NewEntry()
 	nightlyMirrorEntry.SetText(um.Config.NightlyMirror)
 	nightlyMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-nightlies/")
 
@@ -242,8 +213,9 @@ func (um *UIManager) showSettingsView() {
 		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
 		subfolderGroup,
 	)
-	pathsScroll := container.NewVScroll(pathsContent)
-	pathsTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), pathsScroll)
+	// Scroll as the Border center so its 32px MinSize can't balloon the modal.
+	pathsBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(pathsContent))
+	pathsTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), pathsBody)
 
 	behaviorContent := container.NewVBox(
 		NewSectionHeader("Launch Behavior"),
@@ -255,8 +227,8 @@ func (um *UIManager) showSettingsView() {
 		NewSectionDescription("Launches the selected profile when RunTTD opens. "+
 			"The launcher stays open for this startup launch even if auto-close is enabled."),
 	)
-	behaviorScroll := container.NewVScroll(behaviorContent)
-	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), behaviorScroll)
+	behaviorBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(behaviorContent))
+	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), behaviorBody)
 
 	advancedContent := container.NewVBox(
 		NewSectionHeader("Download Sources"),
@@ -270,15 +242,10 @@ func (um *UIManager) showSettingsView() {
 		NewSectionDescription("Auto-detect is recommended and makes shared configs work on any PC. "+
 			"Override only to download builds for a different system."),
 	)
-	advancedScroll := container.NewVScroll(advancedContent)
-	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), advancedScroll)
+	advancedBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(advancedContent))
+	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), advancedBody)
 
-	tabs = container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
-	scrolls = map[*container.TabItem]*container.Scroll{
-		pathsTab:    pathsScroll,
-		behaviorTab: behaviorScroll,
-		advancedTab: advancedScroll,
-	}
+	tabs := container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
 	tabs.SetTabLocation(container.TabLocationTop)
 
 	var settingsDialog *widget.PopUp
@@ -328,6 +295,7 @@ func (um *UIManager) showSettingsView() {
 	})
 
 	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", tabs, cancelBtn, saveBtn)
-	settingsDialog.Resize(fyne.NewSize(850, 600))
+	// ModalPopUp isn't drag-resizable; this is the initial size, kept honest by the Border-centred scrolls.
+	settingsDialog.Resize(fyne.NewSize(760, 560))
 	settingsDialog.Show()
 }
