@@ -1,6 +1,7 @@
 package fyne
 
 import (
+	"errors"
 	"fmt"
 	"image/color"
 	"os"
@@ -188,6 +189,14 @@ func (um *UIManager) showSettingsView() {
 	parentDirEntry := widget.NewEntry()
 	parentDirEntry.SetText(um.Config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where game files / executables will be automatically installed")
+	parentDirEntry.Validator = func(s string) error {
+		if strings.TrimSpace(s) == "" {
+			return errors.New("required")
+		}
+		return nil
+	}
+	parentDirEntry.AlwaysShowValidationError = true
+	parentDirEntry.Validate()
 
 	parentDirBtn := widget.NewButton("Browse...", func() {
 		um.browseDirectory(parentDirEntry, "Select Parent Directory", "Parent Directory (Settings)")
@@ -196,6 +205,14 @@ func (um *UIManager) showSettingsView() {
 	docsBasePathEntry := widget.NewEntry()
 	docsBasePathEntry.SetText(um.Config.DocsBasePath)
 	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
+	docsBasePathEntry.Validator = func(s string) error {
+		if strings.TrimSpace(s) == "" {
+			return errors.New("required")
+		}
+		return nil
+	}
+	docsBasePathEntry.AlwaysShowValidationError = true
+	docsBasePathEntry.Validate()
 
 	validationIcon := widget.NewIcon(theme.CancelIcon())
 	validationIcon.Hide()
@@ -219,14 +236,22 @@ func (um *UIManager) showSettingsView() {
 		}
 	}
 
-	docsBasePathEntry.OnChanged = func(s string) {
-		updateDocsValidation(s)
-	}
 	updateDocsValidation(docsBasePathEntry.Text)
+
+	// blank = use default; otherwise must be a valid https URL (shared with the stored-config guard).
+	httpsOrBlankValidator := func(s string) error {
+		if strings.TrimSpace(s) == "" || domain.IsValidHTTPSURL(s) {
+			return nil
+		}
+		return errors.New("must be a valid https:// URL or blank")
+	}
 
 	jgrppApiUrlEntry := widget.NewEntry()
 	jgrppApiUrlEntry.SetText(um.Config.JgrppApiUrl)
 	jgrppApiUrlEntry.SetPlaceHolder("https://api.github.com/repos/JGRennison/OpenTTD-patches")
+	jgrppApiUrlEntry.Validator = httpsOrBlankValidator
+	jgrppApiUrlEntry.AlwaysShowValidationError = true
+	jgrppApiUrlEntry.Validate()
 
 	osDetected := platform.DefaultOSType()
 	osTypeSelect := widget.NewSelect(osTypeOptions(osDetected, um.Config.OSType), func(string) {})
@@ -235,10 +260,16 @@ func (um *UIManager) showSettingsView() {
 	vanillaMirrorEntry := widget.NewEntry()
 	vanillaMirrorEntry.SetText(um.Config.VanillaMirror)
 	vanillaMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-releases/")
+	vanillaMirrorEntry.Validator = httpsOrBlankValidator
+	vanillaMirrorEntry.AlwaysShowValidationError = true
+	vanillaMirrorEntry.Validate()
 
 	nightlyMirrorEntry := widget.NewEntry()
 	nightlyMirrorEntry.SetText(um.Config.NightlyMirror)
 	nightlyMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-nightlies/")
+	nightlyMirrorEntry.Validator = httpsOrBlankValidator
+	nightlyMirrorEntry.AlwaysShowValidationError = true
+	nightlyMirrorEntry.Validate()
 
 	// Default client selector. Pre-selects the configured client; an unknown or
 	// empty stored value simply leaves the dropdown unselected.
@@ -330,10 +361,13 @@ func (um *UIManager) showSettingsView() {
 	var settingsDialog *widget.PopUp
 
 	saveBtn := widget.NewButton("Save Settings", func() {
+		if strings.TrimSpace(parentDirEntry.Text) == "" || strings.TrimSpace(docsBasePathEntry.Text) == "" {
+			return // backstop; the disabled button is the primary guard
+		}
 		prevSubfolderPerClient := um.Config.SubfolderPerClient
 
-		um.Config.ParentDir = parentDirEntry.Text
-		um.Config.DocsBasePath = docsBasePathEntry.Text
+		um.Config.ParentDir = strings.TrimSpace(parentDirEntry.Text)
+		um.Config.DocsBasePath = strings.TrimSpace(docsBasePathEntry.Text)
 		um.Config.JgrppApiUrl = jgrppApiUrlEntry.Text
 		um.Config.OSType = osTypeLabelToValue(osDetected, osTypeSelect.Selected)
 		um.Config.AutoCloseOnStart = autoCloseCheck.Checked
@@ -369,11 +403,36 @@ func (um *UIManager) showSettingsView() {
 		}
 	})
 
+	statusLabel := widget.NewLabel("")
+	statusLabel.Wrapping = fyne.TextWrapWord
+	statusLabel.Importance = widget.LowImportance
+
+	// updateState is the real Save gate; Fyne only auto-validates Entry, so a new
+	// required field must be wired in here.
+	updateState := func(string) {
+		switch {
+		case strings.TrimSpace(parentDirEntry.Text) == "":
+			statusLabel.SetText("Enter a Parent Directory to continue.")
+			saveBtn.Disable()
+		case strings.TrimSpace(docsBasePathEntry.Text) == "":
+			statusLabel.SetText("Enter a Docs Base Path to continue.")
+			saveBtn.Disable()
+		default:
+			statusLabel.SetText("")
+			saveBtn.Enable()
+		}
+	}
+	parentDirEntry.OnChanged = updateState
+	docsBasePathEntry.OnChanged = func(s string) { updateDocsValidation(s); updateState(s) }
+	updateState("")
+
 	cancelBtn := widget.NewButton("Cancel", func() {
 		settingsDialog.Hide()
 	})
 
-	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", tabs, cancelBtn, saveBtn)
+	// statusLabel sits below the tabs (above the toolbar) so the blocking hint is visible from any tab.
+	content := container.NewBorder(nil, statusLabel, nil, nil, tabs)
+	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", content, cancelBtn, saveBtn)
 	// ModalPopUp isn't drag-resizable; this is the initial size, kept honest by the Border-centred scrolls.
 	settingsDialog.Resize(fyne.NewSize(760, 560))
 	settingsDialog.Show()
