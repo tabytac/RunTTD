@@ -452,6 +452,9 @@ func (um *UIManager) showSettingsView() {
 		}
 
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
+		if um.profileListRefresh != nil {
+			um.profileListRefresh() // move the §14 startup marker if AutoLaunchProfile changed here
+		}
 		if settingsDialog != nil {
 			settingsDialog.Hide()
 		}

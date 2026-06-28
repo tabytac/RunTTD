@@ -283,6 +283,26 @@ func (mv *mainView) refreshDetails() {
 	header := container.NewVBox(name, intent)
 	mv.detailsContainer.Add(NewThemedBox(ColorNameDetailHeader, container.NewPadded(header)))
 
+	// In-context auto-launch toggle; persists immediately, unlike the save-gated dialog.
+	isStartup := profile.Name == um.Config.AutoLaunchProfile && um.Config.AutoLaunchProfile != ""
+	autoBtn := widget.NewButton("", nil)
+	if isStartup {
+		autoBtn.SetText("★ Launches on startup · click to turn off")
+		autoBtn.Importance = widget.HighImportance
+	} else {
+		autoBtn.SetText("☆ Launch on startup")
+		autoBtn.Importance = widget.MediumImportance
+	}
+	autoBtn.OnTapped = func() {
+		if isStartup {
+			um.setAutoLaunchProfile("")
+		} else {
+			um.setAutoLaunchProfile(profile.Name)
+		}
+		mv.refreshDetails() // flip this button; the list marker is refreshed by the helper
+	}
+	mv.detailsContainer.Add(autoBtn)
+
 	launch := newSection()
 	if profile.LaunchMode == "file" {
 		um.addPathField(launch, "Save File", profile.SavePath, true)
@@ -432,9 +452,12 @@ func (mv *mainView) buildProfileList() {
 
 			pad := theme.Padding()
 			text := container.New(layout.NewCustomPaddedVBoxLayout(-pad/2), nameLabel, versionLabel)
+			marker := widget.NewLabel("")
+			marker.Importance = widget.LowImportance // ▶ on the startup row, empty otherwise
 			dot := newStatusDot()
 			dotWrap := container.New(layout.NewCustomPaddedLayout(0, 0, 0, pad), dot)
-			row := container.NewBorder(nil, nil, badge, dotWrap, text)
+			right := container.NewHBox(marker, dotWrap)
+			row := container.NewBorder(nil, nil, badge, right, text)
 			return container.NewStack(btn, container.New(layout.NewCustomPaddedLayout(0, 0, pad, pad), row))
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
@@ -444,7 +467,9 @@ func (mv *mainView) buildProfileList() {
 			row := padding.Objects[0].(*fyne.Container)
 			text := row.Objects[0].(*fyne.Container)
 			badge := row.Objects[1].(*widget.Label)
-			dot := row.Objects[2].(*fyne.Container).Objects[0].(*statusDot) // right slot wrapper -> dot
+			right := row.Objects[2].(*fyne.Container)                       // the HBox
+			marker := right.Objects[0].(*widget.Label)
+			dot := right.Objects[1].(*fyne.Container).Objects[0].(*statusDot) // dotWrap -> dot
 			nameLabel := text.Objects[0].(*widget.Label)
 			versionLabel := text.Objects[1].(*widget.Label)
 
@@ -470,6 +495,13 @@ func (mv *mainView) buildProfileList() {
 				nameLabel.SetText(profile.Name)
 				versionLabel.SetText(versionText)
 				dot.SetState(um.resolveDotState(profile))
+				if profile.Name == um.Config.AutoLaunchProfile && um.Config.AutoLaunchProfile != "" {
+					marker.SetText("▶")
+					marker.Show()
+				} else {
+					marker.SetText("")
+					marker.Hide()
+				}
 				idx := real
 				btn.OnTapped = func() {
 					mv.handleRowTap(idx)
@@ -673,11 +705,21 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		txt.SizeName = theme.SizeNameCaptionText
 		return container.NewHBox(d, txt)
 	}
+	// The startup marker is a glyph, not a status dot, so it needs its own swatch.
+	markerLegend := func() fyne.CanvasObject {
+		g := widget.NewLabel("▶")
+		g.Importance = widget.LowImportance
+		txt := widget.NewLabel("Startup")
+		txt.Importance = widget.LowImportance
+		txt.SizeName = theme.SizeNameCaptionText
+		return container.NewHBox(g, txt)
+	}
 	legend := container.NewCenter(container.NewHBox(
 		legendItem(DotGreen, "Ready"),
 		legendItem(DotOrange, "Update"),
 		legendItem(DotRed, "Not installed"),
 		legendItem(DotGrey, "Checking"),
+		markerLegend(),
 	))
 
 	footer := container.NewPadded(container.NewVBox(
@@ -831,6 +873,17 @@ func (um *UIManager) applyAppearance(variant string, presetIdx int) {
 		pt.UpdateAccent(presetIdx, variant)
 	}
 	_ = domain.SaveConfig(um.ConfigPath, um.Config)
+}
+
+// setAutoLaunchProfile records the single startup profile (or "" for off), persists,
+// and refreshes the list so the marker moves. The writer for the instant main-view
+// toggle; the settings dialog writes the field in its batch save then calls profileListRefresh.
+func (um *UIManager) setAutoLaunchProfile(name string) {
+	um.Config.AutoLaunchProfile = name
+	_ = domain.SaveConfig(um.ConfigPath, um.Config)
+	if um.profileListRefresh != nil {
+		um.profileListRefresh()
+	}
 }
 
 // showThemeCustomizer presents the preset accent color circular items and mode toggles
