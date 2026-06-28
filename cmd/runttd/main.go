@@ -115,6 +115,7 @@ func main() {
 	}()
 
 	ui := fyneuipkg.NewUIManager(config, configPath, Version)
+	ui.Defaults = domain.NewDefaultConfig(defaultConfigPaths())
 	if bootstrapFileLog {
 		platform.AppendToLogFileRaw(logPath, "Launching UI")
 	}

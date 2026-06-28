@@ -21,6 +21,7 @@ type UIManager struct {
 	App                 fyne.App
 	Window              fyne.Window
 	Config              *domain.Config
+	Defaults            *domain.Config // factory defaults for Reset (set by cmd/runttd)
 	Logger              *platform.Logger
 	ConfigPath          string
 	Version             string

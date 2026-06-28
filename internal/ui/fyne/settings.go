@@ -399,6 +399,7 @@ func (um *UIManager) showSettingsView() {
 	tabs.SetTabLocation(container.TabLocationTop)
 
 	var settingsDialog *widget.PopUp
+	var refreshDirty func() // assigned below once the dialog exists; captured early by resetBtn
 
 	saveBtn := widget.NewButton("Save Settings", func() {
 		if strings.TrimSpace(parentDirEntry.Text) == "" || strings.TrimSpace(docsBasePathEntry.Text) == "" {
@@ -480,15 +481,43 @@ func (um *UIManager) showSettingsView() {
 	}
 	cancelBtn := widget.NewButton("Cancel", cancelOrConfirm)
 
+	// Reset stages the factory defaults into the widgets (persisted only on Save);
+	// theme/accent persist immediately via applyAppearance (persist-on-click model).
+	resetBtn := widget.NewButton("Reset to defaults", func() {
+		dialog.ShowConfirm("Reset to defaults?",
+			"Reset all settings to their defaults? Your profiles are not affected.",
+			func(ok bool) {
+				if !ok {
+					return
+				}
+				parentDirEntry.SetText(um.Defaults.ParentDir)
+				docsBasePathEntry.SetText(um.Defaults.DocsBasePath)
+				subfolderCheck.SetChecked(um.Defaults.SubfolderPerClient)
+				vanillaMirrorEntry.SetText("")
+				nightlyMirrorEntry.SetText("")
+				jgrppApiUrlEntry.SetText("")
+				osTypeSelect.SetSelected(osTypeValueToLabel(osDetected, "")) // auto-detect
+				autoCloseCheck.SetChecked(false)
+				autoOpenLogCheck.SetChecked(false)
+				verboseCheck.SetChecked(false)
+				autoLaunchSelect.SetSelected(autoLaunchOffLabel)
+				// DefaultClient is left as-is (optional; see spec §12).
+				um.applyAppearance("dark", 0) // persists immediately (persist-on-click model)
+				updateState("")
+				refreshDirty()
+			}, um.Window)
+	})
+	resetBtn.Importance = widget.LowImportance
+
 	// statusLabel sits below the tabs (above the toolbar) so the blocking hint is visible from any tab.
 	content := container.NewBorder(nil, statusLabel, nil, nil, tabs)
-	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", content, cancelBtn, saveBtn)
+	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", content, resetBtn, cancelBtn, saveBtn)
 	// ModalPopUp isn't drag-resizable; this is the initial size, kept honest by the Border-centred scrolls.
 	settingsDialog.Resize(fyne.NewSize(760, 560))
 
 	titleLabel := findTitleLabel(settingsDialog.Content, "Global Settings")
 	// refreshDirty reflects unsaved edits: Save turns high-importance and the title gains " *".
-	refreshDirty := func() {
+	refreshDirty = func() {
 		dirty := isDirty()
 		if dirty {
 			saveBtn.Importance = widget.HighImportance
