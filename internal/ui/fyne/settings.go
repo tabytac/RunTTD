@@ -2,11 +2,13 @@ package fyne
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
@@ -118,6 +120,69 @@ func autoLaunchSelectedLabel(profiles []domain.Profile, stored string) string {
 	return autoLaunchOffLabel
 }
 
+// buildAppearanceTab builds the settings Appearance pane, reusing the theme/accent
+// widgets from showThemeCustomizer. Both routes call um.applyAppearance so they can't drift;
+// changes persist on click and are excluded from the dialog's dirty-state.
+func (um *UIManager) buildAppearanceTab() fyne.CanvasObject {
+	var currentMode string
+	if um.Config.ThemeVariant == "light" {
+		currentMode = "Light"
+	} else {
+		currentMode = "Dark"
+	}
+
+	modeSelect := NewSegmentedRadio([]string{"Light", "Dark"}, currentMode, func(s string) {
+		um.applyAppearance(strings.ToLower(s), um.Config.AccentPreset)
+	})
+
+	colorGrid := container.NewGridWithColumns(4)
+	colorButtons := make([]*canvas.Rectangle, len(ThemePresets))
+
+	updateButtons := func() {
+		for i, rect := range colorButtons {
+			if i == um.Config.AccentPreset {
+				rect.StrokeColor = theme.Color(theme.ColorNamePrimary)
+				rect.StrokeWidth = 3
+			} else {
+				rect.StrokeColor = color.Transparent
+				rect.StrokeWidth = 0
+			}
+			rect.Refresh()
+		}
+	}
+
+	for i, p := range ThemePresets {
+		idx := i
+		hex := p.DarkHex
+		if um.Config.ThemeVariant == "light" {
+			hex = p.LightHex
+		}
+		c, _ := ParseHexColor(hex)
+
+		rect := canvas.NewRectangle(c)
+		rect.SetMinSize(fyne.NewSize(36, 36))
+		rect.CornerRadius = 4
+		colorButtons[idx] = rect
+
+		btn := widget.NewButton("", func() {
+			um.applyAppearance(um.Config.ThemeVariant, idx)
+			updateButtons()
+		})
+		btn.Importance = widget.LowImportance
+
+		colorGrid.Add(container.NewStack(rect, btn))
+	}
+
+	updateButtons()
+
+	content := container.NewVBox(
+		NewSectionHeader("Appearance"),
+		NewLabeledField("Theme", "Light or dark colour scheme. Changes apply instantly.", modeSelect.Container),
+		NewLabeledField("Accent Colour", "Used for highlights, buttons, and selections. Applies instantly.", colorGrid),
+	)
+	return container.NewBorder(nil, nil, nil, nil, container.NewVScroll(content))
+}
+
 // showSettingsView shows a dialog to edit global settings
 func (um *UIManager) showSettingsView() {
 	parentDirEntry := widget.NewEntry()
@@ -182,11 +247,17 @@ func (um *UIManager) showSettingsView() {
 		defaultClientSelect.SetSelected(label)
 	}
 
-	autoCloseCheck := widget.NewCheck("Auto-close launcher when OpenTTD starts", nil)
-	autoCloseCheck.SetChecked(um.Config.AutoCloseOnStart)
+	autoCloseCheck, autoCloseGroup := NewLabeledCheckWithDescription(
+		"Auto-close launcher when OpenTTD starts",
+		"Hides the launcher once the game opens.",
+		um.Config.AutoCloseOnStart,
+	)
 
-	autoOpenLogCheck := widget.NewCheck("Auto-open log panel when game starts", nil)
-	autoOpenLogCheck.SetChecked(um.Config.AutoOpenLog)
+	autoOpenLogCheck, autoOpenLogGroup := NewLabeledCheckWithDescription(
+		"Auto-open log panel when game starts",
+		"Opens the log panel so you can watch download/start progress.",
+		um.Config.AutoOpenLog,
+	)
 
 	verboseCheck, verboseGroup := NewLabeledCheckWithDescription(
 		"Verbose logging (show all messages)",
@@ -205,47 +276,55 @@ func (um *UIManager) showSettingsView() {
 		um.Config.SubfolderPerClient,
 	)
 
-	pathsContent := container.NewVBox(
+	// Files & Storage: the install/save anchors plus the subfolder layout switch.
+	filesContent := container.NewVBox(
 		NewSectionHeader("Installation Paths"),
-		widget.NewLabel("Parent Directory (where game files / executables will be automatically installed)"),
-		container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry),
-		widget.NewLabel("Docs Base Path (Saves & config)"),
-		container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
+		NewLabeledField("Parent Directory (required)",
+			"RunTTD downloads, installs, and removes game clients here.",
+			container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry)),
+		NewLabeledField("Docs Base Path (required)",
+			"Where your saves and configuration (openttd.cfg) live. RunTTD reads from here but never modifies your files.",
+			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry)),
 		subfolderGroup,
 	)
 	// Scroll as the Border center so its 32px MinSize can't balloon the modal.
-	pathsBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(pathsContent))
-	pathsTab := container.NewTabItemWithIcon("Paths", theme.FolderIcon(), pathsBody)
+	filesBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(filesContent))
+	filesTab := container.NewTabItemWithIcon("Files & Storage", theme.FolderIcon(), filesBody)
 
-	behaviorContent := container.NewVBox(
-		NewSectionHeader("Launch Behavior"),
-		autoCloseCheck,
-		autoOpenLogCheck,
-		verboseGroup,
-		widget.NewLabel("Auto-launch profile on startup"),
-		autoLaunchSelect,
-		NewSectionDescription("Launches the selected profile when RunTTD opens. "+
-			"The launcher stays open for this startup launch even if auto-close is enabled."),
-	)
-	behaviorBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(behaviorContent))
-	behaviorTab := container.NewTabItemWithIcon("Behavior", theme.ConfirmIcon(), behaviorBody)
-
-	advancedContent := container.NewVBox(
-		NewSectionHeader("Download Sources"),
-		widget.NewLabel("Vanilla CDN (stable) base URL"), vanillaMirrorEntry,
-		widget.NewLabel("Vanilla Nightly CDN base URL"), nightlyMirrorEntry,
-		widget.NewLabel("JGRPP GitHub API URL"), jgrppApiUrlEntry,
+	// Launching: the new-profile default plus everything that happens at startup.
+	launchingContent := container.NewVBox(
 		NewSectionHeader("Profile Defaults"),
-		widget.NewLabel("Default Client (new profiles)"), defaultClientSelect,
-		NewSectionHeader("System"),
-		widget.NewLabel("OS Type"), osTypeSelect,
-		NewSectionDescription("Auto-detect is recommended and makes shared configs work on any PC. "+
-			"Override only to download builds for a different system."),
+		NewLabeledField("Default Client (new profiles)",
+			"The client new profiles use by default. Change it per profile.",
+			defaultClientSelect),
+		NewSectionHeader("Launch Behavior"),
+		NewLabeledField("Auto-launch profile on startup",
+			"Launches the chosen profile when RunTTD opens. The launcher stays open for this one startup launch even if auto-close is on.",
+			autoLaunchSelect),
+		autoCloseGroup,
+		autoOpenLogGroup,
+		verboseGroup,
 	)
-	advancedBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(advancedContent))
-	advancedTab := container.NewTabItemWithIcon("Advanced", theme.SettingsIcon(), advancedBody)
+	launchingBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(launchingContent))
+	launchingTab := container.NewTabItemWithIcon("Launching", theme.ConfirmIcon(), launchingBody)
 
-	tabs := container.NewAppTabs(pathsTab, behaviorTab, advancedTab)
+	appearanceTab := container.NewTabItemWithIcon("Appearance", theme.ColorPaletteIcon(), um.buildAppearanceTab())
+
+	// Network & System: expert-only download overrides + the build target.
+	networkContent := container.NewVBox(
+		NewSectionHeader("Download Sources"),
+		NewLabeledField("Vanilla CDN (stable) base URL", "Where stable releases are fetched from.", vanillaMirrorEntry),
+		NewLabeledField("Vanilla Nightly CDN base URL", "Where nightly builds are fetched from.", nightlyMirrorEntry),
+		NewLabeledField("JGRPP GitHub API URL", "Where JGR's Patchpack releases are looked up.", jgrppApiUrlEntry),
+		NewSectionHeader("System"),
+		NewLabeledField("OS / Build Target",
+			"Auto-detect is recommended and makes a shared config work on any PC. Override only to fetch builds for a different system.",
+			osTypeSelect),
+	)
+	networkBody := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(networkContent))
+	networkTab := container.NewTabItemWithIcon("Network & System", theme.SettingsIcon(), networkBody)
+
+	tabs := container.NewAppTabs(filesTab, launchingTab, appearanceTab, networkTab)
 	tabs.SetTabLocation(container.TabLocationTop)
 
 	var settingsDialog *widget.PopUp
