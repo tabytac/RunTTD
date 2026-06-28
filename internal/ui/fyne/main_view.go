@@ -821,16 +821,21 @@ func (um *UIManager) addUpdatePill(headerRight *fyne.Container, tag, releaseURL 
 	headerRight.Refresh()
 }
 
+// applyAppearance persists the theme variant + accent preset and applies them live.
+// Shared by the header palette popover and the settings Appearance tab so the two
+// entry points can't drift.
+func (um *UIManager) applyAppearance(variant string, presetIdx int) {
+	um.Config.ThemeVariant = variant
+	um.Config.AccentPreset = presetIdx
+	if pt, ok := um.App.Settings().Theme().(*LauncherTheme); ok {
+		pt.UpdateAccent(presetIdx, variant)
+	}
+	_ = domain.SaveConfig(um.ConfigPath, um.Config)
+}
+
 // showThemeCustomizer presents the preset accent color circular items and mode toggles
 func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
-	apply := func(v string, presetIdx int) {
-		um.Config.ThemeVariant = v
-		um.Config.AccentPreset = presetIdx
-		if pt, ok := um.App.Settings().Theme().(*LauncherTheme); ok {
-			pt.UpdateAccent(presetIdx, v)
-		}
-		_ = domain.SaveConfig(um.ConfigPath, um.Config)
-	}
+	apply := um.applyAppearance
 
 	var currentMode string
 	if um.Config.ThemeVariant == "light" {
