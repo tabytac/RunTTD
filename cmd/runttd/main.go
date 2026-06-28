@@ -29,9 +29,9 @@ func setupGuiOutput() {
 	}
 }
 
-// buildDefaultConfig returns a fresh FirstRun config with platform-appropriate
-// OpenTTD directory names. Used for both a missing and a recovered-corrupt config.
-func buildDefaultConfig() *domain.Config {
+// defaultConfigPaths resolves the platform-specific default paths. The GOOS branch
+// lives here (main.go), the sanctioned exception, so domain stays platform-free.
+func defaultConfigPaths() (parentDir, docsBasePath, osDefault string) {
 	docsBase := platform.GetDocumentsDir()
 	ottdDirName := "OpenTTD"
 	clientsSuffix := "-Clients"
@@ -39,17 +39,12 @@ func buildDefaultConfig() *domain.Config {
 		ottdDirName = "openttd"
 		clientsSuffix = "-clients"
 	}
-	return &domain.Config{
-		FirstRun:           true,
-		ParentDir:          filepath.Join(docsBase, ottdDirName+clientsSuffix),
-		DocsBasePath:       filepath.Join(docsBase, ottdDirName),
-		JgrppApiUrl:        domain.DefaultJgrppApiUrl,
-		OSType:             platform.DefaultOSType(),
-		SubfolderPerClient: true,
-		VanillaMirror:      domain.DefaultVanillaMirror,
-		NightlyMirror:      domain.DefaultNightlyMirror,
-		Profiles:           []domain.Profile{{Name: "Default", Version: "latest"}},
-	}
+	return filepath.Join(docsBase, ottdDirName+clientsSuffix), filepath.Join(docsBase, ottdDirName), platform.DefaultOSType()
+}
+
+// buildDefaultConfig returns a fresh FirstRun config with platform-appropriate paths.
+func buildDefaultConfig() *domain.Config {
+	return domain.NewDefaultConfig(defaultConfigPaths())
 }
 
 // recoverCorruptConfig moves an unreadable config aside to <path>.broken

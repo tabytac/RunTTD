@@ -50,6 +50,23 @@ type Config struct {
 	Profiles []Profile `json:"profiles"`
 }
 
+// NewDefaultConfig assembles a fresh FirstRun config from already-resolved,
+// platform-specific paths. The caller (cmd/runttd) owns the platform derivation
+// (GOOS-specific dir names, documents dir) so domain stays platform-free.
+func NewDefaultConfig(parentDir, docsBasePath, osDefault string) *Config {
+	return &Config{
+		FirstRun:           true,
+		ParentDir:          parentDir,
+		DocsBasePath:       docsBasePath,
+		JgrppApiUrl:        DefaultJgrppApiUrl,
+		OSType:             osDefault,
+		SubfolderPerClient: true,
+		VanillaMirror:      DefaultVanillaMirror,
+		NightlyMirror:      DefaultNightlyMirror,
+		Profiles:           []Profile{{Name: "Default", Version: "latest"}},
+	}
+}
+
 // WindowSize returns the saved main-window size, or the default when unset or
 // below the minimum (the floor guards against a garbage value persisting an
 // unusable window).
