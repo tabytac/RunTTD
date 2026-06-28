@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"runttd/internal/domain"
 	"runttd/internal/platform"
@@ -37,6 +38,8 @@ type UIManager struct {
 	CachedVersions        []string
 	upstream            *upstreamCache
 	profileListRefresh  func() // set by the main view; refreshes the profile list from any goroutine (via fyne.Do)
+	settingsOverlay     *widget.PopUp // the open settings dialog, for the scoped Escape handler; nil when closed
+	settingsOnEscape    func()        // Escape on the settings overlay routes here (dirty -> discard-confirm)
 }
 
 // NewUIManager creates a new UIManager instance, configuring the static app icons and custom presets theme

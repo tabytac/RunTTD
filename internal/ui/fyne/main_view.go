@@ -777,7 +777,10 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		// Escape dismisses the top modal (profile editor, settings, theme
 		// customizer), matching each modal's Cancel button which only hides it.
 		if event.Name == fyne.KeyEscape {
-			if top := um.Window.Canvas().Overlays().Top(); top != nil {
+			// Settings routes through its dirty->discard-confirm; the confirm is a new top overlay, so Escape on it hits the else and dismisses just the confirm.
+			if top := um.Window.Canvas().Overlays().Top(); top == um.settingsOverlay && um.settingsOnEscape != nil {
+				um.settingsOnEscape()
+			} else if top != nil {
 				top.Hide()
 			}
 			return

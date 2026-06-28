@@ -421,6 +421,14 @@ func (um *UIManager) showSettingsView() {
 	var settingsDialog *widget.PopUp
 	var refreshDirty func() // assigned below once the dialog exists; captured early by resetBtn
 
+	// hideSettings clears the scoped-Escape refs (Task 11) on every dialog hide so a
+	// stale overlay ref can't mis-route a later Escape.
+	hideSettings := func() {
+		um.settingsOverlay = nil
+		um.settingsOnEscape = nil
+		settingsDialog.Hide()
+	}
+
 	saveBtn := widget.NewButton("Save Settings", func() {
 		if strings.TrimSpace(parentDirEntry.Text) == "" || strings.TrimSpace(docsBasePathEntry.Text) == "" {
 			return // backstop; the disabled button is the primary guard
@@ -456,7 +464,7 @@ func (um *UIManager) showSettingsView() {
 			um.profileListRefresh() // move the §14 startup marker if AutoLaunchProfile changed here
 		}
 		if settingsDialog != nil {
-			settingsDialog.Hide()
+			hideSettings()
 		}
 
 		if um.Config.SubfolderPerClient != prevSubfolderPerClient {
@@ -505,7 +513,7 @@ func (um *UIManager) showSettingsView() {
 	// Reused by the Cancel button and (Task 11) the scoped Escape handler.
 	cancelOrConfirm := func() {
 		if !isDirty() {
-			settingsDialog.Hide()
+			hideSettings()
 			return
 		}
 		dialog.ShowCustomConfirm("Discard changes?",
@@ -513,7 +521,7 @@ func (um *UIManager) showSettingsView() {
 			widget.NewLabel("You have unsaved changes. Theme and accent changes are kept (they apply immediately)."),
 			func(discard bool) {
 				if discard {
-					settingsDialog.Hide()
+					hideSettings()
 				}
 			}, um.Window)
 	}
@@ -552,6 +560,10 @@ func (um *UIManager) showSettingsView() {
 	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", content, resetBtn, cancelBtn, saveBtn)
 	// ModalPopUp isn't drag-resizable; this is the initial size, kept honest by the Border-centred scrolls.
 	settingsDialog.Resize(fyne.NewSize(760, 560))
+
+	// Scope the Escape handler to this overlay by identity; cleared on hide via hideSettings.
+	um.settingsOverlay = settingsDialog
+	um.settingsOnEscape = cancelOrConfirm
 
 	titleLabel := findTitleLabel(settingsDialog.Content, "Global Settings")
 	// refreshDirty reflects unsaved edits: Save turns high-importance and the title gains " *".
