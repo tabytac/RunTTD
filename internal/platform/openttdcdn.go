@@ -76,18 +76,6 @@ func NightlyPlatformAliases(cfg *domain.Config) []string {
 	return ClientPlatformAliases(cfg)
 }
 
-// NightlyIDMatchesPlatform checks whether a file identifier contains target architecture substrings
-func NightlyIDMatchesPlatform(id string, aliases []string) bool {
-	lower := strings.ToLower(id)
-	for _, a := range aliases {
-		a = strings.ToLower(strings.TrimSpace(a))
-		if a != "" && strings.Contains(lower, a) {
-			return true
-		}
-	}
-	return false
-}
-
 // preferredExtsForOS lists acceptable archive extensions, most-preferred first.
 // Old folders need several (Linux gained .tar.xz only at 1.4.0; macOS used .dmg
 // then .zip). .exe/.pdb/.deb/source/docs are intentionally absent.
@@ -371,31 +359,25 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 		if err != nil {
 			logf("Nightly manifest fetch failed: %v", err)
 		} else {
-			targetExt := ".zip"
-			lowerOS := resolveOSType(cfg)
-			switch {
-			case strings.Contains(lowerOS, "linux"):
-				targetExt = ".tar.xz"
-			case strings.Contains(lowerOS, "mac") || strings.Contains(lowerOS, "darwin"):
-				targetExt = ".dmg"
+			osType := resolveOSType(cfg)
+			id, aliasIdx := selectManifestAsset(manifest.FileIDs, platformAliases, preferredExtsForOS(osType))
+			if id == "" {
+				logf("No %s build exists for nightly %s; install skipped.", osDisplayHint(osType), version)
+				return false // authoritative manifest: short-circuit, do not guess
 			}
-			for _, id := range manifest.FileIDs {
-				if !NightlyIDMatchesPlatform(id, platformAliases) {
-					continue
-				}
-				if !strings.HasSuffix(strings.ToLower(id), targetExt) {
-					continue
-				}
-				url := fmt.Sprintf("%s/%s/%s/%s", baseTrimmed, nightlyYear, version, id)
-				logf("Nightly selected asset: %s", url)
-				archivePath := filepath.Join(downloadDir, id)
-
-				if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, resolveOSType(cfg), logger, progress); err != nil {
-					logf("Nightly asset failed (%s): %v", url, err)
-					continue
-				}
-				return true
+			if aliasIdx > 0 {
+				logf("No %s build for %s; using %s (runs via emulation on this platform).",
+					osType, version, platformAliases[aliasIdx])
 			}
+			matchedTag := canonicalOSTag(platformAliases[aliasIdx])
+			url := fmt.Sprintf("%s/%s/%s/%s", baseTrimmed, nightlyYear, version, id)
+			logf("Nightly selected asset: %s", url)
+			archivePath := filepath.Join(downloadDir, id)
+			if err := downloadAndExtractTo(ctx, downloadClient, url, archivePath, downloadDir, matchedTag, logger, progress); err != nil {
+				logf("Nightly asset failed (%s): %v", url, err)
+				return false
+			}
+			return true
 		}
 	}
 
