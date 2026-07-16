@@ -428,6 +428,18 @@ func (mv *mainView) deleteSelected() {
 	).Show()
 }
 
+// A drawn SVG, not a "▶" label: Windows renders that glyph via the emoji font.
+var startupMarkerSVG = fyne.NewStaticResource("startup-marker.svg",
+	[]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="#1E88E5" d="M1 0 L9 5 L1 10 Z"/></svg>`))
+
+// newStartupMarker returns the blue ▶ flag shown on the auto-launch profile's row.
+func newStartupMarker() *canvas.Image {
+	img := canvas.NewImageFromResource(startupMarkerSVG)
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(dotDiameter, dotDiameter))
+	return img
+}
+
 // buildProfileList creates the profile list widget and wires its row template,
 // row binding, drag-reorder, and selection callbacks.
 func (mv *mainView) buildProfileList() {
@@ -452,8 +464,8 @@ func (mv *mainView) buildProfileList() {
 
 			pad := theme.Padding()
 			text := container.New(layout.NewCustomPaddedVBoxLayout(-pad/2), nameLabel, versionLabel)
-			marker := widget.NewLabel("")
-			marker.Importance = widget.LowImportance // ▶ on the startup row, empty otherwise
+			marker := container.New(layout.NewCustomPaddedLayout(0, 0, 0, pad/2), newStartupMarker())
+			marker.Hide() // shown only on the startup row
 			dot := newStatusDot()
 			dotWrap := container.New(layout.NewCustomPaddedLayout(0, 0, 0, pad), dot)
 			right := container.NewHBox(marker, dotWrap)
@@ -468,7 +480,7 @@ func (mv *mainView) buildProfileList() {
 			text := row.Objects[0].(*fyne.Container)
 			badge := row.Objects[1].(*widget.Label)
 			right := row.Objects[2].(*fyne.Container)                       // the HBox
-			marker := right.Objects[0].(*widget.Label)
+			marker := right.Objects[0].(*fyne.Container)
 			dot := right.Objects[1].(*fyne.Container).Objects[0].(*statusDot) // dotWrap -> dot
 			nameLabel := text.Objects[0].(*widget.Label)
 			versionLabel := text.Objects[1].(*widget.Label)
@@ -496,10 +508,8 @@ func (mv *mainView) buildProfileList() {
 				versionLabel.SetText(versionText)
 				dot.SetState(um.resolveDotState(profile))
 				if profile.Name == um.Config.AutoLaunchProfile && um.Config.AutoLaunchProfile != "" {
-					marker.SetText("▶")
 					marker.Show()
 				} else {
-					marker.SetText("")
 					marker.Hide()
 				}
 				idx := real
@@ -705,14 +715,12 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		txt.SizeName = theme.SizeNameCaptionText
 		return container.NewHBox(d, txt)
 	}
-	// The startup marker is a glyph, not a status dot, so it needs its own swatch.
+	// The startup marker is a triangle, not a status dot, so it needs its own swatch.
 	markerLegend := func() fyne.CanvasObject {
-		g := widget.NewLabel("▶")
-		g.Importance = widget.LowImportance
 		txt := widget.NewLabel("Startup")
 		txt.Importance = widget.LowImportance
 		txt.SizeName = theme.SizeNameCaptionText
-		return container.NewHBox(g, txt)
+		return container.NewHBox(newStartupMarker(), txt)
 	}
 	legend := container.NewCenter(container.NewHBox(
 		legendItem(DotGreen, "Ready"),
