@@ -20,13 +20,16 @@ var httpClient = &http.Client{
 // findReleaseAsset returns the URL and name of the archive asset whose name
 // contains any of the platform aliases, or empty strings if none match.
 func findReleaseAsset(assets []domain.ReleaseAsset, aliases []string) (url, name string) {
-	for _, a := range assets {
-		n := strings.ToLower(a.Name)
-		if !(strings.HasSuffix(n, ".zip") || strings.HasSuffix(n, ".tar.xz") || strings.HasSuffix(n, ".dmg")) {
+	for _, alias := range aliases {
+		if alias == "" {
 			continue
 		}
-		for _, alias := range aliases {
-			if alias != "" && strings.Contains(n, alias) {
+		for _, a := range assets {
+			n := strings.ToLower(a.Name)
+			if !(strings.HasSuffix(n, ".zip") || strings.HasSuffix(n, ".tar.xz") || strings.HasSuffix(n, ".dmg")) {
+				continue
+			}
+			if strings.Contains(n, alias) {
 				return a.BrowserDownloadURL, a.Name
 			}
 		}
