@@ -141,13 +141,23 @@ func ScanInstalledVersions(cfg *domain.Config) []domain.InstalledVersion {
 }
 
 // parseVersionFromName extracts a version token for display/sort: a nightly's
-// YYYYMMDD build date formatted YYYY-MM-DD, else the dotted version (e.g. 14.1).
+// YYYYMMDD build date formatted YYYY-MM-DD, else everything from the dotted
+// version to the OS tag, so pre-release suffixes (16.0-beta2) survive.
 func parseVersionFromName(name string) string {
-	if m := nightlyDateTokenRe.FindStringSubmatch(strings.ToLower(name)); len(m) == 2 {
+	l := strings.ToLower(name)
+	if m := nightlyDateTokenRe.FindStringSubmatch(l); len(m) == 2 {
 		d := m[1]
 		return d[0:4] + "-" + d[4:6] + "-" + d[6:8]
 	}
-	return versionRe.FindString(name)
+	loc := versionRe.FindStringIndex(l)
+	if loc == nil {
+		return ""
+	}
+	end := len(name)
+	if tag := osTagRe.FindStringIndex(l); tag != nil && tag[0] > loc[0] {
+		end = tag[0]
+	}
+	return name[loc[0]:end]
 }
 
 // parseOSTag returns the trailing OS/arch tag (lowercased), or "" if absent.
