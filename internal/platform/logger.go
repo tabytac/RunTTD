@@ -58,6 +58,13 @@ func (l *Logger) Len() int {
 	return len(l.lines)
 }
 
+// Clear discards the in-memory session log. Any on-disk log file is left intact.
+func (l *Logger) Clear() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lines = nil
+}
+
 // AppendToLogFileRaw exposes the raw log file writing capability for bootstrapping and panic recovery logging
 func AppendToLogFileRaw(path, msg string) {
 	appendToLogFile(path, msg)

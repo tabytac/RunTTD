@@ -125,6 +125,21 @@ func (um *UIManager) showLogView(profileIdx int) {
 		um.showToast("Logs copied to clipboard!")
 	})
 
+	clearBtn := widget.NewButtonWithIcon("Clear Logs", theme.ContentClearIcon(), func() {
+		dialog.ShowConfirm("Clear logs?",
+			"Remove all messages from this view? Any saved log file is left untouched.",
+			func(ok bool) {
+				if !ok {
+					return
+				}
+				um.Logger.Clear()
+				// Set the display directly (we're on the UI thread); the ticker
+				// re-syncs its line count on the next pass.
+				_ = logBinding.Set("")
+				um.showToast("Logs cleared")
+			}, um.Window)
+	})
+
 	top := container.NewVBox()
 	if isLaunch {
 		top.Add(summaryObj)
@@ -133,7 +148,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 
 	content := container.NewBorder(
 		top,
-		container.NewHBox(closeBtn, copyBtn),
+		container.NewHBox(closeBtn, copyBtn, clearBtn),
 		nil,
 		nil,
 		logBox,
