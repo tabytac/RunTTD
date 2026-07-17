@@ -24,6 +24,7 @@ See [Known Issues](#known-issues) for compatibility details.
 - **Auto-download.** If the chosen client/version isn't installed locally, the launcher downloads it. Vanilla builds come from the OpenTTD CDN, JGRPP builds from GitHub releases.
 - **Version pinning.** Lock a profile to a specific version like `0.72.2`, or use `latest` to always grab the newest release.
 - **Custom builds.** Run your own OpenTTD build by pointing a profile at its executable folder instead of a downloaded release.
+- **Auto-launch on startup.** Mark one profile to launch automatically when RunTTD opens. The launcher stays open even if auto-close is on.
 - **Quick launch.** Press `1`-`9` (or `0` for the 10th) to launch that profile instantly.
 - **Update notifications.** Checks for new releases on startup and links you to the download.
 - **Custom themes.** 8 color presets, plus a Light/Dark toggle.
