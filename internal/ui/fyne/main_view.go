@@ -765,6 +765,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	headerLabel := widget.NewLabel("RunTTD")
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
+	titleBox := container.NewHBox(headerLabel, mutedLabel(versionCaption(um.Version)))
 	var themeToggleBtn *widget.Button
 	themeToggleBtn = widget.NewButtonWithIcon("", theme.ColorPaletteIcon(), func() {
 		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(themeToggleBtn)
@@ -775,7 +776,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	themeToggleBtn.Importance = widget.LowImportance
 
 	headerRight := container.NewHBox(themeToggleBtn)
-	headerContent := container.NewBorder(nil, nil, nil, headerRight, headerLabel)
+	headerContent := container.NewBorder(nil, nil, nil, headerRight, titleBox)
 	header := NewThemedBox(ColorNameHeader, container.NewPadded(headerContent))
 
 	um.startUpdateCheck(headerRight)

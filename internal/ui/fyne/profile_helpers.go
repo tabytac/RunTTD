@@ -30,6 +30,14 @@ func mutedLabel(text string) *widget.Label {
 	return l
 }
 
+// versionCaption formats the app version for display; blank/whitespace builds read "dev".
+func versionCaption(version string) string {
+	if v := strings.TrimSpace(version); v != "" {
+		return v
+	}
+	return "dev"
+}
+
 func indexOfProfileByName(profiles []domain.Profile, name string) int {
 	needle := strings.TrimSpace(name)
 	if needle == "" {

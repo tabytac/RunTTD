@@ -63,6 +63,7 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 		pendingLaunchIdx: -1,
 		upstream:         newUpstreamCache(),
 	}
+	um.Logger.Append("RunTTD " + versionCaption(version) + " starting")
 
 	if um.Config.ThemeVariant == "" {
 		um.Config.ThemeVariant = "dark"
