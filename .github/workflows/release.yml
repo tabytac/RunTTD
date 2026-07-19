@@ -94,19 +94,18 @@ jobs:
         shell: bash
         run: |
           cd dist
-          TAG=${{ github.ref_name }}
           PLATFORM=${{ matrix.platform }}
           BINARY=${{ matrix.output_name }}
 
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            RELEASE_FILE="RunTTD_${TAG}_${PLATFORM}.exe"
+            RELEASE_FILE="RunTTD-${PLATFORM}.exe"
             cp "$BINARY" "$RELEASE_FILE"
           elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            RELEASE_FILE="RunTTD_${TAG}_${PLATFORM}.tar.gz"
+            RELEASE_FILE="RunTTD-${PLATFORM}.tar.gz"
             tar -czf "$RELEASE_FILE" "$BINARY"
           else
             # macOS Universal
-            RELEASE_FILE="RunTTD_${TAG}_${PLATFORM}.zip"
+            RELEASE_FILE="RunTTD-${PLATFORM}.zip"
             zip "$RELEASE_FILE" "$BINARY"
           fi
 
