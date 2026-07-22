@@ -106,7 +106,7 @@ func HighestInstalledFolderInRoot(cfg *domain.Config, client string) string {
 // highestInstalledByClient returns, per client, the HIGHEST-version install
 // (by version, not mod-time), restricted to the configured platform so a
 // launch's actual target wins over an alphabetically-earlier OS build.
-func highestInstalledByClient(cfg *domain.Config) map[string]domain.InstalledVersion {
+func highestInstalledByClient(cfg *domain.Config, stableOnly bool) map[string]domain.InstalledVersion {
 	aliases := platform.ClientPlatformAliases(cfg)
 	out := map[string]domain.InstalledVersion{}
 	for _, v := range platform.ScanInstalledVersions(cfg) {
@@ -114,6 +114,9 @@ func highestInstalledByClient(cfg *domain.Config) map[string]domain.InstalledVer
 			continue
 		}
 		if !platform.FolderMatchesAnyAlias(strings.ToLower(filepath.Base(v.Path)), aliases) {
+			continue
+		}
+		if stableOnly && platform.IsPreReleaseVersion(v.Version) {
 			continue
 		}
 		cur, ok := out[v.Client]
@@ -125,12 +128,11 @@ func highestInstalledByClient(cfg *domain.Config) map[string]domain.InstalledVer
 }
 
 // HighestInstalledFolder returns the folder path of the highest-version install
-// for a client (platform-filtered), or "" if none is installed. This is how a
-// "latest" profile resolves locally — by version, matching an online launch and
-// the library view; do NOT use newest-by-mod-time, which a later re-download of
-// an older version would wrongly win.
+// for a client across every track (platform-filtered), or "" if none is installed.
+// Do NOT use newest-by-mod-time, which a later re-download of an older version
+// would wrongly win.
 func HighestInstalledFolder(cfg *domain.Config, client string) string {
-	if v, ok := highestInstalledByClient(cfg)[client]; ok {
+	if v, ok := highestInstalledByClient(cfg, false)[client]; ok {
 		return v.Path
 	}
 	return ""
@@ -144,7 +146,8 @@ func HighestInstalledFolder(cfg *domain.Config, client string) string {
 func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry {
 	scanned := platform.ScanInstalledVersions(cfg)
 
-	latestByClient := highestInstalledByClient(cfg)
+	anyByClient := highestInstalledByClient(cfg, false)
+	stableByClient := highestInstalledByClient(cfg, true)
 
 	refs := map[string][]string{} // folder path -> profile names
 	for _, p := range cfg.Profiles {
@@ -161,7 +164,12 @@ func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry
 		version := strings.TrimSpace(p.Version)
 		var folder string
 		if IsLatestVersion(version) {
-			if v, ok := latestByClient[client]; ok {
+			// Track-aware: a latest-stable profile launches the newest stable, never a higher beta.
+			byClient := anyByClient
+			if LatestTrack(client, version) == "stable" {
+				byClient = stableByClient
+			}
+			if v, ok := byClient[client]; ok {
 				folder = v.Path
 			}
 		} else {

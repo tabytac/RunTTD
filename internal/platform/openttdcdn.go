@@ -294,7 +294,7 @@ func CheckForNewVersionForClientTrack(ctx context.Context, client string, cfg *d
 			if lower == "latest (stable)" || lower == "latest (testing)" || lower == "latest" {
 				continue
 			}
-			if track == "stable" && (strings.Contains(lower, "-rc") || strings.Contains(lower, "beta")) {
+			if track == "stable" && IsPreReleaseVersion(lower) {
 				continue
 			}
 			return vv

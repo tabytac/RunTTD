@@ -160,6 +160,13 @@ func parseVersionFromName(name string) string {
 	return name[loc[0]:end]
 }
 
+// IsPreReleaseVersion reports whether a version tag is a beta or release candidate,
+// i.e. one the "stable" track never resolves to.
+func IsPreReleaseVersion(version string) bool {
+	lower := strings.ToLower(version)
+	return strings.Contains(lower, "-rc") || strings.Contains(lower, "beta")
+}
+
 // parseOSTag returns the trailing OS/arch tag (lowercased), or "" if absent.
 func parseOSTag(name string) string {
 	m := osTagRe.FindStringSubmatch(name)
