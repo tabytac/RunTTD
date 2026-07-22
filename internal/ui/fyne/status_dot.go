@@ -104,7 +104,8 @@ func dotState(in dotInput) DotState {
 	}
 	switch in.cacheState {
 	case okUpstream:
-		if in.latestTagFolder == in.installedFolder {
+		// Not installedFolder: that scan is track-blind, so a higher off-track beta would read as an update.
+		if in.latestTagFolder != "" {
 			return DotGreen
 		}
 		return DotOrange
