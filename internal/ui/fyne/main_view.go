@@ -722,7 +722,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		txt.SizeName = theme.SizeNameCaptionText
 		return container.NewHBox(newStartupMarker(), txt)
 	}
-	legend := container.NewCenter(container.NewHBox(
+	// One 3-column grid, not a single row: five entries in a row would set a
+	// ~390px floor on the panel's width, and the shared grid keeps the rows' columns aligned.
+	legend := container.NewCenter(container.NewGridWithColumns(3,
 		legendItem(DotGreen, "Ready"),
 		legendItem(DotOrange, "Update"),
 		legendItem(DotRed, "Not installed"),
