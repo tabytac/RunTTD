@@ -15,7 +15,7 @@ import (
 
 // makeOnboardingView creates the first-run configuration screen
 func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
-	welcomeLabel := widget.NewLabel("Set up RunTTD")
+	welcomeLabel := widget.NewLabel("Set up RunTTD - " + versionCaption(um.Version))
 	welcomeLabel.TextStyle = fyne.TextStyle{Bold: true, Italic: false}
 	welcomeLabel.Alignment = fyne.TextAlignCenter
 
