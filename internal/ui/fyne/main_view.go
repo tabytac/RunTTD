@@ -303,6 +303,13 @@ func (mv *mainView) refreshDetails() {
 	}
 	mv.detailsContainer.Add(autoBtn)
 
+	// Echo of the row's warning, from the async cache (setupIssueFor); no disk I/O on this path.
+	if issue := um.setupIssueFor(profile); issue != "" {
+		wl := widget.NewLabel(issue)
+		wl.Importance = widget.WarningImportance
+		mv.detailsContainer.Add(container.NewHBox(newSetupWarning(), wl))
+	}
+
 	launch := newSection()
 	if profile.LaunchMode == "file" {
 		um.addPathField(launch, "Save File", profile.SavePath, true)
@@ -440,6 +447,19 @@ func newStartupMarker() *canvas.Image {
 	return img
 }
 
+// Amber triangle with an exclamation cutout; drawn, not a "⚠" glyph (emoji font fallback).
+var setupWarningSVG = fyne.NewStaticResource("setup-warning.svg",
+	[]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="#E6A700" d="M5 0 L10 10 L0 10 Z"/><rect x="4.35" y="3.4" width="1.3" height="3.3" fill="#20242C"/><rect x="4.35" y="7.8" width="1.3" height="1.3" fill="#20242C"/></svg>`))
+
+// newSetupWarning returns the ⚠ flag shown on rows whose launch would silently
+// miss the profile's configured intent (see app.ProfileSetupIssue).
+func newSetupWarning() *canvas.Image {
+	img := canvas.NewImageFromResource(setupWarningSVG)
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(dotDiameter, dotDiameter))
+	return img
+}
+
 // buildProfileList creates the profile list widget and wires its row template,
 // row binding, drag-reorder, and selection callbacks.
 func (mv *mainView) buildProfileList() {
@@ -464,11 +484,13 @@ func (mv *mainView) buildProfileList() {
 
 			pad := theme.Padding()
 			text := container.New(layout.NewCustomPaddedVBoxLayout(-pad/2), nameLabel, versionLabel)
+			warn := container.New(layout.NewCustomPaddedLayout(0, 0, 0, pad/2), newSetupWarning())
+			warn.Hide() // shown only on rows with a setup issue
 			marker := container.New(layout.NewCustomPaddedLayout(0, 0, 0, pad/2), newStartupMarker())
 			marker.Hide() // shown only on the startup row
 			dot := newStatusDot()
 			dotWrap := container.New(layout.NewCustomPaddedLayout(0, 0, 0, pad), dot)
-			right := container.NewHBox(marker, dotWrap)
+			right := container.NewHBox(warn, marker, dotWrap)
 			row := container.NewBorder(nil, nil, badge, right, text)
 			return container.NewStack(btn, container.New(layout.NewCustomPaddedLayout(0, 0, pad, pad), row))
 		},
@@ -480,8 +502,9 @@ func (mv *mainView) buildProfileList() {
 			text := row.Objects[0].(*fyne.Container)
 			badge := row.Objects[1].(*widget.Label)
 			right := row.Objects[2].(*fyne.Container)                       // the HBox
-			marker := right.Objects[0].(*fyne.Container)
-			dot := right.Objects[1].(*fyne.Container).Objects[0].(*statusDot) // dotWrap -> dot
+			warn := right.Objects[0].(*fyne.Container)
+			marker := right.Objects[1].(*fyne.Container)
+			dot := right.Objects[2].(*fyne.Container).Objects[0].(*statusDot) // dotWrap -> dot
 			nameLabel := text.Objects[0].(*widget.Label)
 			versionLabel := text.Objects[1].(*widget.Label)
 
@@ -507,6 +530,11 @@ func (mv *mainView) buildProfileList() {
 				nameLabel.SetText(profile.Name)
 				versionLabel.SetText(versionText)
 				dot.SetState(um.resolveDotState(profile))
+				if um.setupIssueFor(profile) != "" {
+					warn.Show()
+				} else {
+					warn.Hide()
+				}
 				if profile.Name == um.Config.AutoLaunchProfile && um.Config.AutoLaunchProfile != "" {
 					marker.Show()
 				} else {
@@ -562,6 +590,7 @@ func (mv *mainView) buildProfileList() {
 		mv.refreshDetails()
 	}
 	um.profileListRefresh = func() { mv.profileList.Refresh() }
+	um.detailsRefresh = func() { mv.refreshDetails() }
 }
 
 // makeMainView creates the main profile selection view
@@ -713,28 +742,32 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		txt := widget.NewLabel(label)
 		txt.Importance = widget.LowImportance
 		txt.SizeName = theme.SizeNameCaptionText
-		return container.NewHBox(d, txt)
+		return container.New(layout.NewCustomPaddedHBoxLayout(0), d, txt) // no dot-to-label gap; the label's own padding spaces them
 	}
-	// The startup marker is a triangle, not a status dot, so it needs its own swatch.
-	markerLegend := func() fyne.CanvasObject {
-		txt := widget.NewLabel("Startup")
+	// Marker entries are glyphs, not status dots, so they get their own swatches.
+	glyphLegend := func(glyph fyne.CanvasObject, label string) fyne.CanvasObject {
+		txt := widget.NewLabel(label)
 		txt.Importance = widget.LowImportance
 		txt.SizeName = theme.SizeNameCaptionText
-		return container.NewHBox(newStartupMarker(), txt)
+		return container.New(layout.NewCustomPaddedHBoxLayout(0), glyph, txt)
 	}
-	// One 3-column grid, not a single row: five entries in a row would set a
-	// ~390px floor on the panel's width, and the shared grid keeps the rows' columns aligned.
-	legend := container.NewCenter(container.NewGridWithColumns(3,
-		legendItem(DotGreen, "Ready"),
-		legendItem(DotOrange, "Update"),
-		legendItem(DotRed, "Not installed"),
-		legendItem(DotGrey, "Checking"),
-		markerLegend(),
+	// Content-sized columns packed tight and centered: small gaps, spare space at the ends, dots aligned per column.
+	legendCol := func(top, bottom fyne.CanvasObject) fyne.CanvasObject {
+		return container.New(layout.NewCustomPaddedVBoxLayout(-theme.Padding()), top, bottom)
+	}
+	legend := container.NewCenter(container.New(layout.NewCustomPaddedHBoxLayout(theme.Padding()*2),
+		legendCol(legendItem(DotGreen, "Ready"), legendItem(DotGrey, "Checking")),
+		legendCol(legendItem(DotOrange, "Update"), glyphLegend(newStartupMarker(), "Startup")),
+		legendCol(legendItem(DotRed, "Uninstalled"), glyphLegend(newSetupWarning(), "Invalid")),
 	))
 
+	// Separator marks the list/footer boundary; the top group is tightened so it lines up with the one above Run Selected.
+	footerTop := container.New(layout.NewCustomPaddedVBoxLayout(-theme.Padding()),
+		widget.NewSeparator(),
+		container.New(layout.NewCustomPaddedVBoxLayout(-theme.Padding()-2), dragHint, legend),
+	)
 	footer := container.NewPadded(container.NewVBox(
-		legend,
-		dragHint,
+		footerTop,
 		container.NewGridWithColumns(3, mv.seeLogsBtn, manageInstallsBtn, settingsBtn),
 	))
 

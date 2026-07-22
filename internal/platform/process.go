@@ -37,10 +37,7 @@ func ExecuteOpenTTD(
 	switch profile.LaunchMode {
 	case "file", "folder":
 		if profile.SavePath != "" {
-			gamePath := profile.SavePath
-			if !filepath.IsAbs(profile.SavePath) {
-				gamePath = filepath.Join(docsBasePath, "save", profile.SavePath)
-			}
+			gamePath := ResolveProfileSavePath(docsBasePath, profile.SavePath)
 
 			info, err := os.Stat(gamePath)
 			if err == nil {
@@ -76,10 +73,7 @@ func ExecuteOpenTTD(
 		}
 	}
 
-	configPath := strings.TrimSpace(profile.ConfigFilePath)
-	if configPath != "" && !filepath.IsAbs(configPath) && docsBasePath != "" {
-		configPath = filepath.Join(docsBasePath, configPath)
-	}
+	configPath := ResolveProfileConfigOverride(docsBasePath, profile.ConfigFilePath)
 
 	args := buildLaunchArgs(profile, saveFile, configPath, allowCompanyPassword)
 
@@ -121,6 +115,25 @@ func ExecuteOpenTTD(
 			obs.LogVerbose("OpenTTD exited normally")
 		}
 	}()
+}
+
+// ResolveProfileSavePath resolves a profile's save target the way launch does:
+// absolute as-is, else under <docsBase>/save. Callers pass a non-empty savePath.
+func ResolveProfileSavePath(docsBase, savePath string) string {
+	if filepath.IsAbs(savePath) {
+		return savePath
+	}
+	return filepath.Join(docsBase, "save", savePath)
+}
+
+// ResolveProfileConfigOverride resolves a profile's -c override, or "" when unset:
+// absolute as-is, else under docsBase.
+func ResolveProfileConfigOverride(docsBase, raw string) string {
+	p := strings.TrimSpace(raw)
+	if p != "" && !filepath.IsAbs(p) && docsBase != "" {
+		p = filepath.Join(docsBase, p)
+	}
+	return p
 }
 
 // buildLaunchArgs assembles the OpenTTD CLI arguments for a profile. saveFile and

@@ -37,7 +37,9 @@ type UIManager struct {
 	quit                  func()
 	CachedVersions        []string
 	upstream            *upstreamCache
+	setupIssues         *setupIssueCache
 	profileListRefresh  func() // set by the main view; refreshes the profile list from any goroutine (via fyne.Do)
+	detailsRefresh      func() // set by the main view; rebuilds the details pane from any goroutine (via fyne.Do)
 	settingsOverlay     *widget.PopUp // the open settings dialog, for the scoped Escape handler; nil when closed
 	settingsOnEscape    func()        // Escape on the settings overlay routes here (dirty -> discard-confirm)
 }
@@ -62,6 +64,7 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 		LastListSelectID: -1,
 		pendingLaunchIdx: -1,
 		upstream:         newUpstreamCache(),
+		setupIssues:      newSetupIssueCache(),
 	}
 	um.Logger.Append("RunTTD " + versionCaption(version) + " starting")
 
