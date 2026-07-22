@@ -97,12 +97,22 @@ func NewUIManager(config *domain.Config, configPath string, version string) *UIM
 	// size is the readable content size; the WindowSize floor guards a bad value.
 	window.SetOnClosed(func() {
 		sz := window.Canvas().Size()
-		um.Config.WindowWidth = int(sz.Width)
-		um.Config.WindowHeight = int(sz.Height)
-		_ = domain.SaveConfig(um.ConfigPath, um.Config)
+		um.persistWindowSize(int(sz.Width), int(sz.Height))
 	})
 
 	return um
+}
+
+// persistWindowSize stores the window size for the next launch. It writes nothing
+// while onboarding is unfinished, since creating the config there would make the
+// next launch skip setup.
+func (um *UIManager) persistWindowSize(w, h int) {
+	if um.Config.FirstRun {
+		return
+	}
+	um.Config.WindowWidth = w
+	um.Config.WindowHeight = h
+	_ = domain.SaveConfig(um.ConfigPath, um.Config)
 }
 
 // LogVerbose appends a message only if verbose logging is enabled in settings

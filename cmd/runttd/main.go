@@ -85,11 +85,9 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Config at %s was unreadable; backed up to %s.broken and reset to defaults.\n", configPath, configPath)
 		}
 
+		// Left unsaved on purpose: onboarding writes the config when it completes, so
+		// quitting first-run early leaves no file and setup runs again next launch.
 		config = buildDefaultConfig()
-		if saveErr := domain.SaveConfig(configPath, config); saveErr != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create default config at %s: %v\n", configPath, saveErr)
-			os.Exit(1)
-		}
 		bootstrapFileLog = config.LogToFile
 	default:
 		fmt.Fprintf(os.Stderr, "Startup failed while loading config: %v\n", err)
