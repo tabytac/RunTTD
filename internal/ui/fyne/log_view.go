@@ -226,9 +226,9 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			if updateStatus != nil {
 				updateStatus("Update check unavailable (offline?), using latest local install")
 			}
-			// Highest-version install (matches the online launch target and the
-			// status dot); NOT newest-by-mod-time, which a re-downloaded older build wins.
-			versionFolder := apppkg.HighestInstalledFolderInRoot(um.Config, client)
+			// Highest-version install on this track (matches the online launch target
+			// and the status dot); NOT newest-by-mod-time, which a re-downloaded older build wins.
+			versionFolder := apppkg.HighestInstalledFolderInRoot(um.Config, client, latestTrack)
 			if versionFolder == "" {
 				if updateStatus != nil {
 					updateStatus("Failed: offline and no local installation found for client")

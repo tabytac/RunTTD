@@ -74,10 +74,11 @@ func ClientLatestForTrack(ctx context.Context, clientID, track string, cfg *doma
 
 // HighestInstalledFolderInRoot is like HighestInstalledFolder but restricted to
 // the client's OWN download root (ClientDownloadDir), matching the single-root
-// scan FindVersionFolderClient uses. The status dot uses this so its installed
+// scan FindVersionFolderClient uses, and to the given track so it resolves what
+// that profile would actually launch. The status dot uses this so its installed
 // folder and the latest-tag folder come from the same scan and cannot diverge
 // when a folder is misplaced under another client's root.
-func HighestInstalledFolderInRoot(cfg *domain.Config, client string) string {
+func HighestInstalledFolderInRoot(cfg *domain.Config, client, track string) string {
 	root := platform.ClientDownloadDir(cfg, client)
 	aliases := platform.ClientPlatformAliases(cfg)
 	var best domain.InstalledVersion
@@ -90,6 +91,9 @@ func HighestInstalledFolderInRoot(cfg *domain.Config, client string) string {
 			continue
 		}
 		if !platform.FolderMatchesAnyAlias(strings.ToLower(filepath.Base(v.Path)), aliases) {
+			continue
+		}
+		if track == "stable" && platform.IsPreReleaseVersion(v.Version) {
 			continue
 		}
 		if !found || compareVersions(v.Version, best.Version) > 0 {

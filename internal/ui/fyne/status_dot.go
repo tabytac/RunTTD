@@ -201,7 +201,7 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 
 	ctx := context.Background()
 	if in.isLatest {
-		in.installedFolder = apppkg.HighestInstalledFolderInRoot(um.Config, client)
+		in.installedFolder = apppkg.HighestInstalledFolderInRoot(um.Config, client, apppkg.LatestTrack(client, profile.Version))
 	} else {
 		folder, _ := apppkg.ClientFindInstalled(ctx, client, profile.Version, um.Config)
 		in.installedFolder = folder
