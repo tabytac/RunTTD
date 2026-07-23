@@ -1,5 +1,10 @@
 # RunTTD
 
+[![CI](https://github.com/tabytac/RunTTD/actions/workflows/ci.yml/badge.svg)](https://github.com/tabytac/RunTTD/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/tabytac/RunTTD)](https://github.com/tabytac/RunTTD/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/tabytac/RunTTD/total)](https://github.com/tabytac/RunTTD/releases)
+[![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-blue.svg)](LICENSE)
+
 A small desktop launcher for OpenTTD and JGR's Patchpack (JGRPP). It downloads the version you want (vanilla stable, vanilla nightly, or JGRPP) and keeps your servers, saves, and launch options grouped into profiles.
 
 <p align="center">
