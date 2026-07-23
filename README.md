@@ -23,6 +23,7 @@ See [Known Issues](#known-issues) for compatibility details.
 - **Profile system.** Set up separate profiles for different saves, servers, or JGRPP versions and switch between them.
 - **Auto-download.** If the chosen client/version isn't installed locally, the launcher downloads it. Vanilla builds come from the OpenTTD CDN, JGRPP builds from GitHub releases.
 - **Version pinning.** Lock a profile to a specific version like `0.72.2`, or use `latest` to always grab the newest release.
+- **Status indicator.** A colored dot on each profile shows at a glance whether it's ready, has an update available, or isn't installed yet. `latest` and nightly profiles check for a newer version in the background.
 - **Custom builds.** Run your own OpenTTD build by pointing a profile at its executable folder instead of a downloaded release.
 - **Auto-launch on startup.** Mark one profile to launch automatically when RunTTD opens. The launcher stays open even if auto-close is on.
 - **Quick launch.** Press `1`-`9` (or `0` for the 10th) to launch that profile instantly.
@@ -78,12 +79,13 @@ The **Manage Installs** screen lists every downloaded version grouped by client,
 
 ## Settings
 
-Click **Settings** at the bottom of the profile list to configure:
+Click **Settings** at the bottom of the profile list. The options are organized into four tabs (Files & Storage, Launching, Appearance, and Network & System):
 
 - **Parent Directory.** Where client versions are downloaded and extracted, each in its own versioned folder (e.g. `openttd-15.3-windows-win64`, `openttd-jgrpp-0.72.4-windows-win64`).
 - **Per-client subfolders.** On by default. Installs are nested under `/jgrpp`, `/vanilla`, `/vanilla-nightly`; turn it off to have every client share the parent directory directly.
 - **Docs Base Path.** Your OpenTTD documents folder, where `save/` and `openttd.cfg` live.
 - **Auto-close.** Close the launcher once OpenTTD starts.
+- **Auto-open log panel.** Open the live log view when a launch starts, instead of the compact status band on the main screen.
 - **Verbose logging.** Detailed log messages during launch.
 - **Default Client.** Which client new profiles start with.
 - **CDN base URLs.** Override the vanilla stable and nightly download mirrors if you want.
