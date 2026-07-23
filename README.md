@@ -86,6 +86,13 @@ The **Manage Installs** screen lists every downloaded version grouped by client,
 
 Click **Settings** at the bottom of the profile list. The options are organized into four tabs (Files & Storage, Launching, Appearance, and Network & System):
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-window-dark.png">
+    <img src="docs/screenshots/settings-window-light.png" alt="The Settings dialog, Launching tab" width="820">
+  </picture>
+</p>
+
 - **Parent Directory.** Where client versions are downloaded and extracted, each in its own versioned folder (e.g. `openttd-15.3-windows-win64`, `openttd-jgrpp-0.72.4-windows-win64`).
 - **Per-client subfolders.** On by default. Installs are nested under `/jgrpp`, `/vanilla`, `/vanilla-nightly`; turn it off to have every client share the parent directory directly.
 - **Docs Base Path.** Your OpenTTD documents folder, where `save/` and `openttd.cfg` live.
