@@ -1,6 +1,7 @@
 package fyne
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -35,6 +36,9 @@ func (um *UIManager) browseSavePath(startPath, title string, directory bool) (st
 			zenity.Filename(startPath),
 		)
 	}
+	if errors.Is(err, zenity.ErrCanceled) {
+		return "", nil // a cancel is not an error; callers dialog on non-nil
+	}
 	if err != nil || selected == "" {
 		return "", err
 	}
@@ -64,6 +68,9 @@ func (um *UIManager) browseConfigPath(startPath string) (string, error) {
 		},
 		zenity.Filename(startPath),
 	)
+	if errors.Is(err, zenity.ErrCanceled) {
+		return "", nil
+	}
 	if err != nil || selected == "" {
 		return "", err
 	}
