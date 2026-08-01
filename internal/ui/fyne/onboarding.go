@@ -89,7 +89,9 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 
 		// First write of the config; a failure here means setup runs again next launch.
 		if err := domain.SaveConfig(um.ConfigPath, um.Config); err != nil {
+			// Stay on setup: continuing would leave every later save failing too.
 			um.showErrorf("could not save your settings to %s: %w", um.ConfigPath, err)
+			return
 		}
 
 		um.Window.SetContent(um.makeMainView())
