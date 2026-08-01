@@ -28,12 +28,12 @@ See [Known Issues](#known-issues) for compatibility details.
 - **Profile system.** Set up separate profiles for different saves, servers, or JGRPP versions and switch between them.
 - **Auto-download.** If the chosen client/version isn't installed locally, the launcher downloads it. Vanilla builds come from the OpenTTD CDN, JGRPP builds from GitHub releases.
 - **Version pinning.** Lock a profile to a specific version like `0.72.2`, or use `latest` to always grab the newest release.
-- **Status indicator.** A colored dot on each profile shows at a glance whether it's ready, has an update available, or isn't installed yet. `latest` and nightly profiles check for a newer version in the background.
+- **Status indicator.** A coloured dot on each profile shows at a glance whether it's ready, has an update available, or isn't installed yet. `latest` and nightly profiles check for a newer version in the background.
 - **Custom builds.** Run your own OpenTTD build by pointing a profile at its executable folder instead of a downloaded release.
 - **Auto-launch on startup.** Mark one profile to launch automatically when RunTTD opens. The launcher stays open even if auto-close is on.
 - **Quick launch.** Press `1`-`9` (or `0` for the 10th) to launch that profile instantly.
 - **Update notifications.** Checks for new releases on startup and links you to the download.
-- **Custom themes.** 8 color presets, plus a Light/Dark toggle.
+- **Custom themes.** 8 colour presets, plus a Light/Dark toggle.
 - **Multiplayer quick-join.** Store the server address, passwords, and company info per profile, and the game opens straight to that server.
 - **Save path loading.** Point a profile at a save folder and the launcher loads the most recent `.sav` file in it.
 - **Installed-clients library.** See every downloaded version, its size on disk, and total space used; remove versions you no longer need, including a one-click cleanup of versions no profile is using.
@@ -68,7 +68,7 @@ Each profile stores:
 | **Company Password** | If the company requires one |
 | **Config File Override** | Optional path to an alternate `openttd.cfg` for this profile |
 | **No Config Save** | Don't let OpenTTD write config changes back on exit |
-| **NewGRF Scan Behavior** | Control NewGRF scanning/loading on startup (see below) |
+| **NewGRF Scan Behaviour** | Control NewGRF scanning/loading on startup (see below) |
 | **Custom Arguments** | Extra command-line flags passed straight to the OpenTTD executable |
 
 Create, edit, duplicate, and delete profiles from the main window. Everything lives in `runttd-config.json` next to the executable. The UI covers all of it, but you can hand-edit the file too.
@@ -84,7 +84,7 @@ The **Manage Installs** screen lists every downloaded version grouped by client,
 
 ## Settings
 
-Click **Settings** at the bottom of the profile list. The options are organized into four tabs (Files & Storage, Launching, Appearance, and Network & System):
+Click **Settings** at the bottom of the profile list. The options are organised into four tabs (Files & Storage, Launching, Appearance, and Network & System):
 
 <p align="center">
   <picture>

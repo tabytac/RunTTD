@@ -50,7 +50,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	}
 
 	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(
-		"Organize downloaded clients into per-client subfolders",
+		"Organise downloaded clients into per-client subfolders",
 		"Keeps each client's downloaded files in a separate folder, instead of all sharing the parent folder. "+
 			"Easiest to choose now, before anything is downloaded; you can change it later in Settings.",
 		um.Config.SubfolderPerClient,

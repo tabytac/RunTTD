@@ -991,7 +991,7 @@ func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 	content := container.NewVBox(
 		widget.NewLabel("Theme"),
 		modeSelect.Container,
-		widget.NewLabel("Accent Color"),
+		widget.NewLabel("Accent Colour"),
 		colorGrid,
 	)
 

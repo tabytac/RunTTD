@@ -73,7 +73,7 @@ func clientDisplayName(client string) string {
 	case "vanilla-nightly":
 		return "Vanilla OpenTTD (Nightly)"
 	default:
-		return "Unrecognized"
+		return "Unrecognised"
 	}
 }
 
@@ -282,7 +282,7 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 		barColor = libGreen
 		chipFill = libGreen
 	case e.Client == "":
-		chipText = "UNRECOGNIZED"
+		chipText = "UNRECOGNISED"
 		chipFill = libGrey
 	default:
 		chipText = "UNUSED"

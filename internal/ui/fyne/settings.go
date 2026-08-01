@@ -334,7 +334,7 @@ func (um *UIManager) showSettingsView() {
 	autoLaunchSelect.SetSelected(autoLaunchSelectedLabel(um.Config.Profiles, um.Config.AutoLaunchProfile))
 
 	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(
-		"Organize downloaded clients into per-client subfolders",
+		"Organise downloaded clients into per-client subfolders",
 		"Keeps each client's downloaded files in a separate folder, instead of all sharing the parent folder. "+
 			"If you change this later, anything already downloaded gets fetched again.",
 		um.Config.SubfolderPerClient,
@@ -383,7 +383,7 @@ func (um *UIManager) showSettingsView() {
 		NewLabeledField("Default Client (new profiles)",
 			"The client new profiles use by default. Change it per profile.",
 			defaultClientSelect),
-		NewSectionHeader("Launch Behavior"),
+		NewSectionHeader("Launch Behaviour"),
 		NewLabeledField("Auto-launch profile on startup",
 			"Launches the chosen profile when RunTTD opens. The launcher stays open for this one startup launch even if auto-close is on.",
 			autoLaunchSelect),
@@ -470,7 +470,7 @@ func (um *UIManager) showSettingsView() {
 		if um.Config.SubfolderPerClient != prevSubfolderPerClient {
 			dialog.ShowInformation(
 				"Install location changed",
-				"The launcher will now look for clients in the new location and may re-download them. Existing downloads are left in place — move or delete them manually if you no longer need them.",
+				"The launcher will now look for clients in the new location and may re-download them. Existing downloads are left in place; move or delete them manually if you no longer need them.",
 				um.Window,
 			)
 		}

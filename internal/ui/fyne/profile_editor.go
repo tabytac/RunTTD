@@ -712,12 +712,12 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	launchTab := container.NewTabItemWithIcon("Launch Options", theme.MediaPlayIcon(), launchScroll)
 
 	advancedScroll := container.NewVScroll(container.NewVBox(
-		NewSectionTitle("OpenTTD Config Behavior"),
+		NewSectionTitle("OpenTTD Config Behaviour"),
 		widget.NewLabel("Config File Override (optional)"),
 		container.NewBorder(nil, nil, nil, browseConfigBtn, configFileEntry),
 		noConfigSaveCheck,
 		widget.NewSeparator(),
-		NewSectionTitle("NewGRF Scan Behavior"),
+		NewSectionTitle("NewGRF Scan Behaviour"),
 		widget.NewLabel("Control NewGRF scanning/loading on startup:"),
 		container.NewHBox(newgrfRadio.Container),
 		widget.NewSeparator(),
