@@ -42,6 +42,8 @@ type UIManager struct {
 	detailsRefresh      func() // set by the main view; rebuilds the details pane from any goroutine (via fyne.Do)
 	settingsOverlay     *widget.PopUp // the open settings dialog, for the scoped Escape handler; nil when closed
 	settingsOnEscape    func()        // Escape on the settings overlay routes here (dirty -> discard-confirm)
+	blockingConfirm     *widget.PopUp // a confirm whose caller blocks on its response; raw overlay.Hide() would skip the callback and hang forever
+	blockingConfirmHide func()        // resolves blockingConfirm via the dialog's own Hide(), so Escape still answers "No"
 }
 
 // NewUIManager creates a new UIManager instance, configuring the static app icons and custom presets theme

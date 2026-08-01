@@ -593,6 +593,22 @@ func (mv *mainView) buildProfileList() {
 	um.detailsRefresh = func() { mv.refreshDetails() }
 }
 
+// escapeOverlayAction resolves what Escape should do for the given top overlay, or nil
+// if there's nothing to dismiss. Scoped overlays (settings, a blocking confirm) route
+// through their own dismiss so callbacks still fire; raw top.Hide() would skip them.
+func (um *UIManager) escapeOverlayAction(top fyne.CanvasObject) func() {
+	switch {
+	case top == nil:
+		return nil
+	case top == um.settingsOverlay && um.settingsOnEscape != nil:
+		return um.settingsOnEscape
+	case top == um.blockingConfirm && um.blockingConfirmHide != nil:
+		return um.blockingConfirmHide
+	default:
+		return top.Hide
+	}
+}
+
 // makeMainView creates the main profile selection view
 func (um *UIManager) makeMainView() fyne.CanvasObject {
 	mv := &mainView{
@@ -821,11 +837,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		// Escape dismisses the top modal (profile editor, settings, theme
 		// customizer), matching each modal's Cancel button which only hides it.
 		if event.Name == fyne.KeyEscape {
-			// Settings routes through its dirty->discard-confirm; the confirm is a new top overlay, so Escape on it hits the else and dismisses just the confirm.
-			if top := um.Window.Canvas().Overlays().Top(); top == um.settingsOverlay && um.settingsOnEscape != nil {
-				um.settingsOnEscape()
-			} else if top != nil {
-				top.Hide()
+			if action := um.escapeOverlayAction(um.Window.Canvas().Overlays().Top()); action != nil {
+				action()
 			}
 			return
 		}

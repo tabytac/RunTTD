@@ -273,7 +273,17 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 				"Versions before 1.2.0 don't include free graphics, so you'll need original "+
 				"Transport Tycoon Deluxe data files to play. Some old releases also predate builds for many systems.", version)
 			fyne.Do(func() {
-				dialog.NewConfirm("Very old OpenTTD version", msg, func(ok bool) { proceed <- ok }, um.Window).Show()
+				confirm := dialog.NewConfirm("Very old OpenTTD version", msg, func(ok bool) {
+					um.blockingConfirm, um.blockingConfirmHide = nil, nil
+					proceed <- ok
+				}, um.Window)
+				confirm.Show()
+				// Escape reaches only the raw overlay, whose Hide() skips this callback;
+				// route it through the dialog's own Hide() so proceed always gets a value.
+				if top, ok := um.Window.Canvas().Overlays().Top().(*widget.PopUp); ok {
+					um.blockingConfirm = top
+					um.blockingConfirmHide = confirm.Hide
+				}
 			})
 			if !<-proceed {
 				um.LogImportant(fmt.Sprintf("Cancelled: %s needs manual setup before it can run.", version))
