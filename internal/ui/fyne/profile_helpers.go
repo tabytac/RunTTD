@@ -51,6 +51,26 @@ func indexOfProfileByName(profiles []domain.Profile, name string) int {
 	return -1
 }
 
+// reorderProfiles moves the profile at from to Fyne's drag-list destination to
+// (draggedTo: insert before whatever currently sits there) and returns a new
+// slice; profiles is left untouched. Callers re-resolve any selection by name
+// afterward (indexOfProfileByName), since the move can shift other indices too.
+func reorderProfiles(profiles []domain.Profile, from, to int) []domain.Profile {
+	if to > from {
+		to--
+	}
+	profile := profiles[from]
+	rest := make([]domain.Profile, 0, len(profiles)-1)
+	rest = append(rest, profiles[:from]...)
+	rest = append(rest, profiles[from+1:]...)
+
+	out := make([]domain.Profile, 0, len(profiles))
+	out = append(out, rest[:to]...)
+	out = append(out, profile)
+	out = append(out, rest[to:]...)
+	return out
+}
+
 // uniqueProfileName returns "base Copy", escalating to "base Copy (2)", "(3)"... on case-insensitive collision.
 func uniqueProfileName(profiles []domain.Profile, base string) string {
 	candidate := base + " Copy"

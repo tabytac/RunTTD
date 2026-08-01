@@ -560,25 +560,19 @@ func (mv *mainView) buildProfileList() {
 			return
 		}
 
-		if to > from {
-			to--
-		}
-
-		profile := um.Config.Profiles[from]
-		um.Config.Profiles = append(um.Config.Profiles[:from], um.Config.Profiles[from+1:]...)
-
-		newProfiles := make([]domain.Profile, 0, len(um.Config.Profiles)+1)
-		newProfiles = append(newProfiles, um.Config.Profiles[:to]...)
-		newProfiles = append(newProfiles, profile)
-		newProfiles = append(newProfiles, um.Config.Profiles[to:]...)
-		um.Config.Profiles = newProfiles
-
+		um.Config.Profiles = reorderProfiles(um.Config.Profiles, from, to)
 		_ = domain.SaveConfig(um.ConfigPath, um.Config)
-		mv.profileList.Refresh()
 
-		if from == mv.selectedIdx {
-			mv.profileList.Select(widget.ListItemID(to))
+		// Re-resolve by name: the splice shifts mv.selectedIdx onto a different
+		// profile whenever the drag crosses it, even if the dragged row wasn't the selection.
+		mv.selectedIdx = indexOfProfileByName(um.Config.Profiles, um.SelectedProfileName)
+		mv.profileList.Refresh()
+		if d := mv.displayPos(mv.selectedIdx); d >= 0 {
+			mv.profileList.Select(widget.ListItemID(d))
+		} else {
+			mv.profileList.UnselectAll()
 		}
+		mv.refreshDetails()
 	}
 	mv.profileList.OnSelected = func(id widget.ListItemID) {
 		if int(id) < len(mv.visibleIdx) {
