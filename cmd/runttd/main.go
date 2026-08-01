@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"runtime/debug"
 
+	"github.com/ncruces/zenity"
+
 	"runttd/internal/app"
 	"runttd/internal/domain"
 	"runttd/internal/platform"
@@ -55,6 +57,15 @@ func recoverCorruptConfig(path string) error {
 	return os.Rename(path, broken)
 }
 
+// fatalStartup reports a startup failure and exits. stderr is nulled on the
+// -H=windowsgui build (setupGuiOutput), so a native dialog is the only channel
+// that reaches the user there; it's shown alongside stderr for console/dev runs.
+func fatalStartup(msg string) {
+	fmt.Fprintln(os.Stderr, msg)
+	_ = zenity.Error(msg, zenity.Title("RunTTD failed to start"))
+	os.Exit(1)
+}
+
 func main() {
 	setupGuiOutput()
 
@@ -79,8 +90,7 @@ func main() {
 		// FirstRun then runs onboarding, signalling the reset without a dialog.
 		if errors.As(err, &parseErr) {
 			if recErr := recoverCorruptConfig(configPath); recErr != nil {
-				fmt.Fprintf(os.Stderr, "Config at %s was unreadable and could not be backed up: %v\n", configPath, recErr)
-				os.Exit(1)
+				fatalStartup(fmt.Sprintf("Config at %s was unreadable and could not be backed up: %v", configPath, recErr))
 			}
 			fmt.Fprintf(os.Stderr, "Config at %s was unreadable; backed up to %s.broken and reset to defaults.\n", configPath, configPath)
 		}
@@ -90,8 +100,7 @@ func main() {
 		config = buildDefaultConfig()
 		bootstrapFileLog = config.LogToFile
 	default:
-		fmt.Fprintf(os.Stderr, "Startup failed while loading config: %v\n", err)
-		os.Exit(1)
+		fatalStartup(fmt.Sprintf("Startup failed while loading config: %v", err))
 	}
 
 	// 4. Initialize session logs using platform logger.
