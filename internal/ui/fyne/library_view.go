@@ -150,6 +150,7 @@ func (um *UIManager) showLibraryView() {
 
 	var cleanupBtn *widget.Button
 	var rescan func()
+	var busy func(active bool) // toggles the surrounding controls off while a delete runs
 
 	render := func(entries []domain.LibraryEntry) {
 		listBox.Objects = nil
@@ -186,7 +187,7 @@ func (um *UIManager) showLibraryView() {
 				clientDisplayName(g.Client), len(g.Entries), pluralVersions(len(g.Entries), g.Client)))
 			listBox.Add(head)
 			for _, e := range g.Entries {
-				listBox.Add(um.libraryRow(e, rescan))
+				listBox.Add(um.libraryRow(e, busy, rescan))
 			}
 		}
 
@@ -197,7 +198,7 @@ func (um *UIManager) showLibraryView() {
 			cleanupBtn.SetText(fmt.Sprintf("Clean up %d unused · free %s", unusedCount, humanSize(unusedBytes)))
 			cleanupBtn.Enable()
 			cleanupBtn.OnTapped = func() {
-				um.confirmCleanup(orphans, rescan)
+				um.confirmCleanup(orphans, busy, rescan)
 			}
 		} else {
 			summary.SetText(fmt.Sprintf("%d %s · %s total · none unused",
@@ -230,6 +231,25 @@ func (um *UIManager) showLibraryView() {
 	cleanupBtn.Disable()
 
 	refreshBtn := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { rescan() })
+
+	// A delete can be slow (a large or network-hosted folder), so it runs off the UI
+	// thread; busy disables the surrounding controls for that stretch. render()'s
+	// own Enable/Disable of cleanupBtn on completion is left alone: rescan (called
+	// after busy(false)) re-derives whether anything is still unused. Per-row delete
+	// buttons are deliberately left enabled, so two different rows can delete
+	// concurrently; each targets its own path, and a stale rescan from one is
+	// superseded by the other's, so this is accepted rather than gated.
+	busy = func(active bool) {
+		if active {
+			summary.SetText("Removing…")
+			backBtn.Disable()
+			cleanupBtn.Disable()
+			refreshBtn.Disable()
+			return
+		}
+		backBtn.Enable()
+		refreshBtn.Enable()
+	}
 
 	header := container.NewBorder(nil, nil, summary, container.NewHBox(refreshBtn))
 	footer := container.NewBorder(nil, nil, backBtn, cleanupBtn)
@@ -264,7 +284,7 @@ func pluralVersions(n int, client string) string {
 
 // libraryRow builds one grouped row: status color-bar, version title with an
 // inline status chip, muted size/date, and icon-only actions.
-func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.CanvasObject {
+func (um *UIManager) libraryRow(e domain.LibraryEntry, busy func(bool), afterChange func()) fyne.CanvasObject {
 	// Title is the version (client is the group header); fall back to folder base.
 	titleText := e.Version
 	if titleText == "" {
@@ -310,7 +330,7 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	})
 	revealBtn.Importance = widget.LowImportance
 	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
-		um.confirmDeleteOne(e, afterChange)
+		um.confirmDeleteOne(e, busy, afterChange)
 	})
 	deleteBtn.Importance = widget.LowImportance
 
@@ -325,8 +345,10 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, afterChange func()) fyne.
 	return container.NewPadded(rowInner)
 }
 
-// confirmDeleteOne asks before deleting a single folder, warning if referenced.
-func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, afterChange func()) {
+// confirmDeleteOne asks before deleting a single folder, warning if referenced. The
+// delete runs off the UI thread (RemoveAll can be slow on a large or network-hosted
+// folder); busy(true/false) brackets it so the window doesn't look frozen meanwhile.
+func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), afterChange func()) {
 	msg := fmt.Sprintf("Delete this folder?\n\n%s\n(%s)", e.Path, humanSize(e.SizeBytes))
 	if len(e.ReferencedBy) > 0 {
 		msg += "\n\nWarning: used by profile(s): " + strings.Join(e.ReferencedBy, ", ")
@@ -335,17 +357,26 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, afterChange func())
 		if !ok {
 			return
 		}
-		if err := platform.DeleteInstalledVersion(um.Config, e.Path); err != nil {
-			um.showErrorf("could not delete installed version: %w", err)
-			return
-		}
-		um.Logger.Append("Deleted installed version: " + e.Path)
-		afterChange()
+		busy(true)
+		go func() {
+			err := platform.DeleteInstalledVersion(um.Config, e.Path)
+			fyne.Do(func() {
+				busy(false)
+				if err != nil {
+					um.showErrorf("could not delete installed version: %w", err)
+				} else {
+					um.Logger.Append("Deleted installed version: " + e.Path)
+				}
+				// Always rescan, success or failure: it re-derives the summary and
+				// cleanupBtn's enabled state, which busy(false) alone doesn't restore.
+				afterChange()
+			})
+		}()
 	}, um.Window).Show()
 }
 
-// confirmCleanup removes all orphan folders after a single confirm.
-func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, afterChange func()) {
+// confirmCleanup removes all orphan folders after a single confirm, off the UI thread.
+func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, busy func(bool), afterChange func()) {
 	var list string
 	var total int64
 	for _, e := range orphans {
@@ -357,18 +388,24 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, afterChange f
 		if !ok {
 			return
 		}
-		var failed int
-		for _, e := range orphans {
-			if err := platform.DeleteInstalledVersion(um.Config, e.Path); err != nil {
-				failed++
-				um.Logger.Append(fmt.Sprintf("Cleanup failed for %s: %v", e.Path, err))
-			} else {
-				um.Logger.Append("Cleanup removed: " + e.Path)
+		busy(true)
+		go func() {
+			var failed int
+			for _, e := range orphans {
+				if err := platform.DeleteInstalledVersion(um.Config, e.Path); err != nil {
+					failed++
+					um.Logger.Append(fmt.Sprintf("Cleanup failed for %s: %v", e.Path, err))
+				} else {
+					um.Logger.Append("Cleanup removed: " + e.Path)
+				}
 			}
-		}
-		if failed > 0 {
-			um.showErrorf("%d folder(s) could not be removed; see logs", failed)
-		}
-		afterChange()
+			fyne.Do(func() {
+				busy(false)
+				if failed > 0 {
+					um.showErrorf("%d folder(s) could not be removed; see logs", failed)
+				}
+				afterChange()
+			})
+		}()
 	}, um.Window).Show()
 }
