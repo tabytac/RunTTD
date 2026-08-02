@@ -38,7 +38,8 @@ type mainView struct {
 	// Launch-band state.
 	launchLogsIdx    int
 	launchInProgress bool
-	launchGen        int // bumped per launch; guards the stale success auto-hide
+	launchGen        int    // bumped per launch; guards the stale success auto-hide
+	launchCancel     func() // cancels the in-flight launch's download context, if any
 
 	detailsContainer *fyne.Container
 	profileList      *fyneadvancedlist.List
@@ -46,6 +47,7 @@ type mainView struct {
 	launchBar        *widget.ProgressBar
 	launchSpin       *widget.ProgressBarInfinite
 	launchLogsBtn    *widget.Button
+	cancelBtn        *widget.Button
 	launchBand       *ThemedBox
 	runBtn           *widget.Button
 	editBtn          *widget.Button
@@ -145,9 +147,14 @@ func (mv *mainView) launchIndex(idx int) {
 		um.showLogView(idx)
 		return
 	}
-	if mv.launchInProgress {
+	// um.launchInProgress is the cross-path guard (also checked by showLogView);
+	// mv.launchInProgress mirrors it for this view's own button/band state, since
+	// AutoOpenLog can be toggled mid-launch, switching which path a later Run
+	// takes without the launch itself having finished.
+	if um.launchInProgress {
 		return
 	}
+	um.launchInProgress = true
 	mv.launchInProgress = true
 	mv.launchGen++
 
@@ -165,41 +172,19 @@ func (mv *mainView) launchIndex(idx int) {
 	mv.launchBand.Refresh()
 	mv.runBtn.Disable()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	mv.launchCancel = cancel
+	mv.cancelBtn.Show()
+
 	failed := false
 	lastPct := -1
 	go func() {
-		um.launchProfile(profile,
-			func(status string) {
-				fyne.Do(func() { mv.launchPhase.SetText(status) })
-			},
-			func(done, total int64) {
-				if total <= 0 {
-					return // unknown size: stay on the marquee
-				}
-				if done >= total {
-					fyne.Do(func() {
-						mv.launchBar.Hide()
-						mv.launchSpin.Show()
-						mv.launchPhase.SetText("Extracting")
-					})
-					return
-				}
-				pct := int(done * 100 / total)
-				if pct == lastPct {
-					return // throttle to whole-percent steps
-				}
-				lastPct = pct
-				fyne.Do(func() {
-					mv.launchSpin.Hide()
-					mv.launchBar.Show()
-					mv.launchBar.SetValue(float64(done) / float64(total))
-				})
-			},
-			func() { failed = true },
-		)
-
-		fyne.Do(func() {
+		defer fyne.Do(func() {
+			um.launchInProgress = false
 			mv.launchInProgress = false
+			cancel()
+			mv.launchCancel = nil
+			mv.cancelBtn.Hide()
 			mv.launchSpin.Hide()
 			mv.launchBar.Hide()
 			mv.runBtn.Enable()
@@ -228,6 +213,36 @@ func (mv *mainView) launchIndex(idx int) {
 				})
 			}()
 		})
+		um.launchProfile(ctx, profile,
+			func(status string) {
+				fyne.Do(func() { mv.launchPhase.SetText(status) })
+			},
+			func(done, total int64) {
+				if total <= 0 {
+					return // unknown size: stay on the marquee
+				}
+				if done >= total {
+					fyne.Do(func() {
+						mv.launchBar.Hide()
+						mv.launchSpin.Show()
+						mv.launchPhase.SetText("Extracting")
+						mv.cancelBtn.Hide() // extraction isn't cancellable; stop offering to
+					})
+					return
+				}
+				pct := int(done * 100 / total)
+				if pct == lastPct {
+					return // throttle to whole-percent steps
+				}
+				lastPct = pct
+				fyne.Do(func() {
+					mv.launchSpin.Hide()
+					mv.launchBar.Show()
+					mv.launchBar.SetValue(float64(done) / float64(total))
+				})
+			},
+			func() { failed = true },
+		)
 	}()
 }
 
@@ -662,9 +677,21 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 	})
 	mv.launchLogsBtn.Importance = widget.LowImportance
+	mv.cancelBtn = widget.NewButton("Cancel", func() {
+		if mv.launchCancel != nil {
+			mv.launchCancel()
+		}
+	})
+	mv.cancelBtn.Importance = widget.DangerImportance
+	mv.cancelBtn.Hide()
 
 	launchBars := container.NewStack(mv.launchSpin, mv.launchBar)
-	barsCentered := container.NewVBox(layout.NewSpacer(), launchBars, layout.NewSpacer())
+	// Cancel shares the bar's row via Border (bar takes the remaining space, Cancel
+	// pins right) rather than another full-width Stack layer, which would draw the
+	// button on top of the bar instead of beside it — Border skips a hidden Right
+	// widget's space entirely, so the bar still spans the full row once Cancel hides.
+	barsWithCancel := container.NewBorder(nil, nil, nil, mv.cancelBtn, launchBars)
+	barsCentered := container.NewVBox(layout.NewSpacer(), barsWithCancel, layout.NewSpacer())
 	logsRow := container.NewHBox(layout.NewSpacer(), mv.launchLogsBtn)
 	rowPin := canvas.NewRectangle(color.Transparent)
 	rowPin.SetMinSize(fyne.NewSize(1, mv.launchLogsBtn.MinSize().Height))

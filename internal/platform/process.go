@@ -23,7 +23,10 @@ type ProcessObserver interface {
 // ExecuteOpenTTD starts the OpenTTD application for the given profile using
 // detached platform routines. versionFolder is the resolved client install
 // directory; docsBasePath anchors relative save/config paths; obs receives
-// lifecycle and logging callbacks.
+// lifecycle and logging callbacks. Returns whether the process actually
+// started (obs.OnStarted() was called) — callers must check this rather than
+// assume success, since every failure here is otherwise reported only via
+// LogImportant.
 func ExecuteOpenTTD(
 	ctx context.Context,
 	versionFolder string,
@@ -31,7 +34,7 @@ func ExecuteOpenTTD(
 	docsBasePath string,
 	allowCompanyPassword bool,
 	obs ProcessObserver,
-) {
+) bool {
 	var saveFile string
 
 	switch profile.LaunchMode {
@@ -65,11 +68,11 @@ func ExecuteOpenTTD(
 				exePath = appGlob[0]
 			} else {
 				obs.LogImportant(fmt.Sprintf("Executable not found in %s (also checked .app bundles)", versionFolder))
-				return
+				return false
 			}
 		} else {
 			obs.LogImportant(fmt.Sprintf("Executable not found in %s", versionFolder))
-			return
+			return false
 		}
 	}
 
@@ -90,7 +93,7 @@ func ExecuteOpenTTD(
 
 	if err := cmd.Start(); err != nil {
 		obs.LogImportant(fmt.Sprintf("Failed to start OpenTTD: %v", err))
-		return
+		return false
 	}
 
 	obs.LogImportant("OpenTTD started successfully")
@@ -115,6 +118,7 @@ func ExecuteOpenTTD(
 			obs.LogVerbose("OpenTTD exited normally")
 		}
 	}()
+	return true
 }
 
 // ResolveProfileSavePath resolves a profile's save target the way launch does:

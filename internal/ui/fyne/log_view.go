@@ -2,6 +2,7 @@ package fyne
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -140,6 +141,14 @@ func (um *UIManager) showLogView(profileIdx int) {
 			}, um.Window)
 	})
 
+	cancelBtn := widget.NewButton("Cancel", func() {
+		if um.launchCancel != nil {
+			um.launchCancel()
+		}
+	})
+	cancelBtn.Importance = widget.DangerImportance
+	cancelBtn.Hide()
+
 	top := container.NewVBox()
 	if isLaunch {
 		top.Add(summaryObj)
@@ -148,7 +157,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 
 	content := container.NewBorder(
 		top,
-		container.NewHBox(closeBtn, copyBtn, clearBtn),
+		container.NewHBox(closeBtn, copyBtn, clearBtn, cancelBtn),
 		nil,
 		nil,
 		logBox,
@@ -156,16 +165,77 @@ func (um *UIManager) showLogView(profileIdx int) {
 
 	um.Window.SetContent(content)
 
-	// Launch OpenTTD in background if requested
+	// Launch OpenTTD in background if requested. Guarded at the UIManager level
+	// (not mainView.launchInProgress, which this path bypasses entirely) so
+	// leaving this view mid-download and pressing Run again can't start a second
+	// concurrent download into the same folder.
 	if isLaunch {
-		go um.launchProfile(profile, func(status string) {
-			_ = statusBinding.Set(status)
-		}, nil, nil)
+		if um.launchInProgress {
+			// The original launch is still running (this is a fresh showLogView,
+			// e.g. after "Back to Profiles" then Run again); um.launchCancel still
+			// targets it, so offer Cancel here too even though this view's own
+			// status/progress aren't wired to that goroutine.
+			um.showToast("A launch is already in progress")
+			cancelBtn.Show()
+		} else {
+			um.launchInProgress = true
+			ctx, cancel := context.WithCancel(context.Background())
+			um.launchCancel = cancel
+			cancelBtn.Show()
+			lastPct := -1
+			go func() {
+				defer fyne.Do(func() {
+					um.launchInProgress = false
+					cancel()
+					um.launchCancel = nil
+					cancelBtn.Hide()
+				})
+				um.launchProfile(ctx, profile, func(status string) {
+					// binding.String.Set is documented safe from any goroutine.
+					_ = statusBinding.Set(status)
+				}, func(done, total int64) {
+					if total <= 0 {
+						return // unknown size: leave the current status text alone
+					}
+					if done >= total {
+						fyne.Do(cancelBtn.Hide) // extraction isn't cancellable; stop offering to
+						return
+					}
+					pct := int(done * 100 / total)
+					if pct == lastPct {
+						return // throttle to whole-percent steps
+					}
+					lastPct = pct
+					_ = statusBinding.Set(fmt.Sprintf("Downloading… %d%%", pct))
+				}, nil)
+			}()
+		}
 	}
 }
 
-// launchProfile launches OpenTTD with the specified profile configuration and logging observers
-func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(status string), onProgress platform.ProgressFunc, onError func()) {
+// reportLaunchResult surfaces whether ExecuteOpenTTD actually started the game,
+// instead of the previous unconditional "Launch command sent" regardless of outcome.
+func reportLaunchResult(started bool, updateStatus func(string), onError func()) {
+	if started {
+		if updateStatus != nil {
+			updateStatus("Launch command sent")
+		}
+		return
+	}
+	if updateStatus != nil {
+		updateStatus("Failed: OpenTTD did not start")
+	}
+	if onError != nil {
+		onError()
+	}
+}
+
+// launchProfile launches OpenTTD with the specified profile configuration and
+// logging observers. ctx governs only the version-check and download/extract
+// steps below (cancelling it is how the Cancel button works) — every
+// ExecuteOpenTTD call site deliberately uses context.Background() instead, since
+// cancelling after the game has started would kill it via exec.CommandContext.
+func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, updateStatus func(status string), onProgress platform.ProgressFunc, onError func()) {
 	if updateStatus != nil {
 		updateStatus("Resolving profile and version")
 	}
@@ -202,10 +272,10 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 		if updateStatus != nil {
 			updateStatus("Starting OpenTTD from custom folder")
 		}
-		platform.ExecuteOpenTTD(context.Background(), folder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
-		if updateStatus != nil {
-			updateStatus("Launch command sent")
-		}
+		// context.Background() here (not a cancellable ctx) is deliberate: once
+		// ExecuteOpenTTD's exec.CommandContext starts the game, cancelling would kill it.
+		started := platform.ExecuteOpenTTD(context.Background(), folder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
+		reportLaunchResult(started, updateStatus, onError)
 		return
 	}
 
@@ -217,7 +287,21 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			updateStatus(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
 		}
 		um.LogImportant(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
-		version = platform.CheckForNewVersionForClientTrack(context.Background(), client, um.Config, latestTrack)
+		version = platform.CheckForNewVersionForClientTrack(ctx, client, um.Config, latestTrack)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			// A cancel here must abort the whole launch, not fall back to
+			// launching whatever's already installed — that would be Cancel
+			// silently not cancelling, and the launch band would show a
+			// dishonest "Launched" straight after the user clicked Cancel.
+			um.LogImportant("Cancelled: version check was cancelled by the user.")
+			if updateStatus != nil {
+				updateStatus("Cancelled")
+			}
+			if onError != nil {
+				onError()
+			}
+			return
+		}
 		if version == "" {
 			// The remote lookup failed or returned nothing — typically because the
 			// download server is unreachable (offline). Skip the update check and
@@ -243,10 +327,8 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			if updateStatus != nil {
 				updateStatus("Starting OpenTTD from latest local installation")
 			}
-			platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
-			if updateStatus != nil {
-				updateStatus("Launch command sent")
-			}
+			started := platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
+			reportLaunchResult(started, updateStatus, onError)
 			return
 		}
 	}
@@ -296,11 +378,18 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 				return
 			}
 		}
-		if !platform.DownloadAndExtractVersionForClientWithLogger(context.Background(), version, client, um.Config, um.Logger, onProgress) {
-			if updateStatus != nil {
-				updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
+		if !platform.DownloadAndExtractVersionForClientWithLogger(ctx, version, client, um.Config, um.Logger, onProgress) {
+			if errors.Is(ctx.Err(), context.Canceled) {
+				if updateStatus != nil {
+					updateStatus("Cancelled")
+				}
+				um.LogImportant(fmt.Sprintf("Cancelled: download of version %s was cancelled by the user.", version))
+			} else {
+				if updateStatus != nil {
+					updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
+				}
+				um.LogImportant(fmt.Sprintf("Failed to download version %s for client %s.", version, client))
 			}
-			um.LogImportant(fmt.Sprintf("Failed to download version %s for client %s.", version, client))
 			if onError != nil {
 				onError()
 			}
@@ -325,12 +414,24 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 		}
 	}
 
+	// A cancel can land here with nothing left to interrupt (e.g. the version was
+	// already installed locally, so the download step above never even ran) —
+	// check explicitly rather than launching anyway just because nothing failed.
+	if errors.Is(ctx.Err(), context.Canceled) {
+		um.LogImportant("Cancelled: launch was cancelled by the user before starting OpenTTD.")
+		if updateStatus != nil {
+			updateStatus("Cancelled")
+		}
+		if onError != nil {
+			onError()
+		}
+		return
+	}
+
 	um.LogVerbose(fmt.Sprintf("Using version folder: %s", versionFolder))
 	if updateStatus != nil {
 		updateStatus("Starting OpenTTD")
 	}
-	platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
-	if updateStatus != nil {
-		updateStatus("Launch command sent")
-	}
+	started := platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
+	reportLaunchResult(started, updateStatus, onError)
 }
