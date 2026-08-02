@@ -136,7 +136,7 @@ func statusChip(text string, fill, fg color.Color) fyne.CanvasObject {
 // showLibraryView presents the full-screen Installed Clients library, opening in
 // a scanning state and populating rows on a background goroutine.
 func (um *UIManager) showLibraryView() {
-	summary := widget.NewLabel("Scanning installed clients...")
+	summary := widget.NewLabel("Scanning installed clients…")
 	summary.TextStyle = fyne.TextStyle{Bold: true}
 
 	listBox := container.NewVBox()
@@ -166,7 +166,7 @@ func (um *UIManager) showLibraryView() {
 			empty.Alignment = fyne.TextAlignCenter
 			empty.Wrapping = fyne.TextWrapWord
 			listBox.Add(container.NewPadded(empty))
-			cleanupBtn.SetText("Clean up unused")
+			cleanupBtn.SetText("Clean Up Unused")
 			cleanupBtn.Disable()
 			listBox.Refresh()
 			return
@@ -184,7 +184,7 @@ func (um *UIManager) showLibraryView() {
 
 		// Render grouped by client, version-desc within each group.
 		for _, g := range apppkg.GroupLibrary(entries, um.Config) {
-			head := NewSectionHeader(fmt.Sprintf("%s — %d %s",
+			head := NewSectionHeader(fmt.Sprintf("%s: %d %s",
 				clientDisplayName(g.Client), len(g.Entries), pluralVersions(len(g.Entries), g.Client)))
 			listBox.Add(head)
 			for _, e := range g.Entries {
@@ -204,7 +204,7 @@ func (um *UIManager) showLibraryView() {
 		} else {
 			summary.SetText(fmt.Sprintf("%d %s · %s total · none unused",
 				len(entries), plural(len(entries), "version"), humanSize(total)))
-			cleanupBtn.SetText("Clean up unused")
+			cleanupBtn.SetText("Clean Up Unused")
 			cleanupBtn.Disable()
 		}
 		listBox.Refresh()
@@ -213,7 +213,7 @@ func (um *UIManager) showLibraryView() {
 	rescan = func() {
 		scanGen++
 		gen := scanGen
-		summary.SetText("Scanning installed clients...")
+		summary.SetText("Scanning installed clients…")
 		listBox.Objects = nil
 		listBox.Refresh()
 		go func() {
@@ -227,8 +227,8 @@ func (um *UIManager) showLibraryView() {
 		}()
 	}
 
-	cleanupBtn = widget.NewButton("Clean up unused", func() {})
-	cleanupBtn.Importance = widget.WarningImportance
+	cleanupBtn = widget.NewButton("Clean Up Unused", func() {})
+	cleanupBtn.Importance = widget.DangerImportance
 	cleanupBtn.Disable()
 
 	refreshBtn := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { rescan() })
@@ -327,14 +327,14 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, busy func(bool), afterCha
 	revealBtn := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
 		if err := platform.RevealInFileManager(e.Path); err != nil {
 			um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", e.Path, err))
-			um.showErrorf("couldn't open the folder: %w", err)
+			um.showErrorf("could not open the folder: %w", err)
 		}
 	})
 	revealBtn.Importance = widget.LowImportance
 	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		um.confirmDeleteOne(e, busy, afterChange)
 	})
-	deleteBtn.Importance = widget.LowImportance
+	deleteBtn.Importance = widget.DangerImportance
 
 	titleRow := container.NewHBox(titleObjects...)
 	left := container.NewVBox(titleRow, meta)
@@ -355,7 +355,10 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), af
 	if len(e.ReferencedBy) > 0 {
 		msg += "\n\nWarning: used by profile(s): " + strings.Join(e.ReferencedBy, ", ")
 	}
-	dialog.NewConfirm("Delete Installed Version", msg, func(ok bool) {
+	msgLabel := widget.NewLabel(msg)
+	msgLabel.Alignment = fyne.TextAlignCenter
+	msgLabel.Wrapping = fyne.TextWrapWord
+	confirmDlg := dialog.NewCustomConfirm("Delete Installed Version", "Delete", "Cancel", msgLabel, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -375,7 +378,9 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), af
 				afterChange()
 			})
 		}()
-	}, um.Window).Show()
+	}, um.Window)
+	confirmDlg.SetConfirmImportance(widget.DangerImportance)
+	confirmDlg.Show()
 }
 
 // confirmCleanup removes all orphan folders after a single confirm, off the UI thread.
@@ -387,7 +392,10 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, busy func(boo
 		total += e.SizeBytes
 	}
 	msg := fmt.Sprintf("Remove %d unused version(s), freeing %s?%s", len(orphans), humanSize(total), list)
-	dialog.NewConfirm("Clean Up Unused Versions", msg, func(ok bool) {
+	msgLabel := widget.NewLabel(msg)
+	msgLabel.Alignment = fyne.TextAlignCenter
+	msgLabel.Wrapping = fyne.TextWrapWord
+	confirmDlg := dialog.NewCustomConfirm("Clean Up Unused Versions", "Clean Up", "Cancel", msgLabel, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -411,5 +419,7 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, busy func(boo
 				afterChange()
 			})
 		}()
-	}, um.Window).Show()
+	}, um.Window)
+	confirmDlg.SetConfirmImportance(widget.DangerImportance)
+	confirmDlg.Show()
 }

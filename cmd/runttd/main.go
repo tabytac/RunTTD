@@ -103,7 +103,7 @@ func main() {
 		fatalStartup(fmt.Sprintf("Startup failed while loading config: %v", err))
 	}
 
-	// 4. Initialize session logs using platform logger.
+	// 4. Initialise session logs using platform logger.
 	if bootstrapFileLog {
 		_ = os.WriteFile(logPath, []byte{}, 0644) // Clear old logs from previous sessions
 		platform.AppendToLogFileRaw(logPath, fmt.Sprintf("Launcher process starting (config: %s)", configPath))
@@ -117,6 +117,13 @@ func main() {
 				platform.AppendToLogFileRaw(logPath, message)
 			}
 			fmt.Fprintln(os.Stderr, message)
+			// File logging defaults to off and stderr is nulled on the -H=windowsgui
+			// build, so without this a crash would be completely silent to the user.
+			detail := fmt.Sprintf("RunTTD ran into an unexpected error and must close.\n\n%v", r)
+			if bootstrapFileLog {
+				detail += fmt.Sprintf("\n\nDetails were written to %s", logPath)
+			}
+			_ = zenity.Error(detail, zenity.Title("RunTTD crashed"))
 			os.Exit(1)
 		}
 	}()

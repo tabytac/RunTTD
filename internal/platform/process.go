@@ -186,8 +186,9 @@ func buildLaunchArgs(profile domain.Profile, saveFile, configPath string, allowC
 		args = append(args, "-QQ")
 	}
 
-	// Append extra arguments from the Advanced tab
-	if profile.ExtraArgs != "" {
+	// Append extra arguments from the Advanced tab, unless the user toggled them off
+	// (the text itself is preserved on the profile either way).
+	if profile.ExtraArgs != "" && !profile.ExtraArgsDisabled {
 		fields := stripDedicatedConfigArgs(strings.Fields(profile.ExtraArgs))
 		args = append(args, fields...)
 	}

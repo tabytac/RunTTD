@@ -126,7 +126,7 @@ type mirrorField struct{ name, preSave, stored string }
 
 // mirrorResetDiff returns the display names of URL fields whose non-empty pre-save
 // text differs from the value the config kept after sanitizeURLs ran (i.e. it was
-// rejected and reset). Empty/blank input is never reported — blank means "use default".
+// rejected and reset). Empty/blank input is never reported; blank means "use default".
 func mirrorResetDiff(fields []mirrorField) []string {
 	var reset []string
 	for _, f := range fields {
@@ -449,7 +449,7 @@ func (um *UIManager) showSettingsView() {
 	networkContent := container.NewVBox(
 		NewSectionHeader("Download Sources"),
 		mirrorBanner,
-		NewLabeledField("Vanilla CDN (stable) base URL", "Where stable releases are fetched from.", vanillaMirrorEntry),
+		NewLabeledField("Vanilla Releases CDN base URL", "Where stable releases are fetched from.", vanillaMirrorEntry),
 		NewLabeledField("Vanilla Nightly CDN base URL", "Where nightly builds are fetched from.", nightlyMirrorEntry),
 		NewLabeledField("JGRPP GitHub API URL", "Where JGR's Patchpack releases are looked up.", jgrppApiUrlEntry),
 		NewSectionHeader("System"),
@@ -532,8 +532,8 @@ func (um *UIManager) showSettingsView() {
 
 		// sanitizeURLs (in SaveConfig) silently resets invalid mirror URLs; surface that.
 		reset := mirrorResetDiff([]mirrorField{
-			{"Vanilla CDN (stable)", preVanilla, um.Config.VanillaMirror},
-			{"Vanilla Nightly CDN", preNightly, um.Config.NightlyMirror},
+			{"Vanilla Releases CDN base URL", preVanilla, um.Config.VanillaMirror},
+			{"Vanilla Nightly CDN base URL", preNightly, um.Config.NightlyMirror},
 			{"JGRPP GitHub API URL", preJgrpp, um.Config.JgrppApiUrl},
 		})
 		if len(reset) > 0 {
@@ -586,9 +586,11 @@ func (um *UIManager) showSettingsView() {
 
 	// Reset stages the factory defaults into the widgets (persisted only on Save);
 	// theme/accent persist immediately via applyAppearance (persist-on-click model).
-	resetBtn := newDialogButton("Reset to defaults", func() {
-		dialog.ShowConfirm("Reset to defaults?",
-			"Reset all settings to their defaults? Your profiles are not affected.",
+	resetBtn := newDialogButton("Reset to Defaults", func() {
+		resetMsg := widget.NewLabel("Reset all settings to their defaults? Your profiles are not affected.")
+		resetMsg.Alignment = fyne.TextAlignCenter
+		resetMsg.Wrapping = fyne.TextWrapWord
+		dialog.ShowCustomConfirm("Reset to defaults?", "Reset", "Cancel", resetMsg,
 			func(ok bool) {
 				if !ok {
 					return
@@ -610,7 +612,7 @@ func (um *UIManager) showSettingsView() {
 				refreshDirty()
 			}, um.Window)
 	}, onEscape)
-	resetBtn.Importance = widget.LowImportance
+	resetBtn.Importance = widget.WarningImportance
 
 	// statusLabel sits below the tabs (above the toolbar) so the blocking hint is visible from any tab.
 	content := container.NewBorder(nil, statusLabel, nil, nil, tabs)

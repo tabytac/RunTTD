@@ -69,6 +69,13 @@ func (mv *mainView) displayPos(real int) int {
 	return -1
 }
 
+// selectionSurvivesFilter reports whether the current selection is still visible
+// under the active filter, so typing a search needle doesn't clear a selection
+// that still matches.
+func (mv *mainView) selectionSurvivesFilter() bool {
+	return mv.selectedIdx >= 0 && mv.displayPos(mv.selectedIdx) >= 0
+}
+
 // digitLaunchIndex maps a quick-launch key ('1'-'9', '0' for the 10th) to a
 // profile index, or -1 if there's no such profile or it's hidden by the
 // active search filter (its badge digit isn't shown on any visible row, so
@@ -225,7 +232,7 @@ func (mv *mainView) launchIndex(idx int) {
 					fyne.Do(func() {
 						mv.launchBar.Hide()
 						mv.launchSpin.Show()
-						mv.launchPhase.SetText("Extracting")
+						mv.launchPhase.SetText("Extracting (this can take a moment for large installs)")
 						mv.cancelBtn.Hide() // extraction isn't cancellable; stop offering to
 					})
 					return
@@ -255,10 +262,18 @@ func (mv *mainView) shouldAutoHide(gen int) bool {
 
 func (mv *mainView) updateButtonStates() {
 	if mv.selectedIdx >= 0 {
-		mv.runBtn.Enable()
+		if mv.launchInProgress {
+			mv.runBtn.Disable() // stay disabled mid-launch no matter what else triggers this refresh
+		} else {
+			mv.runBtn.Enable()
+		}
 		mv.editBtn.Enable()
 		mv.duplicateBtn.Enable()
-		mv.deleteBtn.Enable()
+		if len(mv.um.Config.Profiles) <= 1 {
+			mv.deleteBtn.Disable() // the last profile can't be deleted; don't even let the click happen
+		} else {
+			mv.deleteBtn.Enable()
+		}
 	} else {
 		mv.runBtn.Disable()
 		mv.editBtn.Disable()
@@ -266,13 +281,9 @@ func (mv *mainView) updateButtonStates() {
 		mv.deleteBtn.Disable()
 	}
 
-	if mv.seeLogsBtn != nil {
-		if mv.um.Logger.Len() > 0 {
-			mv.seeLogsBtn.Enable()
-		} else {
-			mv.seeLogsBtn.Disable()
-		}
-	}
+	// Always enabled: an empty log view is still a valid view (e.g. right after
+	// Clear Logs), and disabling it there would lock the user out of ever
+	// reopening it, since nothing else re-enables it once Logger.Len() hits 0.
 }
 
 func (mv *mainView) refreshDetails() {
@@ -425,7 +436,8 @@ func (mv *mainView) duplicateSelected() {
 }
 
 // deleteSelected confirms, then removes the selected profile and reselects a
-// neighbour. Refuses to delete the last remaining profile.
+// neighbour. Refuses to delete the last remaining profile; updateButtonStates
+// already disables the Delete button in that case, this is just the backstop.
 func (mv *mainView) deleteSelected() {
 	um := mv.um
 	if mv.selectedIdx < 0 {
@@ -436,9 +448,10 @@ func (mv *mainView) deleteSelected() {
 		return
 	}
 	profileName := um.Config.Profiles[mv.selectedIdx].Name
-	dialog.NewConfirm(
-		"Delete Profile",
-		fmt.Sprintf("Are you sure you want to delete profile %q?", profileName),
+	msgLabel := widget.NewLabel(fmt.Sprintf("Are you sure you want to delete profile %q?", profileName))
+	msgLabel.Alignment = fyne.TextAlignCenter
+	msgLabel.Wrapping = fyne.TextWrapWord
+	confirmDlg := dialog.NewCustomConfirm("Delete Profile", "Delete", "Cancel", msgLabel,
 		func(confirmed bool) {
 			if !confirmed {
 				return
@@ -465,7 +478,9 @@ func (mv *mainView) deleteSelected() {
 			mv.updateEmptyState()
 		},
 		um.Window,
-	).Show()
+	)
+	confirmDlg.SetConfirmImportance(widget.DangerImportance)
+	confirmDlg.Show()
 }
 
 // A drawn SVG, not a "▶" label: Windows renders that glyph via the emoji font.
@@ -551,7 +566,7 @@ func (mv *mainView) buildProfileList() {
 				} else {
 					version := profile.Version
 					if version == "" {
-						version = "Latest"
+						version = "latest" // matches the details pane's Version field default
 					}
 					versionText = clientTag + " · " + version
 				}
@@ -659,19 +674,19 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		mv.visibleIdx[i] = i
 	}
 
-	selectionHint := widget.NewLabel("Press 1–9 (0 for 10th) to quick-launch · Enter or double-click to launch selected")
+	selectionHint := widget.NewLabel("Press 1–9 (0 for 10th) to quick-launch · Enter or double-click to launch selected · Right-click to edit")
 	selectionHint.Importance = widget.LowImportance
 	selectionHint.Alignment = fyne.TextAlignCenter
 	selectionHint.Wrapping = fyne.TextWrapWord
 
 	// Launch status band: feedback for background launches (log auto-open off).
-	// Hidden until a launch runs; kept a constant height (sized to the View logs
+	// Hidden until a launch runs; kept a constant height (sized to the View Logs
 	// row) so it never resizes as it moves through phases.
 	mv.launchPhase = widget.NewLabel("")
 	mv.launchPhase.Wrapping = fyne.TextWrapWord
 	mv.launchBar = widget.NewProgressBar()
 	mv.launchSpin = widget.NewProgressBarInfinite()
-	mv.launchLogsBtn = widget.NewButton("View logs", func() {
+	mv.launchLogsBtn = widget.NewButton("View Logs", func() {
 		if mv.launchLogsIdx >= 0 {
 			um.showLogView(mv.launchLogsIdx)
 		}
@@ -688,7 +703,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	launchBars := container.NewStack(mv.launchSpin, mv.launchBar)
 	// Cancel shares the bar's row via Border (bar takes the remaining space, Cancel
 	// pins right) rather than another full-width Stack layer, which would draw the
-	// button on top of the bar instead of beside it — Border skips a hidden Right
+	// button on top of the bar instead of beside it: Border skips a hidden Right
 	// widget's space entirely, so the bar still spans the full row once Cancel hides.
 	barsWithCancel := container.NewBorder(nil, nil, nil, mv.cancelBtn, launchBars)
 	barsCentered := container.NewVBox(layout.NewSpacer(), barsWithCancel, layout.NewSpacer())
@@ -782,11 +797,16 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		mv.recomputeVisible()
 		// Reordering a filtered subset is ambiguous; only allow drag with no filter.
 		mv.profileList.EnableDragging = strings.TrimSpace(s) == ""
-		mv.profileList.UnselectAll()
-		mv.selectProfile(-1)
-		mv.refreshDetails()
-		mv.updateEmptyState()
 		mv.profileList.Refresh()
+		if mv.selectionSurvivesFilter() {
+			// Still visible under the new filter: keep it selected instead of clearing on every keystroke.
+			mv.profileList.Select(widget.ListItemID(mv.displayPos(mv.selectedIdx)))
+		} else {
+			mv.profileList.UnselectAll()
+			mv.selectProfile(-1)
+			mv.refreshDetails()
+		}
+		mv.updateEmptyState()
 	}
 	// Esc clears the filter and returns to the full list, then blurs so quick-launch
 	// (digits, Enter) works again immediately rather than staying dead until the user
@@ -935,7 +955,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	// any focused widget that isn't Shortcutable (Button/Select/Check/List all
 	// qualify), unlike the bare-key handler above. While an Entry has focus these
 	// stay silent, matching Fyne's own built-in shortcuts (e.g. Ctrl+Z inside an
-	// Entry only undoes text) rather than reaching here — expected, not a bug.
+	// Entry only undoes text) rather than reaching here: expected, not a bug.
 	mainViewGuard := func() bool {
 		return um.Window.Content() == mainContent && um.Window.Canvas().Overlays().Top() == nil
 	}
@@ -999,13 +1019,15 @@ func (um *UIManager) startUpdateCheck(headerRight *fyne.Container) {
 	}()
 }
 
-// addUpdatePill prepends an accent-colored "update available" pill to the header
+// addUpdatePill prepends an accent-coloured "update available" pill to the header
 // (left of the theme button) that opens the release page when clicked. Must be
 // called on the main goroutine (inside fyne.Do or a UI callback).
 func (um *UIManager) addUpdatePill(headerRight *fyne.Container, tag, releaseURL string) {
 	pill := widget.NewButton("↻  Update to "+tag, func() {
 		if u, perr := neturl.Parse(releaseURL); perr == nil {
-			_ = fyne.CurrentApp().OpenURL(u)
+			if err := fyne.CurrentApp().OpenURL(u); err != nil {
+				um.Logger.Append(fmt.Sprintf("could not open the release page for %s: %v", tag, err))
+			}
 		}
 	})
 	pill.Importance = widget.HighImportance
@@ -1037,7 +1059,7 @@ func (um *UIManager) setAutoLaunchProfile(name string) {
 	}
 }
 
-// showThemeCustomizer presents the preset accent color circular items and mode toggles
+// showThemeCustomizer presents the preset accent colour circular items and mode toggles
 func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 	apply := um.applyAppearance
 

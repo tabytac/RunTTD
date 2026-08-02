@@ -18,7 +18,7 @@ import (
 )
 
 // DotState is the resolved status of a profile's installed/upstream state,
-// rendered as a colored dot on the profile row.
+// rendered as a coloured dot on the profile row.
 type DotState int
 
 const (
@@ -33,7 +33,7 @@ const (
 // (#2F8A2F, #B36B00); red and grey read fine on both, so dark == light there.
 type dotFill struct{ dark, light color.Color }
 
-// dotFills is the source of truth for dot colors. To retune a dot, edit here.
+// dotFills is the source of truth for dot colours. To retune a dot, edit here.
 var dotFills = map[DotState]dotFill{
 	DotGreen:  {dark: libGreen, light: color.NRGBA{R: 47, G: 138, B: 47, A: 255}},  // #2F8A2F
 	DotOrange: {dark: libAmber, light: color.NRGBA{R: 179, G: 107, B: 0, A: 255}},  // #B36B00
@@ -66,7 +66,7 @@ func isLightTheme() bool {
 type upstreamState int
 
 const (
-	noUpstream      upstreamState = iota // no entry yet / expired — caller should enqueue a fetch
+	noUpstream      upstreamState = iota // no entry yet / expired; caller should enqueue a fetch
 	pendingUpstream                      // a fetch is in flight
 	okUpstream                           // fetch succeeded; latestTagFolder is set (possibly "")
 	failedUpstream                       // fetch failed (offline/429/timeout)
@@ -133,9 +133,9 @@ func dotState(in dotInput) DotState {
 
 const dotDiameter = 10
 
-// statusDot is a small filled circle whose color encodes the profile's status.
+// statusDot is a small filled circle whose colour encodes the profile's status.
 // Fills are picked per theme (dotColor) so each clears the contrast bar on its
-// own — no outline ring.
+// own; no outline ring.
 type statusDot struct {
 	widget.BaseWidget
 	state DotState
@@ -147,7 +147,7 @@ func newStatusDot() *statusDot {
 	return d
 }
 
-// SetState recolors the dot in place.
+// SetState recolours the dot in place.
 func (d *statusDot) SetState(s DotState) {
 	if s == d.state {
 		return
@@ -262,10 +262,10 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 		return dotState(in) // still checking
 	}
 	if in.installedFolder == "" {
-		return dotState(in) // Red — nothing installed
+		return dotState(in) // Red: nothing installed
 	}
 	if !in.isLatest {
-		return dotState(in) // Green — pinned + installed
+		return dotState(in) // Green: pinned + installed
 	}
 
 	// Check upstream on the profile's track, and re-resolve the cached tag to a
@@ -328,7 +328,7 @@ func (um *UIManager) startUpstreamFetch(client, track string) {
 }
 
 // startDiskLookup runs one deduped background compute for key (an os.Stat or an
-// installed-folder scan — both can hang on an unreachable network share, so
+// installed-folder scan; both can hang on an unreachable network share, so
 // neither may run on the UI thread) and, on completion, stores the result and
 // refreshes the profile list so the dot re-renders.
 func (um *UIManager) startDiskLookup(key string, compute func() string) {

@@ -17,4 +17,5 @@ type Profile struct {
 	Client                string `json:"client"`               // "jgrpp", "vanilla", "vanilla-nightly", "custom"; empty resolves via app.EffectiveClient (config default, else "jgrpp")
 	CustomExecutablePath  string `json:"customExecutablePath"` // folder containing openttd binary; only used when Client=="custom"
 	NewGRFScanMode        string `json:"newgrfScanMode"`       // "" | "Q" | "QQ"
+	ExtraArgsDisabled     bool   `json:"extraArgsDisabled"`    // true skips ExtraArgs at launch but keeps the text; zero-value false preserves prior always-applied behaviour for profiles saved before this field existed
 }

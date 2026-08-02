@@ -81,7 +81,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 
 	// Update the log display whenever the logger gains new lines. The last seen
 	// count is tracked so an unchanged buffer skips the rebuild, the binding
-	// write, and the scroll — leaving the user free to scroll up without being
+	// write, and the scroll, leaving the user free to scroll up without being
 	// yanked back to the bottom every tick.
 	lastLineCount := -1
 	updateLogDisplay := func() {
@@ -127,8 +127,10 @@ func (um *UIManager) showLogView(profileIdx int) {
 	})
 
 	clearBtn := widget.NewButtonWithIcon("Clear Logs", theme.ContentClearIcon(), func() {
-		dialog.ShowConfirm("Clear logs?",
-			"Remove all messages from this view? Any saved log file is left untouched.",
+		msgLabel := widget.NewLabel("Remove all messages from this view? Any saved log file is left untouched.")
+		msgLabel.Alignment = fyne.TextAlignCenter
+		msgLabel.Wrapping = fyne.TextWrapWord
+		confirmDlg := dialog.NewCustomConfirm("Clear Logs?", "Clear", "Cancel", msgLabel,
 			func(ok bool) {
 				if !ok {
 					return
@@ -139,6 +141,8 @@ func (um *UIManager) showLogView(profileIdx int) {
 				_ = logBinding.Set("")
 				um.showToast("Logs cleared")
 			}, um.Window)
+		confirmDlg.SetConfirmImportance(widget.DangerImportance)
+		confirmDlg.Show()
 	})
 
 	cancelBtn := widget.NewButton("Cancel", func() {
@@ -199,6 +203,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 					}
 					if done >= total {
 						fyne.Do(cancelBtn.Hide) // extraction isn't cancellable; stop offering to
+						_ = statusBinding.Set("Extracting (this can take a moment for large installs)")
 						return
 					}
 					pct := int(done * 100 / total)
@@ -232,7 +237,7 @@ func reportLaunchResult(started bool, updateStatus func(string), onError func())
 
 // launchProfile launches OpenTTD with the specified profile configuration and
 // logging observers. ctx governs only the version-check and download/extract
-// steps below (cancelling it is how the Cancel button works) — every
+// steps below (cancelling it is how the Cancel button works); every
 // ExecuteOpenTTD call site deliberately uses context.Background() instead, since
 // cancelling after the game has started would kill it via exec.CommandContext.
 func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, updateStatus func(status string), onProgress platform.ProgressFunc, onError func()) {
@@ -290,7 +295,7 @@ func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, 
 		version = platform.CheckForNewVersionForClientTrack(ctx, client, um.Config, latestTrack)
 		if errors.Is(ctx.Err(), context.Canceled) {
 			// A cancel here must abort the whole launch, not fall back to
-			// launching whatever's already installed — that would be Cancel
+			// launching whatever's already installed; that would be Cancel
 			// silently not cancelling, and the launch band would show a
 			// dishonest "Launched" straight after the user clicked Cancel.
 			um.LogImportant("Cancelled: version check was cancelled by the user.")
@@ -303,7 +308,7 @@ func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, 
 			return
 		}
 		if version == "" {
-			// The remote lookup failed or returned nothing — typically because the
+			// The remote lookup failed or returned nothing, typically because the
 			// download server is unreachable (offline). Skip the update check and
 			// fall back to launching the newest install already on disk.
 			um.LogImportant("Could not reach the download server to check for a newer version; falling back to the latest local install.")
@@ -315,9 +320,9 @@ func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, 
 			versionFolder := apppkg.HighestInstalledFolderInRoot(um.Config, client, latestTrack)
 			if versionFolder == "" {
 				if updateStatus != nil {
-					updateStatus("Failed: offline and no local installation found for client")
+					updateStatus("Failed: offline and no local install found for client")
 				}
-				um.LogImportant("No local installation found for client, and the download server could not be reached.")
+				um.LogImportant("No local install found for client, and the download server could not be reached.")
 				if onError != nil {
 					onError()
 				}
@@ -325,7 +330,7 @@ func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, 
 			}
 			um.LogVerbose(fmt.Sprintf("Using latest local version folder: %s", versionFolder))
 			if updateStatus != nil {
-				updateStatus("Starting OpenTTD from latest local installation")
+				updateStatus("Starting OpenTTD from latest local install")
 			}
 			started := platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
 			reportLaunchResult(started, updateStatus, onError)
@@ -355,7 +360,10 @@ func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, 
 				"Versions before 1.2.0 don't include free graphics, so you'll need original "+
 				"Transport Tycoon Deluxe data files to play. Some old releases also predate builds for many systems.", version)
 			fyne.Do(func() {
-				confirm := dialog.NewConfirm("Very old OpenTTD version", msg, func(ok bool) {
+				msgLabel := widget.NewLabel(msg)
+				msgLabel.Alignment = fyne.TextAlignCenter
+				msgLabel.Wrapping = fyne.TextWrapWord
+				confirm := dialog.NewCustomConfirm("Very Old OpenTTD Version", "Continue", "Cancel", msgLabel, func(ok bool) {
 					um.blockingConfirm, um.blockingConfirmHide = nil, nil
 					proceed <- ok
 				}, um.Window)
@@ -415,7 +423,7 @@ func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, 
 	}
 
 	// A cancel can land here with nothing left to interrupt (e.g. the version was
-	// already installed locally, so the download step above never even ran) —
+	// already installed locally, so the download step above never even ran);
 	// check explicitly rather than launching anyway just because nothing failed.
 	if errors.Is(ctx.Err(), context.Canceled) {
 		um.LogImportant("Cancelled: launch was cancelled by the user before starting OpenTTD.")

@@ -62,7 +62,7 @@ func (um *UIManager) browseConfigPath(startPath string) (string, error) {
 	defer runtime.UnlockOSThread()
 
 	selected, err := zenity.SelectFile(
-		zenity.Title("Select OpenTTD config file"),
+		zenity.Title("Select OpenTTD Config File"),
 		zenity.FileFilters{
 			{Name: "OpenTTD Config", Patterns: []string{"*.cfg"}},
 		},
@@ -92,6 +92,9 @@ func (um *UIManager) browseDirectory(entry *widget.Entry, title, logLabel string
 		defer func() {
 			if r := recover(); r != nil {
 				um.Logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
+				fyne.Do(func() {
+					um.showErrorf("could not open the %s picker: %v", logLabel, r)
+				})
 			}
 		}()
 		um.Logger.Append(fmt.Sprintf("Opening %s picker...", logLabel))
@@ -101,7 +104,16 @@ func (um *UIManager) browseDirectory(entry *widget.Entry, title, logLabel string
 			zenity.Filename(entry.Text),
 		)
 		um.Logger.Append(fmt.Sprintf("Picker closed (%s). Err: %v", logLabel, err))
-		if err == nil && directory != "" {
+		if errors.Is(err, zenity.ErrCanceled) {
+			return // a cancel is not an error; stay silent
+		}
+		if err != nil {
+			fyne.Do(func() {
+				um.showErrorf("could not open the %s picker: %w", logLabel, err)
+			})
+			return
+		}
+		if directory != "" {
 			fyne.Do(func() {
 				entry.SetText(directory)
 			})

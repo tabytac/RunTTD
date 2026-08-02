@@ -151,7 +151,7 @@ func storedVersion(clientID, entered string) string {
 	}
 }
 
-// Empty selection means jgrpp (save-handler default), not Config.DefaultClient — don't route this through EffectiveClient.
+// Empty selection means jgrpp (save-handler default), not Config.DefaultClient: don't route this through EffectiveClient.
 func companyPasswordClientID(cli string) string {
 	if cli == "" {
 		return "jgrpp"
@@ -187,9 +187,10 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	nameEntry.SetText(profile.Name)
 	nameEntry.SetPlaceHolder("Profile name")
 
+	const versionEntryPlaceholder = "latest (Stable), latest (Testing), or 15.3"
 	versionEntry := newDialogSelectEntry(um.CachedVersions, onEscape, onEnter)
 	versionEntry.SetOptions([]string{"latest (Stable)", "latest (Testing)"})
-	versionEntry.PlaceHolder = "latest (Stable), latest (Testing), or 15.3"
+	versionEntry.PlaceHolder = versionEntryPlaceholder
 
 	customFolderEntry := newDialogEntry(onEscape, onEnter)
 	customFolderEntry.SetText(profile.CustomExecutablePath)
@@ -223,17 +224,30 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}
 	}
 
-	// Client selection (Vanilla OpenTTD Stable/Nightly, JGRPP, Custom Executable).
+	// Client selection (Vanilla OpenTTD Releases/Nightly, JGRPP, Custom Executable).
+	// versionFetchGuard drops a slow fetch's result if a newer one has been started
+	// since (e.g. the user switches client A -> B -> A quickly), so it can't
+	// overwrite the newer client's already-applied options with a stale list.
+	var versionFetchGuard debounceGuard
 	fetchVersionsForClient := func(clientID string) {
+		gen := versionFetchGuard.next()
+		versionEntry.PlaceHolder = "Loading versions…"
+		versionEntry.Refresh()
 		go func() {
 			versions, err := app.ClientFetchVersions(context.Background(), clientID, um.Config)
-			if err == nil && len(versions) > 0 {
-				fyne.Do(func() {
+			fyne.Do(func() {
+				if !versionFetchGuard.current(gen) {
+					return // superseded by a newer fetch
+				}
+				if err != nil {
+					um.Logger.Append(fmt.Sprintf("Failed to fetch versions for %s: %v", clientID, err))
+				} else if len(versions) > 0 {
 					um.CachedVersions = versions
 					versionEntry.SetOptions(versions)
-					versionEntry.Refresh()
-				})
-			}
+				}
+				versionEntry.PlaceHolder = versionEntryPlaceholder
+				versionEntry.Refresh()
+			})
 		}()
 	}
 	// updateState is defined later, but the client radio callback may need to call it.
@@ -401,8 +415,28 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}, onEscape, onEnter)
 	noConfigSaveCheck.SetChecked(profile.NoConfigSave)
 
-	browseConfigBtn := newDialogButton("Browse...", func() {
+	// Checked means "apply", matching the entry's plain-English intent; the stored
+	// field is inverted (ExtraArgsDisabled) so an old profile with the field absent
+	// still defaults to applied, not silently dropped.
+	applyExtraArgsCheck := newDialogCheck("Apply custom arguments at launch", func(bool) {
+		if refreshDirty != nil {
+			refreshDirty()
+		}
+	}, onEscape, onEnter)
+	applyExtraArgsCheck.SetChecked(!profile.ExtraArgsDisabled)
+
+	// browseConfigBtn is declared via var/assign (not :=) so its own onTapped
+	// closure below can reference it to disable/re-enable itself around the picker.
+	var browseConfigBtn *dialogButton
+	browseConfigBtn = newDialogButton("Browse...", func() {
+		browseConfigBtn.Disable() // stops a second picker stacking on top while this one is open
 		go func() {
+			defer fyne.Do(browseConfigBtn.Enable)
+			defer func() {
+				if r := recover(); r != nil {
+					um.Logger.Append(fmt.Sprintf("CRITICAL: config picker panicked: %v", r))
+				}
+			}()
 			startPath := strings.TrimSpace(configFileEntry.Text)
 			if startPath == "" && um.Config.DocsBasePath != "" {
 				startPath = filepath.Join(um.Config.DocsBasePath, "openttd.cfg")
@@ -412,18 +446,13 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 			path, err := um.browseConfigPath(startPath)
 			if err != nil {
-				fyne.Do(func() {
-					um.showErrorf("could not open config picker: %w", err)
-				})
+				fyne.Do(func() { um.showErrorf("could not open config picker: %w", err) })
 				return
 			}
 			if path == "" {
 				return
 			}
-
-			fyne.Do(func() {
-				configFileEntry.SetText(path)
-			})
+			fyne.Do(func() { configFileEntry.SetText(path) })
 		}()
 	}, onEscape)
 	browseConfigBtn.Icon = theme.FileIcon()
@@ -471,8 +500,16 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}, onEscape)
 	updateFolderInstructions(autoLatestFilterRadio.Selected)
 
-	browseFileBtn := newDialogButton("Browse File...", func() {
+	var browseFileBtn *dialogButton
+	browseFileBtn = newDialogButton("Browse File...", func() {
+		browseFileBtn.Disable()
 		go func() {
+			defer fyne.Do(browseFileBtn.Enable)
+			defer func() {
+				if r := recover(); r != nil {
+					um.Logger.Append(fmt.Sprintf("CRITICAL: file picker panicked: %v", r))
+				}
+			}()
 			startPath := savePathEntry.Text
 			if startPath == "" {
 				if um.Config.DocsBasePath != "" {
@@ -484,23 +521,27 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 			path, err := um.browseSavePath(startPath, "Select Save or Scenario", false)
 			if err != nil {
-				fyne.Do(func() {
-					um.showErrorf("could not open file picker: %w", err)
-				})
+				fyne.Do(func() { um.showErrorf("could not open file picker: %w", err) })
 				return
 			}
 			if path == "" {
 				return
 			}
-			fyne.Do(func() {
-				savePathEntry.SetText(path)
-			})
+			fyne.Do(func() { savePathEntry.SetText(path) })
 		}()
 	}, onEscape)
 	browseFileBtn.Icon = theme.FileIcon()
 
-	browseFolderBtn := newDialogButton("Browse Folder...", func() {
+	var browseFolderBtn *dialogButton
+	browseFolderBtn = newDialogButton("Browse Folder...", func() {
+		browseFolderBtn.Disable()
 		go func() {
+			defer fyne.Do(browseFolderBtn.Enable)
+			defer func() {
+				if r := recover(); r != nil {
+					um.Logger.Append(fmt.Sprintf("CRITICAL: folder picker panicked: %v", r))
+				}
+			}()
 			startPath := savePathEntry.Text
 			if startPath == "" {
 				if um.Config.DocsBasePath != "" {
@@ -512,17 +553,13 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 			path, err := um.browseSavePath(startPath, "Select Save Folder", true)
 			if err != nil {
-				fyne.Do(func() {
-					um.showErrorf("could not open folder picker: %w", err)
-				})
+				fyne.Do(func() { um.showErrorf("could not open folder picker: %w", err) })
 				return
 			}
 			if path == "" {
 				return
 			}
-			fyne.Do(func() {
-				savePathEntry.SetText(path)
-			})
+			fyne.Do(func() { savePathEntry.SetText(path) })
 		}()
 	}, onEscape)
 	browseFolderBtn.Icon = theme.FolderIcon()
@@ -621,7 +658,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	// keystrokes triggers exactly one pair of stats, 300ms after typing pauses).
 	// pathCheckGuard additionally covers Timer.Stop()'s documented gap (it can't
 	// cancel a callback that already started): a slow, superseded check is
-	// dropped by generation rather than allowed to overwrite a newer result —
+	// dropped by generation rather than allowed to overwrite a newer result,
 	// including validate()'s own instant message, which a stale check could
 	// otherwise clobber after the fact.
 	var pathCheckTimer *time.Timer
@@ -721,6 +758,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}
 		profile.ConfigFilePath = configPath
 		profile.NoConfigSave = noConfigSaveCheck.Checked
+		profile.ExtraArgsDisabled = !applyExtraArgsCheck.Checked
 
 		switch profile.LaunchMode {
 		case "":
@@ -803,6 +841,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		NewSectionTitle("Custom Command Line Arguments"),
 		widget.NewLabel("Specify extra flags to pass to the OpenTTD executable:"),
 		extraArgsEntry,
+		applyExtraArgsCheck,
 	))
 	advancedTab := container.NewTabItemWithIcon("Advanced Options", theme.SettingsIcon(), advancedScroll)
 
@@ -824,7 +863,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		name, client, version, customFolder, mode                string
 		ipPort, serverPass, companyNum, companyPass               string
 		savePath, extraArgs, configFile, newgrf, autoLatestFilter string
-		noConfigSave                                              bool
+		noConfigSave, applyExtraArgs                              bool
 	}
 	current := func() profileSnapshot {
 		return profileSnapshot{
@@ -834,7 +873,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			companyNum: companyNumEntry.Text, companyPass: companyPassEntry.Text,
 			savePath: savePathEntry.Text, extraArgs: extraArgsEntry.Text, configFile: configFileEntry.Text,
 			newgrf: newgrfRadio.Selected, autoLatestFilter: autoLatestFilterRadio.Selected,
-			noConfigSave: noConfigSaveCheck.Checked,
+			noConfigSave: noConfigSaveCheck.Checked, applyExtraArgs: applyExtraArgsCheck.Checked,
 		}
 	}
 	baseline := current()
