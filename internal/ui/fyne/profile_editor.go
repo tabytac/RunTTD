@@ -10,6 +10,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -221,6 +222,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	// updateState is defined later, but the client radio callback may need to call it.
 	var updateState func()
 	var setCompanyPasswordVisible func(visible bool)
+	// hideEditor is defined later (it needs editDialog), but saveProfile below must call it.
+	var hideEditor func()
+	// refreshDirty is defined later (it needs editDialog's title label); guarded nil checks
+	// let the radios below reference it before then, matching updateState's own pattern.
+	var refreshDirty func()
 	initializingClientSelection := true
 	clientSelect := NewSegmentedRadio(defaultClientOptions, "", func(s string) {
 		cli := defaultClientMap[s]
@@ -333,6 +339,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 	modeSelect := NewSegmentedRadio([]string{"Main Menu", "Load File", "Latest in Folder", "Multiplayer"}, revModeMap[profile.LaunchMode], func(s string) {
 		updateVisibility(s)
+		if refreshDirty != nil {
+			refreshDirty()
+		}
 	})
 
 	// Multiplayer fields
@@ -366,7 +375,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	configFileEntry.SetText(profile.ConfigFilePath)
 	configFileEntry.SetPlaceHolder("Optional path to config file (openttd.cfg)")
 
-	noConfigSaveCheck := widget.NewCheck("Do not save config changes on exit", nil)
+	noConfigSaveCheck := widget.NewCheck("Do not save config changes on exit", func(bool) {
+		if refreshDirty != nil {
+			refreshDirty()
+		}
+	})
 	noConfigSaveCheck.SetChecked(profile.NoConfigSave)
 
 	browseConfigBtn := widget.NewButtonWithIcon("Browse...", theme.FileIcon(), func() {
@@ -408,7 +421,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 	initialNewgrf := profile.NewGRFScanMode
 	newgrfRadio := NewSegmentedRadio([]string{newgrfLabelMap[""], newgrfLabelMap["Q"], newgrfLabelMap["QQ"]}, newgrfLabelMap[initialNewgrf], func(s string) {
-		// no-op; selection read on save
+		if refreshDirty != nil { // selection itself is read on save
+			refreshDirty()
+		}
 	})
 
 	// Auto-Latest Filter selection
@@ -430,6 +445,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 	autoLatestFilterRadio := NewSegmentedRadio([]string{"Saves & Scenarios", "Saves Only", "Scenarios Only"}, filterLabelMap[initialFilter], func(s string) {
 		updateFolderInstructions(s)
+		if refreshDirty != nil {
+			refreshDirty()
+		}
 	})
 	updateFolderInstructions(autoLatestFilterRadio.Selected)
 
@@ -673,6 +691,16 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			profile.ServerIpPort = ""
 		}
 
+		// Snapshot what save is about to overwrite, so a failed write can be fully
+		// undone: leaving any of this applied would let a later, unrelated save
+		// (drag-reorder, an accent click) silently persist an edit the user discarded.
+		var prevProfile domain.Profile
+		if !isNew {
+			prevProfile = um.Config.Profiles[profileIdx]
+		}
+		prevAutoLaunch := um.Config.AutoLaunchProfile
+		prevSelected := um.SelectedProfileName
+
 		savedIdx := profileIdx
 		if isNew {
 			um.Config.Profiles = append(um.Config.Profiles, profile)
@@ -683,8 +711,17 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		um.Config.AutoLaunchProfile = carryForwardAutoLaunch(oldProfileName, profile.Name, um.Config.AutoLaunchProfile)
 		um.SelectedProfileName = profile.Name
 
-		_ = domain.SaveConfig(um.ConfigPath, um.Config)
-		editDialog.Hide()
+		if !um.saveConfigOrWarn() {
+			if isNew {
+				um.Config.Profiles = um.Config.Profiles[:savedIdx]
+			} else {
+				um.Config.Profiles[profileIdx] = prevProfile
+			}
+			um.Config.AutoLaunchProfile = prevAutoLaunch
+			um.SelectedProfileName = prevSelected
+			return
+		}
+		hideEditor()
 		if runAfter {
 			// Launch via the rebuilt main view so it honors AutoOpenLog and shows
 			// the launch band, rather than always forcing the log view open.
@@ -738,9 +775,48 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		saveBtn.SetText("Create")
 		saveAndRunBtn.SetText("Create & Run")
 	}
-	cancelBtn := widget.NewButton("Cancel", func() {
+
+	// Dirty-state compares live widget values to a baseline snapshot, the same
+	// approach the settings dialog uses, so Cancel/Escape can't silently discard edits.
+	type profileSnapshot struct {
+		name, client, version, customFolder, mode                string
+		ipPort, serverPass, companyNum, companyPass               string
+		savePath, extraArgs, configFile, newgrf, autoLatestFilter string
+		noConfigSave                                              bool
+	}
+	current := func() profileSnapshot {
+		return profileSnapshot{
+			name: nameEntry.Text, client: clientSelect.Selected, version: versionEntry.Text,
+			customFolder: customFolderEntry.Text, mode: modeSelect.Selected,
+			ipPort: ipPortEntry.Text, serverPass: serverPassEntry.Text,
+			companyNum: companyNumEntry.Text, companyPass: companyPassEntry.Text,
+			savePath: savePathEntry.Text, extraArgs: extraArgsEntry.Text, configFile: configFileEntry.Text,
+			newgrf: newgrfRadio.Selected, autoLatestFilter: autoLatestFilterRadio.Selected,
+			noConfigSave: noConfigSaveCheck.Checked,
+		}
+	}
+	baseline := current()
+	isDirty := func() bool { return current() != baseline }
+
+	hideEditor = func() {
+		um.editorOverlay = nil
+		um.editorOnEscape = nil
 		editDialog.Hide()
-	})
+	}
+	cancelOrConfirm := func() {
+		if !isDirty() {
+			hideEditor()
+			return
+		}
+		dialog.ShowCustomConfirm("Discard changes?", "Discard", "Keep editing",
+			widget.NewLabel("You have unsaved changes to this profile."),
+			func(discard bool) {
+				if discard {
+					hideEditor()
+				}
+			}, um.Window)
+	}
+	cancelBtn := widget.NewButton("Cancel", cancelOrConfirm)
 
 	updateState = func() {
 		ok, _ := validate()
@@ -752,8 +828,11 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			saveAndRunBtn.Disable()
 		}
 		setStatus()
+		if refreshDirty != nil {
+			refreshDirty()
+		}
 	}
-	for _, entry := range []*widget.Entry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry, configFileEntry, customFolderEntry} {
+	for _, entry := range []*widget.Entry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry, configFileEntry, customFolderEntry, extraArgsEntry} {
 		entry.OnChanged = func(string) {
 			updateState()
 		}
@@ -769,5 +848,32 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 	editDialog = NewModalDialog(um.Window.Canvas(), dialogTitle, form, cancelBtn, saveBtn, saveAndRunBtn)
 	editDialog.Resize(fyne.NewSize(850, 600))
+
+	// Scope the Escape handler to this overlay by identity; cleared on hide via hideEditor.
+	um.editorOverlay = editDialog
+	um.editorOnEscape = cancelOrConfirm
+
+	titleLabel := findTitleLabel(editDialog.Content, dialogTitle)
+	refreshDirty = func() {
+		dirty := isDirty()
+		if dirty {
+			saveBtn.Importance = widget.HighImportance
+			saveAndRunBtn.Importance = widget.HighImportance
+		} else {
+			saveBtn.Importance = widget.MediumImportance
+			saveAndRunBtn.Importance = widget.MediumImportance
+		}
+		saveBtn.Refresh()
+		saveAndRunBtn.Refresh()
+		if titleLabel != nil {
+			if dirty {
+				titleLabel.SetText(dialogTitle + " *")
+			} else {
+				titleLabel.SetText(dialogTitle)
+			}
+		}
+	}
+	refreshDirty()
+
 	editDialog.Show()
 }

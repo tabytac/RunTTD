@@ -8,6 +8,8 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+
+	"runttd/internal/domain"
 )
 
 // showError displays a plain-message error dialog on the main window.
@@ -16,6 +18,20 @@ func (um *UIManager) showError(msg string) { dialog.ShowError(errors.New(msg), u
 // showErrorf displays an error dialog from a format string (use %w to keep a wrapped cause).
 func (um *UIManager) showErrorf(format string, a ...any) {
 	dialog.ShowError(fmt.Errorf(format, a...), um.Window)
+}
+
+// saveConfigOrWarn writes the config, dialoging on failure so a write error (a
+// read-only, full, or dead path) isn't silently lost. Returns whether it
+// succeeded, so a caller mid-edit (a modal Save button) can revert any in-memory
+// mutation and keep its dialog open instead of proceeding as if the write landed;
+// a caller with nothing sane to revert to may ignore the return, since the
+// dialog above already told the user.
+func (um *UIManager) saveConfigOrWarn() bool {
+	if err := domain.SaveConfig(um.ConfigPath, um.Config); err != nil {
+		um.showErrorf("could not save to %s: %w", um.ConfigPath, err)
+		return false
+	}
+	return true
 }
 
 // NewSectionTitle returns a bold label for use as a section header

@@ -19,7 +19,6 @@ import (
 	fyneadvancedlist "github.com/dweymouth/fyne-advanced-list"
 
 	apppkg "runttd/internal/app"
-	"runttd/internal/domain"
 	"runttd/internal/platform"
 )
 
@@ -376,7 +375,7 @@ func (mv *mainView) duplicateSelected() {
 	dup := um.Config.Profiles[mv.selectedIdx]
 	dup.Name = uniqueProfileName(um.Config.Profiles, dup.Name)
 	um.Config.Profiles = append(um.Config.Profiles, dup)
-	_ = domain.SaveConfig(um.ConfigPath, um.Config)
+	um.saveConfigOrWarn()
 
 	mv.selectedIdx = len(um.Config.Profiles) - 1
 	um.SelectedProfileName = um.Config.Profiles[mv.selectedIdx].Name
@@ -412,7 +411,7 @@ func (mv *mainView) deleteSelected() {
 			}
 
 			um.Config.Profiles = append(um.Config.Profiles[:mv.selectedIdx], um.Config.Profiles[mv.selectedIdx+1:]...)
-			_ = domain.SaveConfig(um.ConfigPath, um.Config)
+			um.saveConfigOrWarn()
 
 			nextIdx := mv.selectedIdx
 			if nextIdx >= len(um.Config.Profiles) {
@@ -561,7 +560,7 @@ func (mv *mainView) buildProfileList() {
 		}
 
 		um.Config.Profiles = reorderProfiles(um.Config.Profiles, from, to)
-		_ = domain.SaveConfig(um.ConfigPath, um.Config)
+		um.saveConfigOrWarn()
 
 		// Re-resolve by name: the splice shifts mv.selectedIdx onto a different
 		// profile whenever the drag crosses it, even if the dragged row wasn't the selection.
@@ -588,14 +587,16 @@ func (mv *mainView) buildProfileList() {
 }
 
 // escapeOverlayAction resolves what Escape should do for the given top overlay, or nil
-// if there's nothing to dismiss. Scoped overlays (settings, a blocking confirm) route
-// through their own dismiss so callbacks still fire; raw top.Hide() would skip them.
+// if there's nothing to dismiss. Scoped overlays (settings, editor, a blocking confirm)
+// route through their own dismiss so callbacks still fire; raw top.Hide() would skip them.
 func (um *UIManager) escapeOverlayAction(top fyne.CanvasObject) func() {
 	switch {
 	case top == nil:
 		return nil
 	case top == um.settingsOverlay && um.settingsOnEscape != nil:
 		return um.settingsOnEscape
+	case top == um.editorOverlay && um.editorOnEscape != nil:
+		return um.editorOnEscape
 	case top == um.blockingConfirm && um.blockingConfirmHide != nil:
 		return um.blockingConfirmHide
 	default:
@@ -926,7 +927,7 @@ func (um *UIManager) applyAppearance(variant string, presetIdx int) {
 	if pt, ok := um.App.Settings().Theme().(*LauncherTheme); ok {
 		pt.UpdateAccent(presetIdx, variant)
 	}
-	_ = domain.SaveConfig(um.ConfigPath, um.Config)
+	um.saveConfigOrWarn()
 }
 
 // setAutoLaunchProfile records the single startup profile (or "" for off), persists,
@@ -934,7 +935,7 @@ func (um *UIManager) applyAppearance(variant string, presetIdx int) {
 // toggle; the settings dialog writes the field in its batch save then calls profileListRefresh.
 func (um *UIManager) setAutoLaunchProfile(name string) {
 	um.Config.AutoLaunchProfile = name
-	_ = domain.SaveConfig(um.ConfigPath, um.Config)
+	um.saveConfigOrWarn()
 	if um.profileListRefresh != nil {
 		um.profileListRefresh()
 	}

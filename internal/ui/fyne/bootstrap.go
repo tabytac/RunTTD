@@ -2,6 +2,7 @@ package fyne
 
 import (
 	_ "embed"
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -44,6 +45,8 @@ type UIManager struct {
 	settingsOnEscape    func()        // Escape on the settings overlay routes here (dirty -> discard-confirm)
 	blockingConfirm     *widget.PopUp // a confirm whose caller blocks on its response; raw overlay.Hide() would skip the callback and hang forever
 	blockingConfirmHide func()        // resolves blockingConfirm via the dialog's own Hide(), so Escape still answers "No"
+	editorOverlay       *widget.PopUp // the open profile editor, for the scoped Escape handler; nil when closed
+	editorOnEscape      func()        // Escape on the editor overlay routes here (dirty -> discard-confirm)
 }
 
 // NewUIManager creates a new UIManager instance, configuring the static app icons and custom presets theme
@@ -117,7 +120,10 @@ func (um *UIManager) persistWindowSize(w, h int) {
 	}
 	um.Config.WindowWidth = w
 	um.Config.WindowHeight = h
-	_ = domain.SaveConfig(um.ConfigPath, um.Config)
+	// Log-only: the window is already closing, so a dialog here has no one to show it to.
+	if err := domain.SaveConfig(um.ConfigPath, um.Config); err != nil {
+		um.Logger.Append(fmt.Sprintf("could not save window size: %v", err))
+	}
 }
 
 // LogVerbose appends a message only if verbose logging is enabled in settings

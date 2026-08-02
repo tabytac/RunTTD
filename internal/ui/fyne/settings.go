@@ -433,6 +433,10 @@ func (um *UIManager) showSettingsView() {
 		if strings.TrimSpace(parentDirEntry.Text) == "" || strings.TrimSpace(docsBasePathEntry.Text) == "" {
 			return // backstop; the disabled button is the primary guard
 		}
+		// Full value snapshot (Profiles is a slice but this handler never mutates it),
+		// so a failed save can revert everything below, including what SaveConfig's
+		// own sanitizeURLs rewrites in place before the write is attempted.
+		prevConfig := *um.Config
 		prevSubfolderPerClient := um.Config.SubfolderPerClient
 		preVanilla, preNightly, preJgrpp := vanillaMirrorEntry.Text, nightlyMirrorEntry.Text, jgrppApiUrlEntry.Text
 
@@ -459,7 +463,10 @@ func (um *UIManager) showSettingsView() {
 			um.Config.AutoLaunchProfile = um.Config.Profiles[idx].Name
 		}
 
-		_ = domain.SaveConfig(um.ConfigPath, um.Config)
+		if !um.saveConfigOrWarn() {
+			*um.Config = prevConfig
+			return // leave the dialog open so the edits aren't lost; the user can retry
+		}
 		if um.profileListRefresh != nil {
 			um.profileListRefresh() // move the §14 startup marker if AutoLaunchProfile changed here
 		}
