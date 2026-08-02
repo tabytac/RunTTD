@@ -225,27 +225,30 @@ type SegmentedRadio struct {
 	Container *fyne.Container
 	Selected  string
 	Options   []string
-	Buttons   []*widget.Button
+	Buttons   []*dialogButton
 	OnChanged func(string)
 }
 
-// NewSegmentedRadio renders a row of equal-sized toggle buttons
-func NewSegmentedRadio(options []string, initial string, onChanged func(string)) *SegmentedRadio {
+// NewSegmentedRadio renders a row of equal-sized toggle buttons. onEscape is
+// forwarded from each button so a segmented option holding focus doesn't
+// swallow a modal's Escape (see dialogButton; Enter just activates the
+// focused option, matching every other button in the modal).
+func NewSegmentedRadio(options []string, initial string, onChanged func(string), onEscape func()) *SegmentedRadio {
 	s := &SegmentedRadio{
 		Options:   options,
 		Selected:  initial,
 		OnChanged: onChanged,
-		Buttons:   make([]*widget.Button, len(options)),
+		Buttons:   make([]*dialogButton, len(options)),
 	}
 
 	for i, opt := range options {
 		label := opt
-		btn := widget.NewButton(label, func() {
+		btn := newDialogButton(label, func() {
 			s.SetSelected(label)
 			if s.OnChanged != nil {
 				s.OnChanged(label)
 			}
-		})
+		}, onEscape)
 		if label == initial {
 			btn.Importance = widget.HighImportance
 		} else {

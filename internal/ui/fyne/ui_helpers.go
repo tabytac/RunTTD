@@ -57,9 +57,11 @@ func NewSectionDescription(text string) *widget.Label {
 	return label
 }
 
-// NewLabeledCheckWithDescription returns a checkbox paired with an indented italic description label
-func NewLabeledCheckWithDescription(label, description string, checked bool) (*widget.Check, fyne.CanvasObject) {
-	check := widget.NewCheck(label, nil)
+// NewLabeledCheckWithDescription returns a checkbox paired with an indented italic description label.
+// onEscape/onEnter route through dialogCheck for modal use; pass nil, nil for a
+// non-modal view (e.g. onboarding), where they're a no-op.
+func NewLabeledCheckWithDescription(label, description string, checked bool, onEscape, onEnter func()) (*dialogCheck, fyne.CanvasObject) {
+	check := newDialogCheck(label, nil, onEscape, onEnter)
 	check.SetChecked(checked)
 	desc := NewSectionDescription(description)
 	group := container.NewVBox(
@@ -82,8 +84,10 @@ func NewLabeledField(label, description string, control fyne.CanvasObject) fyne.
 	)
 }
 
-// NewModalDialog returns a modal popup with a bold title bar, content area, and centred button toolbar
-func NewModalDialog(canvas fyne.Canvas, title string, content fyne.CanvasObject, buttons ...*widget.Button) *widget.PopUp {
+// NewModalDialog returns a modal popup with a bold title bar, content area, and centred button toolbar.
+// buttons takes fyne.CanvasObject (not *widget.Button) so dialogButton (and any other button-like
+// wrapper) can be passed directly alongside plain widget.Button.
+func NewModalDialog(canvas fyne.Canvas, title string, content fyne.CanvasObject, buttons ...fyne.CanvasObject) *widget.PopUp {
 	paddedButtons := make([]fyne.CanvasObject, len(buttons))
 	for i, btn := range buttons {
 		paddedButtons[i] = container.NewPadded(btn)

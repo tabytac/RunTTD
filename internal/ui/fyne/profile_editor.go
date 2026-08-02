@@ -166,22 +166,38 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		profile = um.Config.Profiles[profileIdx]
 	}
 
+	// cancelOrConfirm/commitSave are defined later (they need widgets built below), but the
+	// dialog* wrappers constructed from here on need something to forward Escape/Enter to
+	// right away; onEscape/onEnter close over the vars so they resolve once assigned.
+	var cancelOrConfirm func()
+	var commitSave func()
+	onEscape := func() {
+		if cancelOrConfirm != nil {
+			cancelOrConfirm()
+		}
+	}
+	onEnter := func() {
+		if commitSave != nil {
+			commitSave()
+		}
+	}
+
 	// Form fields
-	nameEntry := widget.NewEntry()
+	nameEntry := newDialogEntry(onEscape, onEnter)
 	nameEntry.SetText(profile.Name)
 	nameEntry.SetPlaceHolder("Profile name")
 
-	versionEntry := widget.NewSelectEntry(um.CachedVersions)
+	versionEntry := newDialogSelectEntry(um.CachedVersions, onEscape, onEnter)
 	versionEntry.SetOptions([]string{"latest (Stable)", "latest (Testing)"})
 	versionEntry.PlaceHolder = "latest (Stable), latest (Testing), or 15.3"
 
-	customFolderEntry := widget.NewEntry()
+	customFolderEntry := newDialogEntry(onEscape, onEnter)
 	customFolderEntry.SetText(profile.CustomExecutablePath)
 	customFolderEntry.SetPlaceHolder("Folder containing openttd executable")
 
-	customFolderBtn := widget.NewButton("Browse...", func() {
-		um.browseDirectory(customFolderEntry, "Select Custom Executable Folder", "Custom Executable Folder")
-	})
+	customFolderBtn := newDialogButton("Browse...", func() {
+		um.browseDirectory(&customFolderEntry.Entry, "Select Custom Executable Folder", "Custom Executable Folder")
+	}, onEscape)
 	customFolderRow := container.NewBorder(nil, nil, nil, customFolderBtn, customFolderEntry)
 
 	// Text set per client in updateClientFields via versionTrackHintText.
@@ -246,7 +262,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		if updateState != nil {
 			updateState()
 		}
-	})
+	}, onEscape)
 	// Preselect client and version display for new and existing profiles.
 	currentClient := strings.TrimSpace(profile.Client)
 	if currentClient == "" {
@@ -343,47 +359,49 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		if refreshDirty != nil {
 			refreshDirty()
 		}
-	})
+	}, onEscape)
 
 	// Multiplayer fields
-	ipPortEntry := widget.NewEntry()
+	ipPortEntry := newDialogEntry(onEscape, onEnter)
 	ipPortEntry.SetText(profile.ServerIpPort)
 	ipPortEntry.SetPlaceHolder("host:port")
 
-	serverPassEntry := widget.NewPasswordEntry()
+	serverPassEntry := newDialogEntry(onEscape, onEnter)
+	serverPassEntry.Password = true
 	serverPassEntry.SetText(profile.ServerPassword)
 	serverPassEntry.SetPlaceHolder("Optional password")
 
-	companyPassEntry := widget.NewPasswordEntry()
+	companyPassEntry := newDialogEntry(onEscape, onEnter)
+	companyPassEntry.Password = true
 	companyPassEntry.SetText(profile.ServerCompanyPassword)
 	companyPassEntry.SetPlaceHolder("Optional company password")
 
-	companyNumEntry := widget.NewEntry()
+	companyNumEntry := newDialogEntry(onEscape, onEnter)
 	companyNumEntry.SetText(profile.ServerCompanyNumber)
 	companyNumEntry.SetPlaceHolder("Optional company number")
 
 	// Save fields
-	savePathEntry := widget.NewEntry()
+	savePathEntry := newDialogEntry(onEscape, onEnter)
 	savePathEntry.SetText(profile.SavePath)
 	savePathEntry.SetPlaceHolder("Path to file or folder")
 
-	extraArgsEntry := widget.NewMultiLineEntry()
+	extraArgsEntry := newDialogMultiLineEntry(onEscape)
 	extraArgsEntry.SetText(profile.ExtraArgs)
 	extraArgsEntry.SetPlaceHolder("Example: -d 3 -r 1920x1080")
 	extraArgsEntry.Wrapping = fyne.TextWrapWord
 
-	configFileEntry := widget.NewEntry()
+	configFileEntry := newDialogEntry(onEscape, onEnter)
 	configFileEntry.SetText(profile.ConfigFilePath)
 	configFileEntry.SetPlaceHolder("Optional path to config file (openttd.cfg)")
 
-	noConfigSaveCheck := widget.NewCheck("Do not save config changes on exit", func(bool) {
+	noConfigSaveCheck := newDialogCheck("Do not save config changes on exit", func(bool) {
 		if refreshDirty != nil {
 			refreshDirty()
 		}
-	})
+	}, onEscape, onEnter)
 	noConfigSaveCheck.SetChecked(profile.NoConfigSave)
 
-	browseConfigBtn := widget.NewButtonWithIcon("Browse...", theme.FileIcon(), func() {
+	browseConfigBtn := newDialogButton("Browse...", func() {
 		go func() {
 			startPath := strings.TrimSpace(configFileEntry.Text)
 			if startPath == "" && um.Config.DocsBasePath != "" {
@@ -407,7 +425,8 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				configFileEntry.SetText(path)
 			})
 		}()
-	})
+	}, onEscape)
+	browseConfigBtn.Icon = theme.FileIcon()
 
 	// NewGRF scan mode selection
 	newgrfLabelMap := map[string]string{
@@ -425,7 +444,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		if refreshDirty != nil { // selection itself is read on save
 			refreshDirty()
 		}
-	})
+	}, onEscape)
 
 	// Auto-Latest Filter selection
 	filterLabelMap := map[string]string{
@@ -449,10 +468,10 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		if refreshDirty != nil {
 			refreshDirty()
 		}
-	})
+	}, onEscape)
 	updateFolderInstructions(autoLatestFilterRadio.Selected)
 
-	browseFileBtn := widget.NewButtonWithIcon("Browse File...", theme.FileIcon(), func() {
+	browseFileBtn := newDialogButton("Browse File...", func() {
 		go func() {
 			startPath := savePathEntry.Text
 			if startPath == "" {
@@ -477,9 +496,10 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				savePathEntry.SetText(path)
 			})
 		}()
-	})
+	}, onEscape)
+	browseFileBtn.Icon = theme.FileIcon()
 
-	browseFolderBtn := widget.NewButtonWithIcon("Browse Folder...", theme.FolderIcon(), func() {
+	browseFolderBtn := newDialogButton("Browse Folder...", func() {
 		go func() {
 			startPath := savePathEntry.Text
 			if startPath == "" {
@@ -504,7 +524,8 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				savePathEntry.SetText(path)
 			})
 		}()
-	})
+	}, onEscape)
+	browseFolderBtn.Icon = theme.FolderIcon()
 
 	fileOption.Objects = []fyne.CanvasObject{
 		widget.NewLabel("Select a specific save or scenario file to load:"),
@@ -644,8 +665,8 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		})
 	}
 
-	var saveBtn *widget.Button
-	var saveAndRunBtn *widget.Button
+	var saveBtn *dialogButton
+	var saveAndRunBtn *dialogButton
 
 	saveProfile := func(runAfter bool) {
 		if ok, message := validate(); !ok {
@@ -750,6 +771,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}
 		um.Window.SetContent(um.makeMainView())
 	}
+	commitSave = func() { saveProfile(false) }
 
 	generalScroll := container.NewVScroll(container.NewVBox(
 		NewSectionTitle("Identity"),
@@ -789,8 +811,8 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 
 	form := container.NewBorder(statusLabel, nil, nil, nil, tabs)
 
-	saveBtn = widget.NewButton("Save", func() { saveProfile(false) })
-	saveAndRunBtn = widget.NewButton("Save & Run", func() { saveProfile(true) })
+	saveBtn = newDialogButton("Save", func() { saveProfile(false) }, onEscape)
+	saveAndRunBtn = newDialogButton("Save & Run", func() { saveProfile(true) }, onEscape)
 	if isNew {
 		saveBtn.SetText("Create")
 		saveAndRunBtn.SetText("Create & Run")
@@ -823,7 +845,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		um.editorOnEscape = nil
 		editDialog.Hide()
 	}
-	cancelOrConfirm := func() {
+	cancelOrConfirm = func() {
 		if !isDirty() {
 			hideEditor()
 			return
@@ -836,7 +858,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				}
 			}, um.Window)
 	}
-	cancelBtn := widget.NewButton("Cancel", cancelOrConfirm)
+	cancelBtn := newDialogButton("Cancel", cancelOrConfirm, onEscape)
 
 	updateState = func() {
 		ok, _ := validate()
@@ -852,10 +874,13 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			refreshDirty()
 		}
 	}
-	for _, entry := range []*widget.Entry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry, configFileEntry, customFolderEntry, extraArgsEntry} {
+	for _, entry := range []*dialogEntry{nameEntry, savePathEntry, ipPortEntry, serverPassEntry, companyNumEntry, companyPassEntry, configFileEntry, customFolderEntry} {
 		entry.OnChanged = func(string) {
 			updateState()
 		}
+	}
+	extraArgsEntry.OnChanged = func(string) {
+		updateState()
 	}
 	versionEntry.OnChanged = func(string) {
 		updateState()
@@ -896,4 +921,5 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	refreshDirty()
 
 	editDialog.Show()
+	um.Window.Canvas().Focus(nameEntry)
 }

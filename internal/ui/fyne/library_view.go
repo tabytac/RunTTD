@@ -145,6 +145,7 @@ func (um *UIManager) showLibraryView() {
 
 	backBtn := widget.NewButton("Back", func() {
 		scanGen++ // invalidate any in-flight scan render
+		um.libraryRescan = nil
 		um.Window.SetContent(um.makeMainView())
 	})
 
@@ -260,6 +261,7 @@ func (um *UIManager) showLibraryView() {
 		nil, nil,
 		container.NewVScroll(container.NewPadded(listBox)),
 	)
+	um.libraryRescan = rescan
 	um.Window.SetContent(content)
 	rescan()
 }

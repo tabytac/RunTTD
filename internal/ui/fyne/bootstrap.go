@@ -48,6 +48,7 @@ type UIManager struct {
 	blockingConfirmHide func()        // resolves blockingConfirm via the dialog's own Hide(), so Escape still answers "No"
 	editorOverlay       *widget.PopUp // the open profile editor, for the scoped Escape handler; nil when closed
 	editorOnEscape      func()        // Escape on the editor overlay routes here (dirty -> discard-confirm)
+	libraryRescan       func()        // set by showLibraryView while it's the active view; the F5 accelerator's target, nil (no-op) elsewhere
 }
 
 // NewUIManager creates a new UIManager instance, configuring the static app icons and custom presets theme

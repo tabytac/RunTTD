@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -64,6 +65,24 @@ func (mv *mainView) displayPos(real int) int {
 		}
 	}
 	return -1
+}
+
+// digitLaunchIndex maps a quick-launch key ('1'-'9', '0' for the 10th) to a
+// profile index, or -1 if there's no such profile or it's hidden by the
+// active search filter (its badge digit isn't shown on any visible row, so
+// launching it would silently start a profile the user can't currently see).
+func (mv *mainView) digitLaunchIndex(digit byte) int {
+	idx := int(digit - '1')
+	if digit == '0' {
+		idx = 9
+	}
+	if idx < 0 || idx >= len(mv.um.Config.Profiles) {
+		return -1
+	}
+	if mv.displayPos(idx) < 0 {
+		return -1
+	}
+	return idx
 }
 
 func (mv *mainView) recomputeVisible() {
@@ -546,6 +565,13 @@ func (mv *mainView) buildProfileList() {
 				btn.onSecondaryTapped = func() {
 					um.showProfileEditor(idx, false)
 				}
+				btn.onLaunch = func() {
+					if d := mv.displayPos(idx); d >= 0 {
+						mv.profileList.Select(widget.ListItemID(d))
+					}
+					mv.um.suppressAutoCloseOnce = false // a manual launch must clear a stale startup-suppression flag
+					mv.launchIndex(idx)
+				}
 			}
 		},
 	)
@@ -735,11 +761,15 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		mv.updateEmptyState()
 		mv.profileList.Refresh()
 	}
-	// Esc clears the filter and returns to the full list.
+	// Esc clears the filter and returns to the full list, then blurs so quick-launch
+	// (digits, Enter) works again immediately rather than staying dead until the user
+	// clicks elsewhere: Fyne routes keys to the focused widget OR the canvas, never
+	// both, so this Entry keeping focus would otherwise swallow every later key.
 	mv.searchEntry.onEscape = func() {
 		if mv.searchEntry.Text != "" {
 			mv.searchEntry.SetText("") // triggers OnChanged, which resets the filter
 		}
+		um.Window.Canvas().Unfocus()
 	}
 	mv.updateEmptyState()
 
@@ -838,21 +868,29 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			return
 		}
 
+		// F5 targets the library view (a separate full-screen view, not mainContent),
+		// so it's checked before the mainContent guard below. Bare keys (no modifier,
+		// like Escape/Enter/digits) never reach Canvas.AddShortcut, so this and Delete
+		// have to live in this same plain-key fallback.
+		if event.Name == fyne.KeyF5 {
+			if um.libraryRescan != nil && um.Window.Canvas().Overlays().Top() == nil {
+				um.libraryRescan()
+			}
+			return
+		}
+
 		if um.Window.Content() != mainContent || um.Window.Canvas().Overlays().Top() != nil {
 			return
 		}
 
+		if event.Name == fyne.KeyDelete {
+			mv.deleteSelected()
+			return
+		}
+
 		if len(event.Name) == 1 && event.Name[0] >= '0' && event.Name[0] <= '9' {
-			idx := int(event.Name[0] - '1')
-			if event.Name[0] == '0' {
-				idx = 9
-			}
-			if idx >= 0 && idx < len(um.Config.Profiles) {
-				if d := mv.displayPos(idx); d >= 0 {
-					mv.profileList.Select(widget.ListItemID(d))
-				} else {
-					mv.profileList.UnselectAll()
-				}
+			if idx := mv.digitLaunchIndex(event.Name[0]); idx >= 0 {
+				mv.profileList.Select(widget.ListItemID(mv.displayPos(idx)))
 				mv.um.suppressAutoCloseOnce = false
 				mv.launchIndex(idx)
 				return
@@ -863,6 +901,37 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 			if mv.selectedIdx >= 0 {
 				mv.runSelected()
 			}
+		}
+	})
+
+	// Modifier-combo accelerators: Canvas.AddShortcut fires regardless of focus for
+	// any focused widget that isn't Shortcutable (Button/Select/Check/List all
+	// qualify), unlike the bare-key handler above. While an Entry has focus these
+	// stay silent, matching Fyne's own built-in shortcuts (e.g. Ctrl+Z inside an
+	// Entry only undoes text) rather than reaching here — expected, not a bug.
+	mainViewGuard := func() bool {
+		return um.Window.Content() == mainContent && um.Window.Canvas().Overlays().Top() == nil
+	}
+	um.Window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyN, Modifier: fyne.KeyModifierShortcutDefault}, func(fyne.Shortcut) {
+		if mainViewGuard() {
+			um.showProfileEditor(-1, true)
+		}
+	})
+	um.Window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyF, Modifier: fyne.KeyModifierShortcutDefault}, func(fyne.Shortcut) {
+		if mainViewGuard() {
+			um.Window.Canvas().Focus(mv.searchEntry)
+		}
+	})
+	um.Window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyD, Modifier: fyne.KeyModifierShortcutDefault}, func(fyne.Shortcut) {
+		// Duplicate's button is disabled with nothing selected; guard the accelerator
+		// the same way so it doesn't bypass that into an unexpected error dialog.
+		if mainViewGuard() && mv.selectedIdx >= 0 {
+			mv.duplicateSelected()
+		}
+	})
+	um.Window.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyComma, Modifier: fyne.KeyModifierShortcutDefault}, func(fyne.Shortcut) {
+		if mainViewGuard() {
+			um.showSettingsView()
 		}
 	})
 
@@ -954,7 +1023,7 @@ func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 
 	modeSelect := NewSegmentedRadio([]string{"Light", "Dark"}, currentMode, func(s string) {
 		apply(strings.ToLower(s), um.Config.AccentPreset)
-	})
+	}, nil)
 
 	colorGrid := container.NewGridWithColumns(4)
 	colorButtons := make([]*canvas.Rectangle, len(ThemePresets))

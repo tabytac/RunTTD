@@ -150,6 +150,14 @@ func (um *UIManager) buildAppearanceTab() fyne.CanvasObject {
 
 	modeSelect := NewSegmentedRadio([]string{"Light", "Dark"}, currentMode, func(s string) {
 		um.applyAppearance(strings.ToLower(s), um.Config.AccentPreset)
+	}, func() {
+		// buildAppearanceTab has no local onEscape closure to give this button (it only
+		// ever runs inside showSettingsView's dialog), so it reads the global directly.
+		// Safe: showSettingsView assigns settingsOnEscape before Show() and clears it in
+		// hideSettings, and the nil check covers construction order regardless.
+		if um.settingsOnEscape != nil {
+			um.settingsOnEscape()
+		}
 	})
 
 	colorGrid := container.NewGridWithColumns(4)
@@ -220,7 +228,23 @@ func findTitleLabel(root fyne.CanvasObject, text string) *widget.Label {
 
 // showSettingsView shows a dialog to edit global settings
 func (um *UIManager) showSettingsView() {
-	parentDirEntry := widget.NewEntry()
+	// cancelOrConfirm/commitSave are defined later (they need widgets built below), but the
+	// dialog* wrappers constructed from here on need something to forward Escape/Enter to
+	// right away; onEscape/onEnter close over the vars so they resolve once assigned.
+	var cancelOrConfirm func()
+	var commitSave func()
+	onEscape := func() {
+		if cancelOrConfirm != nil {
+			cancelOrConfirm()
+		}
+	}
+	onEnter := func() {
+		if commitSave != nil {
+			commitSave()
+		}
+	}
+
+	parentDirEntry := newDialogEntry(onEscape, onEnter)
 	parentDirEntry.SetText(um.Config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where game files / executables will be automatically installed")
 	parentDirEntry.Validator = func(s string) error {
@@ -232,11 +256,11 @@ func (um *UIManager) showSettingsView() {
 	parentDirEntry.AlwaysShowValidationError = true
 	parentDirEntry.Validate()
 
-	parentDirBtn := widget.NewButton("Browse...", func() {
-		um.browseDirectory(parentDirEntry, "Select Parent Directory", "Parent Directory (Settings)")
-	})
+	parentDirBtn := newDialogButton("Browse...", func() {
+		um.browseDirectory(&parentDirEntry.Entry, "Select Parent Directory", "Parent Directory (Settings)")
+	}, onEscape)
 
-	docsBasePathEntry := widget.NewEntry()
+	docsBasePathEntry := newDialogEntry(onEscape, onEnter)
 	docsBasePathEntry.SetText(um.Config.DocsBasePath)
 	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
 	docsBasePathEntry.Validator = func(s string) error {
@@ -251,9 +275,9 @@ func (um *UIManager) showSettingsView() {
 	validationIcon := widget.NewIcon(theme.CancelIcon())
 	validationIcon.Hide()
 
-	docsBasePathBtn := widget.NewButton("Browse...", func() {
-		um.browseDirectory(docsBasePathEntry, "Select Docs Base Path", "Docs Base Path (Settings)")
-	})
+	docsBasePathBtn := newDialogButton("Browse...", func() {
+		um.browseDirectory(&docsBasePathEntry.Entry, "Select Docs Base Path", "Docs Base Path (Settings)")
+	}, onEscape)
 
 	// Debounced: os.Stat runs 300ms after typing pauses, off the UI thread, since
 	// the path can be an unreachable network share (cancel-and-reset, not just a
@@ -300,7 +324,7 @@ func (um *UIManager) showSettingsView() {
 		return errors.New("must be a valid https:// URL or blank")
 	}
 
-	jgrppApiUrlEntry := widget.NewEntry()
+	jgrppApiUrlEntry := newDialogEntry(onEscape, onEnter)
 	jgrppApiUrlEntry.SetText(um.Config.JgrppApiUrl)
 	jgrppApiUrlEntry.SetPlaceHolder("https://api.github.com/repos/JGRennison/OpenTTD-patches")
 	jgrppApiUrlEntry.Validator = httpsOrBlankValidator
@@ -308,17 +332,17 @@ func (um *UIManager) showSettingsView() {
 	jgrppApiUrlEntry.Validate()
 
 	osDetected := platform.DefaultOSType()
-	osTypeSelect := widget.NewSelect(osTypeOptions(osDetected, um.Config.OSType), func(string) {})
+	osTypeSelect := newDialogSelect(osTypeOptions(osDetected, um.Config.OSType), func(string) {}, onEscape, onEnter)
 	osTypeSelect.SetSelected(osTypeValueToLabel(osDetected, um.Config.OSType))
 
-	vanillaMirrorEntry := widget.NewEntry()
+	vanillaMirrorEntry := newDialogEntry(onEscape, onEnter)
 	vanillaMirrorEntry.SetText(um.Config.VanillaMirror)
 	vanillaMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-releases/")
 	vanillaMirrorEntry.Validator = httpsOrBlankValidator
 	vanillaMirrorEntry.AlwaysShowValidationError = true
 	vanillaMirrorEntry.Validate()
 
-	nightlyMirrorEntry := widget.NewEntry()
+	nightlyMirrorEntry := newDialogEntry(onEscape, onEnter)
 	nightlyMirrorEntry.SetText(um.Config.NightlyMirror)
 	nightlyMirrorEntry.SetPlaceHolder("https://cdn.openttd.org/openttd-nightlies/")
 	nightlyMirrorEntry.Validator = httpsOrBlankValidator
@@ -327,7 +351,7 @@ func (um *UIManager) showSettingsView() {
 
 	// Default client selector. Pre-selects the configured client; an unknown or
 	// empty stored value simply leaves the dropdown unselected.
-	defaultClientSelect := widget.NewSelect(defaultClientOptions, func(string) {})
+	defaultClientSelect := newDialogSelect(defaultClientOptions, func(string) {}, onEscape, onEnter)
 	if label, ok := revDefaultClientMap[um.Config.DefaultClient]; ok {
 		defaultClientSelect.SetSelected(label)
 	}
@@ -335,30 +359,30 @@ func (um *UIManager) showSettingsView() {
 	autoCloseCheck, autoCloseGroup := NewLabeledCheckWithDescription(
 		"Auto-close launcher when OpenTTD starts",
 		"Hides the launcher once the game opens.",
-		um.Config.AutoCloseOnStart,
+		um.Config.AutoCloseOnStart, onEscape, onEnter,
 	)
 
 	autoOpenLogCheck, autoOpenLogGroup := NewLabeledCheckWithDescription(
 		"Auto-open log panel when game starts",
 		"Opens the log panel so you can watch download/start progress.",
-		um.Config.AutoOpenLog,
+		um.Config.AutoOpenLog, onEscape, onEnter,
 	)
 
 	verboseCheck, verboseGroup := NewLabeledCheckWithDescription(
 		"Verbose logging (show all messages)",
 		"Includes debug-level messages in the log panel. Useful for troubleshooting.",
-		um.Config.Verbose,
+		um.Config.Verbose, onEscape, onEnter,
 	)
 
 	autoLaunchOpts, autoLaunchLabelToIdx := autoLaunchOptions(um.Config.Profiles)
-	autoLaunchSelect := widget.NewSelect(autoLaunchOpts, func(string) {})
+	autoLaunchSelect := newDialogSelect(autoLaunchOpts, func(string) {}, onEscape, onEnter)
 	autoLaunchSelect.SetSelected(autoLaunchSelectedLabel(um.Config.Profiles, um.Config.AutoLaunchProfile))
 
 	subfolderCheck, subfolderGroup := NewLabeledCheckWithDescription(
 		"Organise downloaded clients into per-client subfolders",
 		"Keeps each client's downloaded files in a separate folder, instead of all sharing the parent folder. "+
 			"If you change this later, anything already downloaded gets fetched again.",
-		um.Config.SubfolderPerClient,
+		um.Config.SubfolderPerClient, onEscape, onEnter,
 	)
 
 	// Dirty-state compares live widget values to a baseline snapshot, never an
@@ -450,7 +474,7 @@ func (um *UIManager) showSettingsView() {
 		settingsDialog.Hide()
 	}
 
-	saveBtn := widget.NewButton("Save Settings", func() {
+	saveSettings := func() {
 		if strings.TrimSpace(parentDirEntry.Text) == "" || strings.TrimSpace(docsBasePathEntry.Text) == "" {
 			return // backstop; the disabled button is the primary guard
 		}
@@ -519,7 +543,9 @@ func (um *UIManager) showSettingsView() {
 			dialog.ShowInformation("Download sources reset",
 				"These weren't valid https URLs and were restored to their official defaults:\n  - "+strings.Join(reset, "\n  - "), um.Window)
 		}
-	})
+	}
+	commitSave = saveSettings
+	saveBtn := newDialogButton("Save Settings", saveSettings, onEscape)
 
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
@@ -542,7 +568,7 @@ func (um *UIManager) showSettingsView() {
 	}
 	// cancelOrConfirm closes the dialog directly when clean, else asks before discarding.
 	// Reused by the Cancel button and (Task 11) the scoped Escape handler.
-	cancelOrConfirm := func() {
+	cancelOrConfirm = func() {
 		if !isDirty() {
 			hideSettings()
 			return
@@ -556,11 +582,11 @@ func (um *UIManager) showSettingsView() {
 				}
 			}, um.Window)
 	}
-	cancelBtn := widget.NewButton("Cancel", cancelOrConfirm)
+	cancelBtn := newDialogButton("Cancel", cancelOrConfirm, onEscape)
 
 	// Reset stages the factory defaults into the widgets (persisted only on Save);
 	// theme/accent persist immediately via applyAppearance (persist-on-click model).
-	resetBtn := widget.NewButton("Reset to defaults", func() {
+	resetBtn := newDialogButton("Reset to defaults", func() {
 		dialog.ShowConfirm("Reset to defaults?",
 			"Reset all settings to their defaults? Your profiles are not affected.",
 			func(ok bool) {
@@ -583,7 +609,7 @@ func (um *UIManager) showSettingsView() {
 				updateState("")
 				refreshDirty()
 			}, um.Window)
-	})
+	}, onEscape)
 	resetBtn.Importance = widget.LowImportance
 
 	// statusLabel sits below the tabs (above the toolbar) so the blocking hint is visible from any tab.
@@ -632,4 +658,5 @@ func (um *UIManager) showSettingsView() {
 	refreshDirty()
 
 	settingsDialog.Show()
+	um.Window.Canvas().Focus(parentDirEntry)
 }
