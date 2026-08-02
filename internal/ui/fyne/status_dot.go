@@ -72,38 +72,55 @@ const (
 	failedUpstream                       // fetch failed (offline/429/timeout)
 )
 
-// dotInput holds the pre-computed, network-free inputs to dotState.
+// dotInput holds the pre-computed inputs to dotState. Every disk-derived field has
+// a matching *Known bool: false means the async lookup hasn't resolved yet, so
+// dotState must show Grey rather than guess Red/Green from a zero value.
 type dotInput struct {
-	clientKnown      bool
-	isCustom         bool
+	clientKnown bool
+
+	isCustom        bool
+	customPathKnown bool
 	customPathExists bool
-	installedFolder  string
-	isLatest         bool
-	cacheState       upstreamState
-	latestTagFolder  string
+
+	isLatest             bool
+	installedFolderKnown bool
+	installedFolder      string
+
+	cacheState           upstreamState
+	latestTagFolderKnown bool
+	latestTagFolder      string
 }
 
-// dotState resolves the four-state dot from pre-computed, network-free inputs.
+// dotState resolves the four-state dot from pre-computed inputs. Every branch that
+// depends on an async disk lookup checks its *Known flag first, so an unresolved
+// lookup reads as "still checking" (Grey), never a guessed Red or Green.
 func dotState(in dotInput) DotState {
-	// Step 1: classify & disk check.
 	if !in.clientKnown {
 		return DotGrey
 	}
 	if in.isCustom {
+		if !in.customPathKnown {
+			return DotGrey
+		}
 		if in.customPathExists {
 			return DotGreen
 		}
 		return DotRed
 	}
+	if !in.installedFolderKnown {
+		return DotGrey
+	}
 	if in.installedFolder == "" {
 		return DotRed
 	}
-	// Installed. Step 2: currency check.
 	if !in.isLatest {
 		return DotGreen // pinned + installed
 	}
 	switch in.cacheState {
 	case okUpstream:
+		if !in.latestTagFolderKnown {
+			return DotGrey
+		}
 		// Not installedFolder: that scan is track-blind, so a higher off-track beta would read as an update.
 		if in.latestTagFolder != "" {
 			return DotGreen
@@ -173,10 +190,11 @@ func (r *statusDotRenderer) Objects() []fyne.CanvasObject {
 
 func (r *statusDotRenderer) Destroy() {}
 
-// resolveDotState computes a profile's dot state on the UI thread using only
-// disk reads, and enqueues a background upstream fetch when one is needed. It
-// MUST stay network-free on this path: the only network lookup happens in the
-// backgrounded startUpstreamFetch, never here.
+// resolveDotState computes a profile's dot state reading only caches (the disk
+// lookup cache below, and the pre-existing upstream network cache), and enqueues a
+// background compute for whichever inputs aren't cached yet. It MUST stay
+// I/O-free on this path: every disk read and network call happens in a
+// backgrounded goroutine dispatched from here, never inline.
 func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 	client := apppkg.EffectiveClient(profile.Client, um.Config.DefaultClient)
 
@@ -189,24 +207,60 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 	if client == "custom" {
 		in.isCustom = true
 		p := strings.TrimSpace(profile.CustomExecutablePath)
-		if p != "" {
-			if _, err := os.Stat(p); err == nil {
-				in.customPathExists = true
-			}
+		if p == "" {
+			in.customPathKnown = true // nothing configured; "not found" is already final
+			return dotState(in)
+		}
+		key := "custom|" + p
+		if folder, known := um.diskLookups.lookup(key); known {
+			in.customPathKnown = true
+			in.customPathExists = folder != ""
+		} else {
+			um.startDiskLookup(key, func() string {
+				if _, err := os.Stat(p); err == nil {
+					return p
+				}
+				return ""
+			})
 		}
 		return dotState(in)
 	}
 
+	// Snapshot Config now (UI thread) rather than let a background compute read
+	// um.Config directly: settings can write ParentDir/SubfolderPerClient/OSType
+	// concurrently, and *domain.Config has no mutex of its own.
+	cfg := *um.Config
+
 	in.isLatest = apppkg.IsLatestVersion(profile.Version)
 
-	ctx := context.Background()
 	if in.isLatest {
-		in.installedFolder = apppkg.HighestInstalledFolderInRoot(um.Config, client, apppkg.LatestTrack(client, profile.Version))
+		track := apppkg.LatestTrack(client, profile.Version)
+		key := "track|" + client + "|" + track
+		if folder, known := um.diskLookups.lookup(key); known {
+			in.installedFolderKnown = true
+			in.installedFolder = folder
+		} else {
+			um.startDiskLookup(key, func() string {
+				return apppkg.HighestInstalledFolderInRoot(&cfg, client, track)
+			})
+		}
 	} else {
-		folder, _ := apppkg.ClientFindInstalled(ctx, client, profile.Version, um.Config)
-		in.installedFolder = folder
+		key := "version|" + client + "|" + profile.Version
+		if folder, known := um.diskLookups.lookup(key); known {
+			in.installedFolderKnown = true
+			in.installedFolder = folder
+		} else {
+			version := profile.Version
+			um.startDiskLookup(key, func() string {
+				folder, _ := apppkg.ClientFindInstalled(context.Background(), client, version, &cfg)
+				return folder
+			})
+		}
 	}
 
+	if !in.installedFolderKnown {
+		return dotState(in) // still checking
+	}
 	if in.installedFolder == "" {
 		return dotState(in) // Red — nothing installed
 	}
@@ -215,13 +269,26 @@ func (um *UIManager) resolveDotState(profile domain.Profile) DotState {
 	}
 
 	// Check upstream on the profile's track, and re-resolve the cached tag to a
-	// folder here (not at fetch time) so a download is reflected at once.
+	// folder here (not at fetch time) so a download is reflected at once (the
+	// disk cache is invalidated wholesale after a launch or a library delete).
 	track := apppkg.LatestTrack(client, profile.Version)
-	key := upstreamKey(client, track)
-	if e, fresh := um.upstream.get(key); fresh {
+	ukey := upstreamKey(client, track)
+	if e, fresh := um.upstream.get(ukey); fresh {
 		in.cacheState = e.state
 		if e.state == okUpstream && e.tag != "" {
-			in.latestTagFolder, _ = apppkg.ClientFindInstalled(ctx, client, e.tag, um.Config)
+			tag := e.tag
+			dkey := "version|" + client + "|" + tag
+			if folder, known := um.diskLookups.lookup(dkey); known {
+				in.latestTagFolderKnown = true
+				in.latestTagFolder = folder
+			} else {
+				um.startDiskLookup(dkey, func() string {
+					folder, _ := apppkg.ClientFindInstalled(context.Background(), client, tag, &cfg)
+					return folder
+				})
+			}
+		} else {
+			in.latestTagFolderKnown = true // no tag to resolve against; "" is already final
 		}
 	} else {
 		in.cacheState = pendingUpstream
@@ -252,6 +319,26 @@ func (um *UIManager) startUpstreamFetch(client, track string) {
 		} else {
 			um.upstream.store(key, tag, okUpstream)
 		}
+		fyne.Do(func() {
+			if um.profileListRefresh != nil {
+				um.profileListRefresh()
+			}
+		})
+	}()
+}
+
+// startDiskLookup runs one deduped background compute for key (an os.Stat or an
+// installed-folder scan — both can hang on an unreachable network share, so
+// neither may run on the UI thread) and, on completion, stores the result and
+// refreshes the profile list so the dot re-renders.
+func (um *UIManager) startDiskLookup(key string, compute func() string) {
+	gen, start := um.diskLookups.markPending(key)
+	if !start {
+		return // already known or already in flight
+	}
+	go func() {
+		folder := compute()
+		um.diskLookups.store(key, folder, gen)
 		fyne.Do(func() {
 			if um.profileListRefresh != nil {
 				um.profileListRefresh()

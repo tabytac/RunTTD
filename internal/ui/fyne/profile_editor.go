@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -593,35 +594,54 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		return true, ""
 	}
 
+	// pathCheckTimer debounces the two disk-touching warnings below: validate()'s
+	// own checks are pure and show instantly, but a stat on an unreachable network
+	// share must not run on every keystroke (cancel-and-reset, so a burst of
+	// keystrokes triggers exactly one pair of stats, 300ms after typing pauses).
+	// pathCheckGuard additionally covers Timer.Stop()'s documented gap (it can't
+	// cancel a callback that already started): a slow, superseded check is
+	// dropped by generation rather than allowed to overwrite a newer result —
+	// including validate()'s own instant message, which a stale check could
+	// otherwise clobber after the fact.
+	var pathCheckTimer *time.Timer
+	var pathCheckGuard debounceGuard
 	setStatus := func() {
+		if pathCheckTimer != nil {
+			pathCheckTimer.Stop()
+		}
 		ok, message := validate()
 		if !ok {
+			pathCheckGuard.next() // supersede any in-flight check; this message wins
 			statusLabel.SetText(message)
 			statusLabel.Refresh()
 			return
 		}
 
-		if warn := pathExistsWarning("config file", configFileEntry.Text, um.Config.DocsBasePath); warn != "" {
-			statusLabel.SetText(warn)
-			statusLabel.Refresh()
-			return
-		}
-
+		// Capture widget values now (UI thread); the timer callback below must not
+		// touch Fyne widgets off-thread, only these plain strings and the disk.
+		configPath := configFileEntry.Text
+		docsBase := um.Config.DocsBasePath
 		// Save path is only used in file/folder mode; resolve it the way launch
 		// does (relative to docs/save, after stripping a leading save/ prefix).
 		mode := modeMap[modeSelect.Selected]
-		if mode == "file" || mode == "folder" {
-			rawSave := trimSavePrefix(strings.TrimSpace(savePathEntry.Text))
-			saveBase := filepath.Join(um.Config.DocsBasePath, "save")
-			if warn := pathExistsWarning("save path", rawSave, saveBase); warn != "" {
+		checkSave := mode == "file" || mode == "folder"
+		rawSave := trimSavePrefix(strings.TrimSpace(savePathEntry.Text))
+		saveBase := filepath.Join(docsBase, "save")
+
+		gen := pathCheckGuard.next()
+		pathCheckTimer = time.AfterFunc(300*time.Millisecond, func() {
+			warn := pathExistsWarning("config file", configPath, docsBase)
+			if warn == "" && checkSave {
+				warn = pathExistsWarning("save path", rawSave, saveBase)
+			}
+			fyne.Do(func() {
+				if !pathCheckGuard.current(gen) {
+					return // superseded by a newer check
+				}
 				statusLabel.SetText(warn)
 				statusLabel.Refresh()
-				return
-			}
-		}
-
-		statusLabel.SetText("")
-		statusLabel.Refresh()
+			})
+		})
 	}
 
 	var saveBtn *widget.Button

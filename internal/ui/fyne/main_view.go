@@ -197,7 +197,7 @@ func (mv *mainView) launchIndex(idx int) {
 			mv.launchPhase.SetText("Launched " + profile.Name)
 			mv.launchPhase.Refresh()
 			if um.profileListRefresh != nil {
-				um.profileListRefresh() // a download may have changed installed state
+				um.profileListRefresh() // launchProfile already invalidated the disk cache on a fresh download
 			}
 			gen := mv.launchGen
 			go func() {

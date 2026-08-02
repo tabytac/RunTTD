@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -98,19 +99,39 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	})
 	continueBtn.Importance = widget.HighImportance
 
+	// Debounced: os.Stat runs 300ms after typing pauses, off the UI thread, since
+	// the path can be an unreachable network share (cancel-and-reset, not just a
+	// discard-if-stale check, so a burst of keystrokes triggers exactly one stat).
+	// docsCheckGuard additionally covers Timer.Stop()'s documented gap (it can't
+	// cancel a callback that already started): a slow, superseded check is
+	// dropped by generation rather than allowed to overwrite a newer result.
+	var docsCheckTimer *time.Timer
+	var docsCheckGuard debounceGuard
 	updateDocsValidation := func(path string) {
+		if docsCheckTimer != nil {
+			docsCheckTimer.Stop()
+		}
 		if path == "" {
+			docsCheckGuard.next() // supersede any in-flight check; there's nothing to show
 			validationIcon.Hide()
 			return
 		}
-		cfgPath := filepath.Join(path, "openttd.cfg")
-		if _, err := os.Stat(cfgPath); err == nil {
-			validationIcon.SetResource(theme.ConfirmIcon())
-			validationIcon.Show()
-		} else {
-			validationIcon.SetResource(theme.CancelIcon())
-			validationIcon.Show()
-		}
+		gen := docsCheckGuard.next()
+		docsCheckTimer = time.AfterFunc(300*time.Millisecond, func() {
+			cfgPath := filepath.Join(path, "openttd.cfg")
+			_, statErr := os.Stat(cfgPath)
+			fyne.Do(func() {
+				if !docsCheckGuard.current(gen) {
+					return // superseded by a newer check
+				}
+				if statErr == nil {
+					validationIcon.SetResource(theme.ConfirmIcon())
+				} else {
+					validationIcon.SetResource(theme.CancelIcon())
+				}
+				validationIcon.Show()
+			})
+		})
 	}
 
 	// updateState gates Continue on the required inputs, with the hint naming what's missing rather than leaving the button inertly greyed out.

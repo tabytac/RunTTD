@@ -367,6 +367,7 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), af
 				} else {
 					um.Logger.Append("Deleted installed version: " + e.Path)
 				}
+				um.diskLookups.invalidate() // a removed folder must not still read as installed
 				// Always rescan, success or failure: it re-derives the summary and
 				// cleanupBtn's enabled state, which busy(false) alone doesn't restore.
 				afterChange()
@@ -404,6 +405,7 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, busy func(boo
 				if failed > 0 {
 					um.showErrorf("%d folder(s) could not be removed; see logs", failed)
 				}
+				um.diskLookups.invalidate() // removed folders must not still read as installed
 				afterChange()
 			})
 		}()

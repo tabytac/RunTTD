@@ -306,6 +306,9 @@ func (um *UIManager) launchProfile(profile domain.Profile, updateStatus func(sta
 			}
 			return
 		}
+		// A new folder landed on disk; the dot cache's answers for this client are
+		// now stale regardless of which view (or none) is showing when this completes.
+		um.diskLookups.invalidate()
 		if updateStatus != nil {
 			updateStatus("Download complete, resolving extracted folder")
 		}
