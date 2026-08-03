@@ -28,8 +28,10 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	parentDirEntry.SetText(um.Config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where OpenTTD game files / executables will be automatically installed")
 
-	parentDirBtn := widget.NewButton("Browse...", func() {
-		um.browseDirectory(parentDirEntry, "Select Parent Directory", "Parent Directory")
+	var parentDirBtn *widget.Button
+	parentDirBtn = widget.NewButton("Browse...", func() {
+		parentDirBtn.Disable()
+		um.browseDirectory(parentDirEntry, "Select Parent Directory", "Parent Directory", parentDirBtn.Enable)
 	})
 
 	docsBasePathEntry := widget.NewEntry()
@@ -38,9 +40,13 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 
 	validationIcon := widget.NewIcon(theme.CancelIcon())
 	validationIcon.Hide()
+	validationLabel := mutedLabel("")
+	validationLabel.Hide()
 
-	docsBasePathBtn := widget.NewButton("Browse...", func() {
-		um.browseDirectory(docsBasePathEntry, "Select Docs Base Path", "Docs Base Path")
+	var docsBasePathBtn *widget.Button
+	docsBasePathBtn = widget.NewButton("Browse...", func() {
+		docsBasePathBtn.Disable()
+		um.browseDirectory(docsBasePathEntry, "Select Docs Base Path", "Docs Base Path", docsBasePathBtn.Enable)
 	})
 
 	// --- Preferences ---
@@ -114,6 +120,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		if path == "" {
 			docsCheckGuard.next() // supersede any in-flight check; there's nothing to show
 			validationIcon.Hide()
+			validationLabel.Hide()
 			return
 		}
 		gen := docsCheckGuard.next()
@@ -126,10 +133,13 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 				}
 				if statErr == nil {
 					validationIcon.SetResource(theme.ConfirmIcon())
+					validationLabel.SetText("openttd.cfg found")
 				} else {
 					validationIcon.SetResource(theme.CancelIcon())
+					validationLabel.SetText("No openttd.cfg here")
 				}
 				validationIcon.Show()
+				validationLabel.Show()
 			})
 		})
 	}
@@ -172,7 +182,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		NewLabeledField(
 			"Docs Base Path (required)",
 			"Where your saves and configuration (openttd.cfg) live. RunTTD reads from here but never modifies your files.",
-			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry),
+			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, validationLabel, docsBasePathBtn), docsBasePathEntry),
 		),
 		NewSectionHeader("Preferences"),
 		NewLabeledField(

@@ -256,8 +256,10 @@ func (um *UIManager) showSettingsView() {
 	parentDirEntry.AlwaysShowValidationError = true
 	parentDirEntry.Validate()
 
-	parentDirBtn := newDialogButton("Browse...", func() {
-		um.browseDirectory(&parentDirEntry.Entry, "Select Parent Directory", "Parent Directory (Settings)")
+	var parentDirBtn *dialogButton
+	parentDirBtn = newDialogButton("Browse...", func() {
+		parentDirBtn.Disable()
+		um.browseDirectory(&parentDirEntry.Entry, "Select Parent Directory", "Parent Directory (Settings)", parentDirBtn.Enable)
 	}, onEscape)
 
 	docsBasePathEntry := newDialogEntry(onEscape, onEnter)
@@ -274,9 +276,13 @@ func (um *UIManager) showSettingsView() {
 
 	validationIcon := widget.NewIcon(theme.CancelIcon())
 	validationIcon.Hide()
+	validationLabel := mutedLabel("")
+	validationLabel.Hide()
 
-	docsBasePathBtn := newDialogButton("Browse...", func() {
-		um.browseDirectory(&docsBasePathEntry.Entry, "Select Docs Base Path", "Docs Base Path (Settings)")
+	var docsBasePathBtn *dialogButton
+	docsBasePathBtn = newDialogButton("Browse...", func() {
+		docsBasePathBtn.Disable()
+		um.browseDirectory(&docsBasePathEntry.Entry, "Select Docs Base Path", "Docs Base Path (Settings)", docsBasePathBtn.Enable)
 	}, onEscape)
 
 	// Debounced: os.Stat runs 300ms after typing pauses, off the UI thread, since
@@ -294,6 +300,7 @@ func (um *UIManager) showSettingsView() {
 		if path == "" {
 			docsCheckGuard.next() // supersede any in-flight check; there's nothing to show
 			validationIcon.Hide()
+			validationLabel.Hide()
 			return
 		}
 		gen := docsCheckGuard.next()
@@ -306,10 +313,13 @@ func (um *UIManager) showSettingsView() {
 				}
 				if statErr == nil {
 					validationIcon.SetResource(theme.ConfirmIcon())
+					validationLabel.SetText("openttd.cfg found")
 				} else {
 					validationIcon.SetResource(theme.CancelIcon())
+					validationLabel.SetText("No openttd.cfg here")
 				}
 				validationIcon.Show()
+				validationLabel.Show()
 			})
 		})
 	}
@@ -415,7 +425,7 @@ func (um *UIManager) showSettingsView() {
 			container.NewBorder(nil, nil, nil, parentDirBtn, parentDirEntry)),
 		NewLabeledField("Docs Base Path (required)",
 			"Where your saves and configuration (openttd.cfg) live. RunTTD reads from here but never modifies your files.",
-			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, docsBasePathBtn), docsBasePathEntry)),
+			container.NewBorder(nil, nil, nil, container.NewHBox(validationIcon, validationLabel, docsBasePathBtn), docsBasePathEntry)),
 		subfolderGroup,
 	)
 	// Scroll as the Border center so its 32px MinSize can't balloon the modal.

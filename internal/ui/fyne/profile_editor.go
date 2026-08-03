@@ -188,6 +188,8 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	nameEntry.SetPlaceHolder("Profile name")
 
 	const versionEntryPlaceholder = "latest (Stable), latest (Testing), or 15.3"
+	const versionFetchFailedPlaceholder = "Version list unavailable; type a version"
+	const versionFetchFailedHint = "Could not load the version list. Check your connection, or type a version directly."
 	versionEntry := newDialogSelectEntry(um.CachedVersions, onEscape, onEnter)
 	versionEntry.SetOptions([]string{"latest (Stable)", "latest (Testing)"})
 	versionEntry.PlaceHolder = versionEntryPlaceholder
@@ -196,17 +198,28 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	customFolderEntry.SetText(profile.CustomExecutablePath)
 	customFolderEntry.SetPlaceHolder("Folder containing openttd executable")
 
-	customFolderBtn := newDialogButton("Browse...", func() {
-		um.browseDirectory(&customFolderEntry.Entry, "Select Custom Executable Folder", "Custom Executable Folder")
+	var customFolderBtn *dialogButton
+	customFolderBtn = newDialogButton("Browse...", func() {
+		customFolderBtn.Disable()
+		um.browseDirectory(&customFolderEntry.Entry, "Select Custom Executable Folder", "Custom Executable Folder", customFolderBtn.Enable)
 	}, onEscape)
 	customFolderRow := container.NewBorder(nil, nil, nil, customFolderBtn, customFolderEntry)
 
-	// Text set per client in updateClientFields via versionTrackHintText.
+	// Text set per client by applyVersionHint; a failed fetch replaces it until the client changes.
 	versionTrackHint := NewSectionDescription("")
 	versionTrackHint.Hide()
 
 	versionGroup := container.NewVBox(widget.NewLabel("Version"), versionEntry, versionTrackHint)
 	customFolderGroup := container.NewVBox(widget.NewLabel("Executable Folder"), customFolderRow)
+
+	applyVersionHint := func(clientID string) {
+		if hint := versionTrackHintText(clientID); hint != "" {
+			versionTrackHint.SetText(hint)
+			versionTrackHint.Show()
+		} else {
+			versionTrackHint.Hide()
+		}
+	}
 
 	updateClientFields := func(clientID string) {
 		if clientID == "custom" {
@@ -216,12 +229,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			versionGroup.Show()
 			customFolderGroup.Hide()
 		}
-		if hint := versionTrackHintText(clientID); hint != "" {
-			versionTrackHint.SetText(hint)
-			versionTrackHint.Show()
-		} else {
-			versionTrackHint.Hide()
-		}
+		applyVersionHint(clientID)
 	}
 
 	// Client selection (Vanilla OpenTTD Releases/Nightly, JGRPP, Custom Executable).
@@ -241,11 +249,18 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				}
 				if err != nil {
 					um.Logger.Append(fmt.Sprintf("Failed to fetch versions for %s: %v", clientID, err))
-				} else if len(versions) > 0 {
-					um.CachedVersions = versions
-					versionEntry.SetOptions(versions)
+					// The placeholder only paints on an empty field, so the hint carries this.
+					versionEntry.PlaceHolder = versionFetchFailedPlaceholder
+					versionTrackHint.SetText(versionFetchFailedHint)
+					versionTrackHint.Show()
+				} else {
+					if len(versions) > 0 {
+						um.CachedVersions = versions
+						versionEntry.SetOptions(versions)
+					}
+					versionEntry.PlaceHolder = versionEntryPlaceholder
+					applyVersionHint(clientID)
 				}
-				versionEntry.PlaceHolder = versionEntryPlaceholder
 				versionEntry.Refresh()
 			})
 		}()

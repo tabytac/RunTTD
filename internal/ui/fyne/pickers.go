@@ -84,11 +84,15 @@ func (um *UIManager) browseConfigPath(startPath string) (string, error) {
 	return selected, nil
 }
 
-// browseDirectory opens a Zenity directory picker and writes the chosen path into entry
-func (um *UIManager) browseDirectory(entry *widget.Entry, title, logLabel string) {
+// browseDirectory opens a Zenity directory picker and writes the chosen path
+// into entry; onDone (nil ok) runs on the UI thread once the picker closes.
+func (um *UIManager) browseDirectory(entry *widget.Entry, title, logLabel string, onDone func()) {
 	go func() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
+		if onDone != nil {
+			defer fyne.Do(onDone) // deferred so it also fires on cancel, error, and panic
+		}
 		defer func() {
 			if r := recover(); r != nil {
 				um.Logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
