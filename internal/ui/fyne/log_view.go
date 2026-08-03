@@ -11,7 +11,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -139,10 +138,8 @@ func (um *UIManager) showLogView(profileIdx int) {
 	copyBtn.Icon = theme.ContentCopyIcon()
 
 	clearBtn := newDialogButton("Clear Logs", func() {
-		msgLabel := widget.NewLabel("Remove all messages from this view? Any saved log file is left untouched.")
-		msgLabel.Alignment = fyne.TextAlignCenter
-		msgLabel.Wrapping = fyne.TextWrapWord
-		confirmDlg := dialog.NewCustomConfirm("Clear Logs?", "Clear", "Cancel", msgLabel,
+		confirmDlg := um.newConfirmDialog("Clear Logs?", "Clear", "Cancel",
+			"Remove all messages from this view? Any saved log file is left untouched.",
 			func(ok bool) {
 				if !ok {
 					return
@@ -152,7 +149,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 				// re-syncs its line count on the next pass.
 				_ = logBinding.Set("")
 				um.showToast("Logs cleared")
-			}, um.Window)
+			})
 		confirmDlg.SetConfirmImportance(widget.DangerImportance)
 		confirmDlg.Show()
 	}, um.runViewEscape)
@@ -376,13 +373,10 @@ func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, 
 				"Versions before 1.2.0 don't include free graphics, so you'll need original "+
 				"Transport Tycoon Deluxe data files to play. Some old releases also predate builds for many systems.", version)
 			fyne.Do(func() {
-				msgLabel := widget.NewLabel(msg)
-				msgLabel.Alignment = fyne.TextAlignCenter
-				msgLabel.Wrapping = fyne.TextWrapWord
-				confirm := dialog.NewCustomConfirm("Very Old OpenTTD Version", "Continue", "Cancel", msgLabel, func(ok bool) {
+				confirm := um.newConfirmDialog("Very Old OpenTTD Version", "Continue", "Cancel", msg, func(ok bool) {
 					um.blockingConfirm, um.blockingConfirmHide = nil, nil
 					proceed <- ok
-				}, um.Window)
+				})
 				confirm.Show()
 				// Escape reaches only the raw overlay, whose Hide() skips this callback;
 				// route it through the dialog's own Hide() so proceed always gets a value.

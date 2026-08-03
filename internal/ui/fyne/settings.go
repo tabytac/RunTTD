@@ -583,24 +583,21 @@ func (um *UIManager) showSettingsView() {
 			hideSettings()
 			return
 		}
-		dialog.ShowCustomConfirm("Discard changes?",
-			"Discard", "Keep editing",
-			widget.NewLabel("You have unsaved changes. Theme and accent changes are kept (they apply immediately)."),
+		um.newConfirmDialog("Discard changes?", "Discard", "Keep editing",
+			"You have unsaved changes. Theme and accent changes are kept (they apply immediately).",
 			func(discard bool) {
 				if discard {
 					hideSettings()
 				}
-			}, um.Window)
+			}).Show()
 	}
 	cancelBtn := newDialogButton("Cancel", cancelOrConfirm, onEscape)
 
 	// Reset stages the factory defaults into the widgets (persisted only on Save);
 	// theme/accent persist immediately via applyAppearance (persist-on-click model).
 	resetBtn := newDialogButton("Reset to Defaults", func() {
-		resetMsg := widget.NewLabel("Reset all settings to their defaults? Your profiles are not affected.")
-		resetMsg.Alignment = fyne.TextAlignCenter
-		resetMsg.Wrapping = fyne.TextWrapWord
-		dialog.ShowCustomConfirm("Reset to defaults?", "Reset", "Cancel", resetMsg,
+		um.newConfirmDialog("Reset to defaults?", "Reset", "Cancel",
+			"Reset all settings to their defaults? Your profiles are not affected.",
 			func(ok bool) {
 				if !ok {
 					return
@@ -620,7 +617,7 @@ func (um *UIManager) showSettingsView() {
 				um.applyAppearance("dark", 0) // persists immediately (persist-on-click model)
 				updateState("")
 				refreshDirty()
-			}, um.Window)
+			}).Show()
 	}, onEscape)
 	resetBtn.Importance = widget.WarningImportance
 

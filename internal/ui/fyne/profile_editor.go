@@ -11,7 +11,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -904,13 +903,13 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			hideEditor()
 			return
 		}
-		dialog.ShowCustomConfirm("Discard changes?", "Discard", "Keep editing",
-			widget.NewLabel("You have unsaved changes to this profile."),
+		um.newConfirmDialog("Discard changes?", "Discard", "Keep editing",
+			"You have unsaved changes to this profile.",
 			func(discard bool) {
 				if discard {
 					hideEditor()
 				}
-			}, um.Window)
+			}).Show()
 	}
 	cancelBtn := newDialogButton("Cancel", cancelOrConfirm, onEscape)
 

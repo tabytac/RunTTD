@@ -12,7 +12,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
@@ -451,10 +450,8 @@ func (mv *mainView) deleteSelected() {
 		return
 	}
 	profileName := um.Config.Profiles[mv.selectedIdx].Name
-	msgLabel := widget.NewLabel(fmt.Sprintf("Are you sure you want to delete profile %q?", profileName))
-	msgLabel.Alignment = fyne.TextAlignCenter
-	msgLabel.Wrapping = fyne.TextWrapWord
-	confirmDlg := dialog.NewCustomConfirm("Delete Profile", "Delete", "Cancel", msgLabel,
+	confirmDlg := um.newConfirmDialog("Delete Profile", "Delete", "Cancel",
+		fmt.Sprintf("Are you sure you want to delete profile %q?", profileName),
 		func(confirmed bool) {
 			if !confirmed {
 				return
@@ -480,7 +477,6 @@ func (mv *mainView) deleteSelected() {
 			mv.refreshDetails()
 			mv.updateEmptyState()
 		},
-		um.Window,
 	)
 	confirmDlg.SetConfirmImportance(widget.DangerImportance)
 	confirmDlg.Show()
@@ -677,6 +673,15 @@ func (um *UIManager) escapeAction() func() {
 func (um *UIManager) runViewEscape() {
 	if um.viewEscape != nil {
 		um.viewEscape()
+	}
+}
+
+// runLibraryRescan fires the library view's Refresh action, from either the canvas
+// F5 handler or a focused library button. An open overlay suppresses it, matching
+// the guard on the main view's other accelerators.
+func (um *UIManager) runLibraryRescan() {
+	if um.libraryRescan != nil && um.Window.Canvas().Overlays().Top() == nil {
+		um.libraryRescan()
 	}
 }
 
@@ -938,9 +943,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		// like Escape/Enter/digits) never reach Canvas.AddShortcut, so this and Delete
 		// have to live in this same plain-key fallback.
 		if event.Name == fyne.KeyF5 {
-			if um.libraryRescan != nil && um.Window.Canvas().Overlays().Top() == nil {
-				um.libraryRescan()
-			}
+			um.runLibraryRescan()
 			return
 		}
 

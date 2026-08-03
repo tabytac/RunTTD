@@ -192,7 +192,8 @@ func (c *dialogCheck) TypedKey(key *fyne.KeyEvent) {
 // forwarded to the modal's default action the way dialogEntry/Select/Check do.
 type dialogButton struct {
 	widget.Button
-	onEscape func()
+	onEscape  func()
+	onRefresh func() // F5; set only by the library view's buttons, nil everywhere else
 }
 
 func newDialogButton(label string, tapped func(), onEscape func()) *dialogButton {
@@ -208,6 +209,11 @@ func (b *dialogButton) TypedKey(key *fyne.KeyEvent) {
 	case fyne.KeyEscape:
 		if b.onEscape != nil {
 			b.onEscape()
+			return
+		}
+	case fyne.KeyF5:
+		if b.onRefresh != nil {
+			b.onRefresh()
 			return
 		}
 	case fyne.KeyReturn, fyne.KeyEnter:

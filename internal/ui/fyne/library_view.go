@@ -10,7 +10,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -133,6 +132,15 @@ func statusChip(text string, fill, fg color.Color) fyne.CanvasObject {
 	return container.NewStack(bg, container.NewPadded(label))
 }
 
+// newLibraryButton returns a library-view button that answers F5 as well as
+// Escape. Buttons are the only focusable widgets in this view, and a focused one
+// swallows both keys before the canvas fallback in main_view.go sees them.
+func (um *UIManager) newLibraryButton(label string, tapped func()) *dialogButton {
+	b := newDialogButton(label, tapped, um.runViewEscape)
+	b.onRefresh = um.runLibraryRescan
+	return b
+}
+
 // showLibraryView presents the full-screen Installed Clients library, opening in
 // a scanning state and populating rows on a background goroutine.
 func (um *UIManager) showLibraryView() {
@@ -142,6 +150,7 @@ func (um *UIManager) showLibraryView() {
 	listBox := container.NewVBox()
 
 	scanGen := 0
+	deleting := false
 
 	back := func() {
 		scanGen++ // invalidate any in-flight scan render
@@ -149,7 +158,7 @@ func (um *UIManager) showLibraryView() {
 		um.viewEscape = nil
 		um.Window.SetContent(um.makeMainView())
 	}
-	backBtn := newDialogButton("Back", back, um.runViewEscape)
+	backBtn := um.newLibraryButton("Back", back)
 
 	var cleanupBtn *dialogButton
 	var rescan func()
@@ -229,11 +238,11 @@ func (um *UIManager) showLibraryView() {
 		}()
 	}
 
-	cleanupBtn = newDialogButton("Clean Up Unused", func() {}, um.runViewEscape)
+	cleanupBtn = um.newLibraryButton("Clean Up Unused", func() {})
 	cleanupBtn.Importance = widget.DangerImportance
 	cleanupBtn.Disable()
 
-	refreshBtn := newDialogButton("Refresh", func() { rescan() }, um.runViewEscape)
+	refreshBtn := um.newLibraryButton("Refresh", func() { rescan() })
 	refreshBtn.Icon = theme.ViewRefreshIcon()
 
 	// A delete can be slow (a large or network-hosted folder), so it runs off the UI
@@ -244,6 +253,7 @@ func (um *UIManager) showLibraryView() {
 	// concurrently; each targets its own path, and a stale rescan from one is
 	// superseded by the other's, so this is accepted rather than gated.
 	busy = func(active bool) {
+		deleting = active
 		if active {
 			summary.SetText("Removing…")
 			um.viewEscape = nil // Escape leaves this view too, so it goes with the disabled Back button
@@ -269,7 +279,12 @@ func (um *UIManager) showLibraryView() {
 		nil, nil,
 		container.NewVScroll(container.NewPadded(listBox)),
 	)
-	um.libraryRescan = rescan
+	// A rescan mid-delete re-enables the very controls busy() just disabled.
+	um.libraryRescan = func() {
+		if !deleting {
+			rescan()
+		}
+	}
 	um.viewEscape = back
 	um.Window.SetContent(content)
 	rescan()
@@ -333,17 +348,17 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, busy func(bool), afterCha
 
 	meta := widget.NewLabel(fmt.Sprintf("%s · %s", humanSize(e.SizeBytes), e.ModTime.Format("2006-01-02")))
 
-	revealBtn := newDialogButton("", func() {
+	revealBtn := um.newLibraryButton("", func() {
 		if err := platform.RevealInFileManager(e.Path); err != nil {
 			um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", e.Path, err))
 			um.showErrorf("could not open the folder: %w", err)
 		}
-	}, um.runViewEscape)
+	})
 	revealBtn.Icon = theme.FolderOpenIcon()
 	revealBtn.Importance = widget.LowImportance
-	deleteBtn := newDialogButton("", func() {
+	deleteBtn := um.newLibraryButton("", func() {
 		um.confirmDeleteOne(e, busy, afterChange)
-	}, um.runViewEscape)
+	})
 	deleteBtn.Icon = theme.DeleteIcon()
 	deleteBtn.Importance = widget.DangerImportance
 
@@ -366,10 +381,7 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), af
 	if len(e.ReferencedBy) > 0 {
 		msg += "\n\nWarning: used by profile(s): " + strings.Join(e.ReferencedBy, ", ")
 	}
-	msgLabel := widget.NewLabel(msg)
-	msgLabel.Alignment = fyne.TextAlignCenter
-	msgLabel.Wrapping = fyne.TextWrapWord
-	confirmDlg := dialog.NewCustomConfirm("Delete Installed Version", "Delete", "Cancel", msgLabel, func(ok bool) {
+	confirmDlg := um.newConfirmDialog("Delete Installed Version", "Delete", "Cancel", msg, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -389,7 +401,7 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), af
 				afterChange()
 			})
 		}()
-	}, um.Window)
+	})
 	confirmDlg.SetConfirmImportance(widget.DangerImportance)
 	confirmDlg.Show()
 }
@@ -403,10 +415,7 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, busy func(boo
 		total += e.SizeBytes
 	}
 	msg := fmt.Sprintf("Remove %d unused version(s), freeing %s?%s", len(orphans), humanSize(total), list)
-	msgLabel := widget.NewLabel(msg)
-	msgLabel.Alignment = fyne.TextAlignCenter
-	msgLabel.Wrapping = fyne.TextWrapWord
-	confirmDlg := dialog.NewCustomConfirm("Clean Up Unused Versions", "Clean Up", "Cancel", msgLabel, func(ok bool) {
+	confirmDlg := um.newConfirmDialog("Clean Up Unused Versions", "Clean Up", "Cancel", msg, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -430,7 +439,7 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, busy func(boo
 				afterChange()
 			})
 		}()
-	}, um.Window)
+	})
 	confirmDlg.SetConfirmImportance(widget.DangerImportance)
 	confirmDlg.Show()
 }

@@ -3,10 +3,12 @@ package fyne
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"runttd/internal/domain"
@@ -18,6 +20,46 @@ func (um *UIManager) showError(msg string) { dialog.ShowError(errors.New(msg), u
 // showErrorf displays an error dialog from a format string (use %w to keep a wrapped cause).
 func (um *UIManager) showErrorf(format string, a ...any) {
 	dialog.ShowError(fmt.Errorf(format, a...), um.Window)
+}
+
+const (
+	// A word-wrapping label's minimum width is just its padding, so without a floor
+	// Fyne sizes a confirm from the button row alone and breaks long paths mid-word.
+	confirmDialogWidth    = 560
+	confirmDialogMaxWidth = 900
+	// Width a confirm spends on chrome: popup padding, dialog padding, label padding.
+	confirmDialogChrome = 56
+)
+
+// confirmWidthFor widens a confirm until its longest unbreakable token (in practice a
+// file path) fits on one line, so wrapping falls on spaces instead of mid-word.
+func confirmWidthFor(msg string) float32 {
+	var widest float32
+	for _, token := range strings.Fields(msg) {
+		if w := fyne.MeasureText(token, theme.TextSize(), fyne.TextStyle{}).Width; w > widest {
+			widest = w
+		}
+	}
+	switch need := widest + confirmDialogChrome; {
+	case need < confirmDialogWidth:
+		return confirmDialogWidth
+	case need > confirmDialogMaxWidth:
+		return confirmDialogMaxWidth
+	default:
+		return need
+	}
+}
+
+// newConfirmDialog returns an unshown confirm with a centred, word-wrapping message.
+// The zero height leaves the height to the content, and a modal popup clamps both axes
+// to the canvas, so neither dimension can overflow a small window.
+func (um *UIManager) newConfirmDialog(title, confirm, dismiss, msg string, callback func(bool)) *dialog.ConfirmDialog {
+	msgLabel := widget.NewLabel(msg)
+	msgLabel.Alignment = fyne.TextAlignCenter
+	msgLabel.Wrapping = fyne.TextWrapWord
+	d := dialog.NewCustomConfirm(title, confirm, dismiss, msgLabel, callback, um.Window)
+	d.Resize(fyne.NewSize(confirmWidthFor(msg), 0))
+	return d
 }
 
 // saveConfigOrWarn writes the config, dialoging on failure so a write error (a
