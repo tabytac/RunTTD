@@ -46,6 +46,14 @@ func (um *UIManager) showToast(message string) {
 	}()
 }
 
+// hideLaunchCancel hides whichever log view's Cancel button is currently on screen.
+func (um *UIManager) hideLaunchCancel() {
+	if um.launchCancelBtn != nil {
+		um.launchCancelBtn.Hide()
+		um.launchCancelBtn = nil
+	}
+}
+
 // showLogView shows a screen with live logs while launching a profile or in standalone mode
 func (um *UIManager) showLogView(profileIdx int) {
 	var profile domain.Profile
@@ -112,21 +120,25 @@ func (um *UIManager) showLogView(profileIdx int) {
 		}
 	}()
 
-	closeBtn := widget.NewButton("Back to Profiles", func() {
+	// Leaving mid-launch is allowed: the launch goroutine outlives this view.
+	back := func() {
 		select {
 		case <-done:
 		default:
 			close(done)
 		}
+		um.viewEscape = nil
 		um.Window.SetContent(um.makeMainView())
-	})
+	}
+	closeBtn := newDialogButton("Back to Profiles", back, um.runViewEscape)
 
-	copyBtn := widget.NewButtonWithIcon("Copy to Clipboard", theme.ContentCopyIcon(), func() {
+	copyBtn := newDialogButton("Copy to Clipboard", func() {
 		um.App.Clipboard().SetContent(strings.Join(um.Logger.GetAll(), "\n"))
 		um.showToast("Logs copied to clipboard!")
-	})
+	}, um.runViewEscape)
+	copyBtn.Icon = theme.ContentCopyIcon()
 
-	clearBtn := widget.NewButtonWithIcon("Clear Logs", theme.ContentClearIcon(), func() {
+	clearBtn := newDialogButton("Clear Logs", func() {
 		msgLabel := widget.NewLabel("Remove all messages from this view? Any saved log file is left untouched.")
 		msgLabel.Alignment = fyne.TextAlignCenter
 		msgLabel.Wrapping = fyne.TextWrapWord
@@ -143,13 +155,14 @@ func (um *UIManager) showLogView(profileIdx int) {
 			}, um.Window)
 		confirmDlg.SetConfirmImportance(widget.DangerImportance)
 		confirmDlg.Show()
-	})
+	}, um.runViewEscape)
+	clearBtn.Icon = theme.ContentClearIcon()
 
-	cancelBtn := widget.NewButton("Cancel", func() {
+	cancelBtn := newDialogButton("Cancel", func() {
 		if um.launchCancel != nil {
 			um.launchCancel()
 		}
-	})
+	}, um.runViewEscape)
 	cancelBtn.Importance = widget.DangerImportance
 	cancelBtn.Hide()
 
@@ -167,6 +180,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 		logBox,
 	)
 
+	um.viewEscape = back
 	um.Window.SetContent(content)
 
 	// Launch OpenTTD in background if requested. Guarded at the UIManager level
@@ -180,11 +194,13 @@ func (um *UIManager) showLogView(profileIdx int) {
 			// targets it, so offer Cancel here too even though this view's own
 			// status/progress aren't wired to that goroutine.
 			um.showToast("A launch is already in progress")
+			um.launchCancelBtn = cancelBtn
 			cancelBtn.Show()
 		} else {
 			um.launchInProgress = true
 			ctx, cancel := context.WithCancel(context.Background())
 			um.launchCancel = cancel
+			um.launchCancelBtn = cancelBtn
 			cancelBtn.Show()
 			lastPct := -1
 			go func() {
@@ -192,7 +208,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 					um.launchInProgress = false
 					cancel()
 					um.launchCancel = nil
-					cancelBtn.Hide()
+					um.hideLaunchCancel()
 				})
 				um.launchProfile(ctx, profile, func(status string) {
 					// binding.String.Set is documented safe from any goroutine.
@@ -202,7 +218,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 						return // unknown size: leave the current status text alone
 					}
 					if done >= total {
-						fyne.Do(cancelBtn.Hide) // extraction isn't cancellable; stop offering to
+						fyne.Do(um.hideLaunchCancel) // extraction isn't cancellable; stop offering to
 						_ = statusBinding.Set("Extracting (this can take a moment for large installs)")
 						return
 					}

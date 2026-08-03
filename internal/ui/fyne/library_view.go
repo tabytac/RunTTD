@@ -143,13 +143,15 @@ func (um *UIManager) showLibraryView() {
 
 	scanGen := 0
 
-	backBtn := widget.NewButton("Back", func() {
+	back := func() {
 		scanGen++ // invalidate any in-flight scan render
 		um.libraryRescan = nil
+		um.viewEscape = nil
 		um.Window.SetContent(um.makeMainView())
-	})
+	}
+	backBtn := newDialogButton("Back", back, um.runViewEscape)
 
-	var cleanupBtn *widget.Button
+	var cleanupBtn *dialogButton
 	var rescan func()
 	var busy func(active bool) // toggles the surrounding controls off while a delete runs
 
@@ -227,11 +229,12 @@ func (um *UIManager) showLibraryView() {
 		}()
 	}
 
-	cleanupBtn = widget.NewButton("Clean Up Unused", func() {})
+	cleanupBtn = newDialogButton("Clean Up Unused", func() {}, um.runViewEscape)
 	cleanupBtn.Importance = widget.DangerImportance
 	cleanupBtn.Disable()
 
-	refreshBtn := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { rescan() })
+	refreshBtn := newDialogButton("Refresh", func() { rescan() }, um.runViewEscape)
+	refreshBtn.Icon = theme.ViewRefreshIcon()
 
 	// A delete can be slow (a large or network-hosted folder), so it runs off the UI
 	// thread; busy disables the surrounding controls for that stretch. render()'s
@@ -243,10 +246,15 @@ func (um *UIManager) showLibraryView() {
 	busy = func(active bool) {
 		if active {
 			summary.SetText("Removing…")
+			um.viewEscape = nil // Escape leaves this view too, so it goes with the disabled Back button
 			backBtn.Disable()
 			cleanupBtn.Disable()
 			refreshBtn.Disable()
 			return
+		}
+		// A slower concurrent delete can land after Back; don't revive a dead view's hook.
+		if um.libraryRescan != nil {
+			um.viewEscape = back
 		}
 		backBtn.Enable()
 		refreshBtn.Enable()
@@ -262,6 +270,7 @@ func (um *UIManager) showLibraryView() {
 		container.NewVScroll(container.NewPadded(listBox)),
 	)
 	um.libraryRescan = rescan
+	um.viewEscape = back
 	um.Window.SetContent(content)
 	rescan()
 }
@@ -324,16 +333,18 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, busy func(bool), afterCha
 
 	meta := widget.NewLabel(fmt.Sprintf("%s · %s", humanSize(e.SizeBytes), e.ModTime.Format("2006-01-02")))
 
-	revealBtn := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
+	revealBtn := newDialogButton("", func() {
 		if err := platform.RevealInFileManager(e.Path); err != nil {
 			um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", e.Path, err))
 			um.showErrorf("could not open the folder: %w", err)
 		}
-	})
+	}, um.runViewEscape)
+	revealBtn.Icon = theme.FolderOpenIcon()
 	revealBtn.Importance = widget.LowImportance
-	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+	deleteBtn := newDialogButton("", func() {
 		um.confirmDeleteOne(e, busy, afterChange)
-	})
+	}, um.runViewEscape)
+	deleteBtn.Icon = theme.DeleteIcon()
 	deleteBtn.Importance = widget.DangerImportance
 
 	titleRow := container.NewHBox(titleObjects...)

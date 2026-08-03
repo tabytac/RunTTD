@@ -49,8 +49,10 @@ type UIManager struct {
 	editorOverlay       *widget.PopUp // the open profile editor, for the scoped Escape handler; nil when closed
 	editorOnEscape      func()        // Escape on the editor overlay routes here (dirty -> discard-confirm)
 	libraryRescan       func()        // set by showLibraryView while it's the active view; the F5 accelerator's target, nil (no-op) elsewhere
-	launchInProgress    bool          // guards showLogView's AutoOpenLog launch specifically; mainView.launchInProgress covers the Run-button path separately
+	viewEscape          func()        // set by the full-screen library/log views; Escape's target while one is showing, nil (no-op) elsewhere
+	launchInProgress    bool          // the cross-path launch guard; mainView.launchInProgress is a per-view mirror
 	launchCancel        func()        // cancels the in-flight launch's download context, if any; nil once no launch is running or the download step has already finished
+	launchCancelBtn     *dialogButton // the log view Cancel button currently on screen; a reopened view replaces it
 }
 
 // NewUIManager creates a new UIManager instance, configuring the static app icons and custom presets theme

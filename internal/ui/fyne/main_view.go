@@ -159,7 +159,7 @@ func (mv *mainView) launchIndex(idx int) {
 	// AutoOpenLog can be toggled mid-launch, switching which path a later Run
 	// takes without the launch itself having finished.
 	if um.launchInProgress {
-		return
+		return // the visible band is the feedback; a toast overlay would block Cancel for 3s
 	}
 	um.launchInProgress = true
 	mv.launchInProgress = true
@@ -181,6 +181,7 @@ func (mv *mainView) launchIndex(idx int) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	mv.launchCancel = cancel
+	um.launchCancel = cancel // a log view opened over this launch offers a working Cancel
 	mv.cancelBtn.Show()
 
 	failed := false
@@ -191,7 +192,9 @@ func (mv *mainView) launchIndex(idx int) {
 			mv.launchInProgress = false
 			cancel()
 			mv.launchCancel = nil
+			um.launchCancel = nil
 			mv.cancelBtn.Hide()
+			um.hideLaunchCancel() // a log view opened over this launch has its own Cancel showing
 			mv.launchSpin.Hide()
 			mv.launchBar.Hide()
 			mv.runBtn.Enable()
@@ -660,6 +663,23 @@ func (um *UIManager) escapeOverlayAction(top fyne.CanvasObject) func() {
 	}
 }
 
+// escapeAction resolves Escape: an open overlay always wins over the active
+// full-screen view's Back action.
+func (um *UIManager) escapeAction() func() {
+	if action := um.escapeOverlayAction(um.Window.Canvas().Overlays().Top()); action != nil {
+		return action
+	}
+	return um.viewEscape
+}
+
+// runViewEscape fires the active full-screen view's Back action; a focused
+// button would otherwise swallow Escape.
+func (um *UIManager) runViewEscape() {
+	if um.viewEscape != nil {
+		um.viewEscape()
+	}
+}
+
 // makeMainView creates the main profile selection view
 func (um *UIManager) makeMainView() fyne.CanvasObject {
 	mv := &mainView{
@@ -906,10 +926,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 
 	mainContent := container.NewBorder(header, nil, nil, nil, split)
 	um.Window.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
-		// Escape dismisses the top modal (profile editor, settings, theme
-		// customizer), matching each modal's Cancel button which only hides it.
 		if event.Name == fyne.KeyEscape {
-			if action := um.escapeOverlayAction(um.Window.Canvas().Overlays().Top()); action != nil {
+			if action := um.escapeAction(); action != nil {
 				action()
 			}
 			return
