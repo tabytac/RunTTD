@@ -92,8 +92,10 @@ func (um *UIManager) startSetupIssueCheck(profile domain.Profile, sig string) {
 	if !um.setupIssues.markPending(profile.Name, sig) {
 		return
 	}
+	// Read on the UI thread: settings can write DocsBasePath while the compute runs.
+	docsBase := um.Config.DocsBasePath
 	go func() {
-		issue := apppkg.ProfileSetupIssue(profile, um.Config.DocsBasePath)
+		issue := apppkg.ProfileSetupIssue(profile, docsBase)
 		um.setupIssues.store(profile.Name, sig, issue)
 		fyne.Do(func() {
 			if um.profileListRefresh != nil {

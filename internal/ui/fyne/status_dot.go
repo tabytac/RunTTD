@@ -309,12 +309,17 @@ func (um *UIManager) startUpstreamFetch(client, track string) {
 	if !um.upstream.markPending(key) {
 		return // already fresh or in flight
 	}
+	cfg := *um.Config
+	verbose := cfg.Verbose
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		tag := apppkg.ClientLatestForTrack(ctx, client, track, um.Config)
+		tag := apppkg.ClientLatestForTrack(ctx, client, track, &cfg)
 		if tag == "" {
-			um.LogVerbose(fmt.Sprintf("Upstream version check failed for %s (%s); status unknown (offline?)", client, track))
+			// Not LogVerbose: it reads um.Config.Verbose, which settings can write while this runs.
+			if verbose {
+				um.Logger.Append(fmt.Sprintf("Upstream version check failed for %s (%s); status unknown (offline?)", client, track))
+			}
 			um.upstream.store(key, "", failedUpstream)
 		} else {
 			um.upstream.store(key, tag, okUpstream)
