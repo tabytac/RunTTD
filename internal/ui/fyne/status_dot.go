@@ -311,7 +311,7 @@ func (um *UIManager) startUpstreamFetch(client, track string) {
 	}
 	cfg := *um.Config
 	verbose := cfg.Verbose
-	go func() {
+	um.startAsync(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		tag := apppkg.ClientLatestForTrack(ctx, client, track, &cfg)
@@ -329,7 +329,7 @@ func (um *UIManager) startUpstreamFetch(client, track string) {
 				um.profileListRefresh()
 			}
 		})
-	}()
+	})
 }
 
 // startDiskLookup runs one deduped background compute for key (an os.Stat or an
@@ -341,7 +341,7 @@ func (um *UIManager) startDiskLookup(key string, compute func() string) {
 	if !start {
 		return // already known or already in flight
 	}
-	go func() {
+	um.startAsync(func() {
 		folder := compute()
 		um.diskLookups.store(key, folder, gen)
 		fyne.Do(func() {
@@ -349,5 +349,5 @@ func (um *UIManager) startDiskLookup(key string, compute func() string) {
 				um.profileListRefresh()
 			}
 		})
-	}()
+	})
 }

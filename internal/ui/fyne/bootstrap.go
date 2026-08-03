@@ -40,6 +40,7 @@ type UIManager struct {
 	upstream            *upstreamCache
 	setupIssues         *setupIssueCache
 	diskLookups         *diskLookupCache
+	runAsync            func(func()) // how the three async caches spawn work; nil means a fresh goroutine (see startAsync)
 	profileListRefresh  func() // set by the main view; refreshes the profile list from any goroutine (via fyne.Do)
 	detailsRefresh      func() // set by the main view; rebuilds the details pane from any goroutine (via fyne.Do)
 	settingsOverlay     *widget.PopUp // the open settings dialog, for the scoped Escape handler; nil when closed
@@ -131,6 +132,17 @@ func (um *UIManager) persistWindowSize(w, h int) {
 	if err := domain.SaveConfig(um.ConfigPath, um.Config); err != nil {
 		um.Logger.Append(fmt.Sprintf("could not save window size: %v", err))
 	}
+}
+
+// startAsync dispatches fn through runAsync, or a fresh goroutine when it is nil.
+// Tests substitute a runner, because the Fyne test driver executes fyne.Do inline
+// on the calling goroutine, so background work would mutate the widget tree mid-render.
+func (um *UIManager) startAsync(fn func()) {
+	if um.runAsync != nil {
+		um.runAsync(fn)
+		return
+	}
+	go fn()
 }
 
 // LogVerbose appends a message only if verbose logging is enabled in settings

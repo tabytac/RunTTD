@@ -94,7 +94,7 @@ func (um *UIManager) startSetupIssueCheck(profile domain.Profile, sig string) {
 	}
 	// Read on the UI thread: settings can write DocsBasePath while the compute runs.
 	docsBase := um.Config.DocsBasePath
-	go func() {
+	um.startAsync(func() {
 		issue := apppkg.ProfileSetupIssue(profile, docsBase)
 		um.setupIssues.store(profile.Name, sig, issue)
 		fyne.Do(func() {
@@ -105,5 +105,5 @@ func (um *UIManager) startSetupIssueCheck(profile domain.Profile, sig string) {
 				um.detailsRefresh()
 			}
 		})
-	}()
+	})
 }
