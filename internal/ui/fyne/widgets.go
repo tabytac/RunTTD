@@ -176,6 +176,8 @@ func newDialogCheck(label string, changed func(bool), onEscape, onEnter func()) 
 	return c
 }
 
+// Space is absent by design: stock widget.Check.TypedKey is an empty stub,
+// and Space already toggles the check via TypedRune(' ').
 func (c *dialogCheck) TypedKey(key *fyne.KeyEvent) {
 	if handleDialogKey(key, c.onEscape, c.onEnter) {
 		return
