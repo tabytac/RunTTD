@@ -49,10 +49,12 @@ func buildDefaultConfig() *domain.Config {
 	return domain.NewDefaultConfig(defaultConfigPaths())
 }
 
+func brokenConfigPath(path string) string { return path + ".broken" }
+
 // recoverCorruptConfig moves an unreadable config aside to <path>.broken
 // (overwriting any earlier one) so it is preserved but can't keep failing.
 func recoverCorruptConfig(path string) error {
-	broken := path + ".broken"
+	broken := brokenConfigPath(path)
 	os.Remove(broken)
 	return os.Rename(path, broken)
 }
@@ -86,13 +88,16 @@ func main() {
 		bootstrapFileLog = config.LogToFile
 	case errors.Is(err, os.ErrNotExist), errors.As(err, &parseErr):
 		// Missing OR corrupt config -> start from defaults. A corrupt file is moved
-		// aside to .broken first (preserved for recovery) so it can't keep failing;
-		// FirstRun then runs onboarding, signalling the reset without a dialog.
+		// aside to .broken first (preserved for recovery) so it can't keep failing.
 		if errors.As(err, &parseErr) {
+			broken := brokenConfigPath(configPath)
 			if recErr := recoverCorruptConfig(configPath); recErr != nil {
 				fatalStartup(fmt.Sprintf("Config at %s was unreadable and could not be backed up: %v", configPath, recErr))
 			}
-			fmt.Fprintf(os.Stderr, "Config at %s was unreadable; backed up to %s.broken and reset to defaults.\n", configPath, configPath)
+			fmt.Fprintf(os.Stderr, "Config at %s was unreadable; backed up to %s and reset to defaults.\n", configPath, broken)
+			detail := fmt.Sprintf("Your RunTTD configuration file could not be read, so it has been reset to defaults and setup will run again.\n\n"+
+				"The unreadable file was saved as:\n%s\n\nYou can copy your old settings out of it by hand if you want them back.", broken)
+			_ = zenity.Warning(detail, zenity.Title("RunTTD configuration reset"))
 		}
 
 		// Left unsaved on purpose: onboarding writes the config when it completes, so
