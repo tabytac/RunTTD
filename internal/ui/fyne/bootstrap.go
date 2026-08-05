@@ -158,18 +158,27 @@ func (um *UIManager) LogImportant(msg string) {
 	um.Logger.Append(msg)
 }
 
-// armAutoLaunch queues the configured startup profile through pendingLaunchIdx and suppresses auto-close for that one launch.
-func (um *UIManager) armAutoLaunch() {
-	if um.Config.AutoLaunchProfile == "" {
-		return
-	}
+// ArmLaunchProfile queues the named profile to launch as soon as the main view
+// appears. suppressAutoClose keeps the window open afterwards, which the startup
+// setting needs (closing instantly would lock the user out of the launcher) but a
+// deliberate --profile run does not.
+func (um *UIManager) ArmLaunchProfile(name string, suppressAutoClose bool) {
 	for i, p := range um.Config.Profiles {
-		if p.Name == um.Config.AutoLaunchProfile {
+		if p.Name == name {
 			um.pendingLaunchIdx = i
-			um.suppressAutoCloseOnce = true
+			um.suppressAutoCloseOnce = suppressAutoClose
 			return
 		}
 	}
+}
+
+// armAutoLaunch queues the configured startup profile through pendingLaunchIdx and suppresses auto-close for that one launch.
+func (um *UIManager) armAutoLaunch() {
+	// An already-armed launch is a --profile request, which outranks the setting.
+	if um.Config.AutoLaunchProfile == "" || um.pendingLaunchIdx >= 0 {
+		return
+	}
+	um.ArmLaunchProfile(um.Config.AutoLaunchProfile, true)
 }
 
 // Show renders either the first-run onboarding screen or standard profile panel depending on loaded configs
