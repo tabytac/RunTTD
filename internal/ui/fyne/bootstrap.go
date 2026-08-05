@@ -47,6 +47,7 @@ type UIManager struct {
 	settingsOnEscape    func()        // Escape on the settings overlay routes here (dirty -> discard-confirm)
 	blockingConfirm     *widget.PopUp // a confirm whose caller blocks on its response; raw overlay.Hide() would skip the callback and hang forever
 	blockingConfirmHide func()        // resolves blockingConfirm via the dialog's own Hide(), so Escape still answers "No"
+	confirmAction       func()        // the open confirm's Confirm(); Fyne's dialog buttons ignore Enter and take no focus
 	editorOverlay       *widget.PopUp // the open profile editor, for the scoped Escape handler; nil when closed
 	editorOnEscape      func()        // Escape on the editor overlay routes here (dirty -> discard-confirm)
 	libraryRescan       func()        // set by showLibraryView while it's the active view; the F5 accelerator's target, nil (no-op) elsewhere

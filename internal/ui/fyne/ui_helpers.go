@@ -53,12 +53,17 @@ func confirmWidthFor(msg string) float32 {
 // newConfirmDialog returns an unshown confirm with a centred, word-wrapping message.
 // The zero height leaves the height to the content, and a modal popup clamps both axes
 // to the canvas, so neither dimension can overflow a small window.
+// Callers must Show it: confirmAction is armed here, since Fyne offers no on-show hook.
 func (um *UIManager) newConfirmDialog(title, confirm, dismiss, msg string, callback func(bool)) *dialog.ConfirmDialog {
 	msgLabel := widget.NewLabel(msg)
 	msgLabel.Alignment = fyne.TextAlignCenter
 	msgLabel.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm(title, confirm, dismiss, msgLabel, callback, um.Window)
+	d := dialog.NewCustomConfirm(title, confirm, dismiss, msgLabel, func(ok bool) {
+		um.confirmAction = nil
+		callback(ok)
+	}, um.Window)
 	d.Resize(fyne.NewSize(confirmWidthFor(msg), 0))
+	um.confirmAction = d.Confirm
 	return d
 }
 

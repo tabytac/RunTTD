@@ -395,6 +395,17 @@ func (mv *mainView) refreshDetails() {
 	mv.detailsContainer.Refresh()
 }
 
+// newEmptyState stacks placeholder widgets down the middle of the list panel.
+// Spacers rather than NewCenter: a word-wrapping label's MinSize is only its own
+// padding, so a MinSize-based layout wraps the message one character wide.
+func newEmptyState(objects ...fyne.CanvasObject) *fyne.Container {
+	return container.NewVBox(
+		layout.NewSpacer(),
+		container.NewPadded(container.NewVBox(objects...)),
+		layout.NewSpacer(),
+	)
+}
+
 func (mv *mainView) updateEmptyState() {
 	switch {
 	case len(mv.um.Config.Profiles) == 0:
@@ -798,11 +809,10 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	headerRow := container.NewBorder(nil, nil, title, newBtn)
 	headerBand := NewThemedBox(ColorNameDetailHeader, container.NewPadded(headerRow))
 
-	// No-results state (search matched nothing).
-	mv.noResults = container.NewCenter(container.NewVBox(
+	mv.noResults = newEmptyState(
 		centeredLabel("No profiles match your search."),
 		mutedCenteredLabel("Press Esc to clear."),
-	))
+	)
 	mv.noResults.Hide()
 
 	// First-run state (no profiles exist yet).
@@ -810,11 +820,11 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		um.showProfileEditor(-1, true)
 	})
 	firstRunBtn.Importance = widget.HighImportance
-	mv.firstRun = container.NewCenter(container.NewVBox(
+	mv.firstRun = newEmptyState(
 		centeredLabel("No profiles yet."),
 		mutedCenteredLabel("Create your first profile to get started."),
 		container.NewCenter(firstRunBtn),
-	))
+	)
 	mv.firstRun.Hide()
 
 	mv.searchEntry.OnChanged = func(s string) {
@@ -936,6 +946,15 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				action()
 			}
 			return
+		}
+
+		// Fyne's confirm dialogs build plain buttons that ignore Enter and take no
+		// focus, so the default action has to be answered from here.
+		if event.Name == fyne.KeyReturn || event.Name == fyne.KeyEnter {
+			if um.confirmAction != nil && um.Window.Canvas().Overlays().Top() != nil {
+				um.confirmAction()
+				return
+			}
 		}
 
 		// F5 targets the library view (a separate full-screen view, not mainContent),

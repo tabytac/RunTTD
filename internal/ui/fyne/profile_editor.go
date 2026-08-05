@@ -853,9 +853,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		container.NewHBox(newgrfRadio.Container),
 		widget.NewSeparator(),
 		NewSectionTitle("Custom Command Line Arguments"),
+		applyExtraArgsCheck,
 		widget.NewLabel("Specify extra flags to pass to the OpenTTD executable:"),
 		extraArgsEntry,
-		applyExtraArgsCheck,
 	))
 	advancedTab := container.NewTabItemWithIcon("Advanced Options", theme.SettingsIcon(), advancedScroll)
 
