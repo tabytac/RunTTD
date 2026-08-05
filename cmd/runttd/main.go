@@ -64,9 +64,10 @@ Under --wait the game's own exit code is returned once it has started, so it can
 reuse any of those values. A run that never started always says why on stderr,
 which is the reliable way to tell the two apart.
 
-RunTTD is a windowed program, so an interactive prompt does not wait for it:
-output can appear after the prompt returns, and the exit code is only readable
-through something that waits, such as "start /wait RunTTD.exe ..." from cmd.
+RunTTD is a windowed program, so an interactive prompt does not wait for it and
+bare output can tangle with the prompt. Pipe for clean text, for example
+"RunTTD --help | more", and read an exit code through something that waits,
+such as "start /wait RunTTD.exe ..." from cmd.
 `
 
 // cliOptions is the parsed command line.
