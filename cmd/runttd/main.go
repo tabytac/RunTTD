@@ -29,7 +29,7 @@ var Version = "dev"
 // starting the game returns the game's own code instead, which may reuse these.
 const (
 	exitOK           = 0
-	exitUsage        = 1 // bad flags, a startup failure, or a game with no readable exit code
+	exitUsage        = 1 // invalid flags, a startup failure, or a game with no readable exit code
 	exitNoProfile    = 2 // --profile matched no profile, or more than one
 	exitProfileSetup = 3 // the profile's own setup (its custom executable folder) is unusable
 	exitVersion      = 4 // the version could not be resolved, downloaded, or located
@@ -53,10 +53,10 @@ Flags:
   --help                Print this message and exit.
 
 --profile on its own still opens the window and launches on startup, and takes
-precedence over a configured startup profile. Without --wait a headless run exits as soon
-as the game has started, matching the way RunTTD detaches it.
+precedence over a configured startup profile. Without --wait a headless run
+exits as soon as the game has started, matching the way RunTTD detaches it.
 
-Exit codes: 0 launched, 1 bad flags or startup failure, 2 no such profile,
+Exit codes: 0 launched, 1 invalid flags or a startup failure, 2 no such profile,
 3 profile setup problem, 4 download or version problem, 5 launch declined,
 6 OpenTTD did not start.
 
@@ -159,11 +159,11 @@ func namesOf(profiles []domain.Profile, idx []int) string {
 func headlessFailure(result app.LaunchResult) (int, string) {
 	switch result {
 	case app.LaunchProfileError:
-		return exitProfileSetup, "the profile's custom executable folder is unset or missing"
+		return exitProfileSetup, "the profile's custom executable folder is not set or does not exist"
 	case app.LaunchVersionError:
 		return exitVersion, "the requested version could not be resolved, downloaded, or located"
 	case app.LaunchCancelled:
-		return exitDeclined, "this version needs manual setup, so it was not downloaded without confirmation"
+		return exitDeclined, "this version needs manual setup, so it was not downloaded; launch it once from the window to confirm"
 	case app.LaunchStartError:
 		return exitNotStarted, "OpenTTD did not start"
 	case app.LaunchStarted:
@@ -347,9 +347,9 @@ func main() {
 		if errors.As(err, &parseErr) {
 			broken := brokenConfigPath(configPath)
 			if recErr := recoverCorruptConfig(configPath); recErr != nil {
-				fatalStartup(fmt.Sprintf("Config at %s was unreadable and could not be backed up: %v", configPath, recErr))
+				fatalStartup(fmt.Sprintf("Configuration at %s was unreadable and could not be backed up: %v", configPath, recErr))
 			}
-			fmt.Fprintf(os.Stderr, "Config at %s was unreadable; backed up to %s and reset to defaults.\n", configPath, broken)
+			fmt.Fprintf(os.Stderr, "Configuration at %s was unreadable; backed up to %s and reset to defaults.\n", configPath, broken)
 			detail := fmt.Sprintf("Your RunTTD configuration file could not be read, so it has been reset to defaults and setup will run again.\n\n"+
 				"The unreadable file was saved as:\n%s\n\nYou can copy your old settings out of it by hand if you want them back.", broken)
 			if interactive {
@@ -362,7 +362,7 @@ func main() {
 		config = buildDefaultConfig()
 		bootstrapFileLog = config.LogToFile
 	default:
-		fatalStartup(fmt.Sprintf("Startup failed while loading config: %v", err))
+		fatalStartup(fmt.Sprintf("Startup failed while loading the configuration: %v", err))
 	}
 
 	// 4. Initialise session logs using platform logger.

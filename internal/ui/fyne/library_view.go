@@ -117,7 +117,7 @@ func humanSize(b int64) string {
 var (
 	libGreen  = color.NRGBA{R: 61, G: 153, B: 61, A: 255}   // #3D993D
 	libAmber  = color.NRGBA{R: 230, G: 167, B: 0, A: 255}   // #E6A700
-	libGrey   = color.NRGBA{R: 120, G: 125, B: 130, A: 255} // neutral pill for "unrecognized"
+	libGrey   = color.NRGBA{R: 120, G: 125, B: 130, A: 255} // neutral pill for "unrecognised"
 	libChipFg = color.NRGBA{R: 255, G: 255, B: 255, A: 255} // white text on colored pills
 	dotRed    = color.NRGBA{R: 229, G: 57, B: 53, A: 255}   // #E53935 status-dot "not installed"
 )
@@ -291,7 +291,7 @@ func (um *UIManager) showLibraryView() {
 }
 
 // pluralVersions returns the singular/plural noun for a group header count
-// ("versions", or "folders" for the unrecognized group).
+// ("versions", or "folders" for the unrecognised group).
 // plural returns noun with an "s" appended unless n == 1.
 func plural(n int, noun string) string {
 	if n == 1 {
