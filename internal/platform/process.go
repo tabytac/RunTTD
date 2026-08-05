@@ -35,6 +35,25 @@ func ExecuteOpenTTD(
 	allowCompanyPassword bool,
 	obs ProcessObserver,
 ) bool {
+	started, _ := StartOpenTTD(ctx, versionFolder, profile, docsBasePath, allowCompanyPassword, obs)
+	return started
+}
+
+// neverStarted is the wait function handed back for a game that never ran.
+func neverStarted() int { return -1 }
+
+// StartOpenTTD starts the game and returns a wait function: it blocks until the
+// game exits and returns its exit code, or -1 if it never started or was
+// signalled. DETACHED_PROCESS only detaches the console, so the parent still
+// holds the handle a wait needs. Waiting is optional and repeatable.
+func StartOpenTTD(
+	ctx context.Context,
+	versionFolder string,
+	profile domain.Profile,
+	docsBasePath string,
+	allowCompanyPassword bool,
+	obs ProcessObserver,
+) (bool, func() int) {
 	var saveFile string
 
 	switch profile.LaunchMode {
@@ -68,11 +87,11 @@ func ExecuteOpenTTD(
 				exePath = appGlob[0]
 			} else {
 				obs.LogImportant(fmt.Sprintf("Executable not found in %s (also checked .app bundles)", versionFolder))
-				return false
+				return false, neverStarted
 			}
 		} else {
 			obs.LogImportant(fmt.Sprintf("Executable not found in %s", versionFolder))
-			return false
+			return false, neverStarted
 		}
 	}
 
@@ -93,7 +112,7 @@ func ExecuteOpenTTD(
 
 	if err := cmd.Start(); err != nil {
 		obs.LogImportant(fmt.Sprintf("Failed to start OpenTTD: %v", err))
-		return false
+		return false, neverStarted
 	}
 
 	obs.LogImportant("OpenTTD started successfully")
@@ -111,14 +130,23 @@ func ExecuteOpenTTD(
 			obs.LogVerbose("ERR: " + scanner.Text())
 		}
 	}()
+	exited := make(chan struct{})
+	exitCode := -1
 	go func() {
 		if err := cmd.Wait(); err != nil {
 			obs.LogImportant(fmt.Sprintf("OpenTTD exited with error: %v", err))
 		} else {
 			obs.LogVerbose("OpenTTD exited normally")
 		}
+		if cmd.ProcessState != nil {
+			exitCode = cmd.ProcessState.ExitCode()
+		}
+		close(exited) // publishes exitCode to every waiter, however late
 	}()
-	return true
+	return true, func() int {
+		<-exited
+		return exitCode
+	}
 }
 
 // ResolveProfileSavePath resolves a profile's save target the way launch does:
