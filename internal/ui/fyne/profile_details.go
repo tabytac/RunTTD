@@ -41,12 +41,23 @@ func (s *section) addField(label, value string, mono bool) {
 }
 
 func (s *section) addLongField(label, value string, mono bool) {
+	s.longField(label, value, mono, widget.MediumImportance)
+}
+
+// addMutedLongField renders a long field at low emphasis, for a value that is
+// configured but not currently applied; it stays visible and selectable.
+func (s *section) addMutedLongField(label, value string, mono bool) {
+	s.longField(label, value, mono, widget.LowImportance)
+}
+
+func (s *section) longField(label, value string, mono bool, importance widget.Importance) {
 	if strings.TrimSpace(value) == "" {
 		return
 	}
 	val := widget.NewLabel(value)
 	val.Wrapping = fyne.TextWrapWord
 	val.Selectable = true
+	val.Importance = importance
 	if mono {
 		val.TextStyle = fyne.TextStyle{Monospace: true}
 	}

@@ -389,7 +389,11 @@ func (mv *mainView) refreshDetails() {
 	}
 	adv.addField("NewGRF Loading", newGRFDesc(profile.NewGRFScanMode), false)
 	um.addPathField(adv, "Config", profile.ConfigFilePath, true)
-	adv.addLongField("Arguments", profile.ExtraArgs, true)
+	if profile.ExtraArgsDisabled {
+		adv.addMutedLongField("Arguments (disabled)", profile.ExtraArgs, true)
+	} else {
+		adv.addLongField("Arguments", profile.ExtraArgs, true)
+	}
 	adv.emit("Advanced", mv.detailsContainer)
 
 	mv.detailsContainer.Refresh()
