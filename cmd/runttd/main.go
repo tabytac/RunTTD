@@ -63,6 +63,10 @@ Exit codes: 0 launched, 1 bad flags or startup failure, 2 no such profile,
 Under --wait the game's own exit code is returned once it has started, so it can
 reuse any of those values. A run that never started always says why on stderr,
 which is the reliable way to tell the two apart.
+
+RunTTD is a windowed program, so an interactive prompt does not wait for it:
+output can appear after the prompt returns, and the exit code is only readable
+through something that waits, such as "start /wait RunTTD.exe ..." from cmd.
 `
 
 // cliOptions is the parsed command line.
@@ -296,6 +300,11 @@ func fatalProfile(msg string, logToFile bool, logPath string) {
 }
 
 func main() {
+	// Arguments mean console use; a plain double-click stays detached.
+	if len(os.Args) > 1 {
+		attachParentConsole()
+	}
+
 	opts, err := parseArgs(os.Args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
