@@ -71,6 +71,20 @@ func reorderProfiles(profiles []domain.Profile, from, to int) []domain.Profile {
 	return out
 }
 
+// restoredProfileName keeps a restored profile's name unique, which selection,
+// auto-launch and the startup marker all resolve by. A new profile can have taken
+// the name while the undo offer was up, and the editor forbids duplicates.
+func restoredProfileName(profiles []domain.Profile, base string) string {
+	if indexOfProfileByName(profiles, base) < 0 {
+		return base
+	}
+	candidate := base + " (restored)"
+	for n := 2; indexOfProfileByName(profiles, candidate) >= 0; n++ {
+		candidate = fmt.Sprintf("%s (restored %d)", base, n)
+	}
+	return candidate
+}
+
 // uniqueProfileName returns "base Copy", escalating to "base Copy (2)", "(3)"... on case-insensitive collision.
 func uniqueProfileName(profiles []domain.Profile, base string) string {
 	candidate := base + " Copy"
