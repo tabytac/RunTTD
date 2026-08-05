@@ -2,9 +2,7 @@ package fyne
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -231,225 +229,39 @@ func (um *UIManager) showLogView(profileIdx int) {
 	}
 }
 
-// reportLaunchResult surfaces whether ExecuteOpenTTD actually started the game,
-// instead of the previous unconditional "Launch command sent" regardless of outcome.
-func reportLaunchResult(started bool, updateStatus func(string), onError func()) {
-	if started {
-		if updateStatus != nil {
-			updateStatus("Launch command sent")
-		}
-		return
-	}
-	if updateStatus != nil {
-		updateStatus("Failed: OpenTTD did not start")
-	}
-	if onError != nil {
-		onError()
-	}
+// launchProfile adapts the app-layer pipeline to this UIManager. ctx governs
+// only the version-check and download/extract steps; cancelling it is how the
+// Cancel button works.
+func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, updateStatus func(status string), onProgress platform.ProgressFunc, onError func()) {
+	apppkg.LaunchProfile(ctx, profile, apppkg.LaunchDeps{
+		Config:           um.Config,
+		Logger:           um.Logger,
+		Observer:         um,
+		UpdateStatus:     updateStatus,
+		OnProgress:       onProgress,
+		OnError:          onError,
+		InvalidateCaches: func() { um.diskLookups.invalidate() },
+		Confirm:          um.confirmVeryOldVersion,
+	})
 }
 
-// launchProfile launches OpenTTD with the specified profile configuration and
-// logging observers. ctx governs only the version-check and download/extract
-// steps below (cancelling it is how the Cancel button works); every
-// ExecuteOpenTTD call site deliberately uses context.Background() instead, since
-// cancelling after the game has started would kill it via exec.CommandContext.
-func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, updateStatus func(status string), onProgress platform.ProgressFunc, onError func()) {
-	if updateStatus != nil {
-		updateStatus("Resolving profile and version")
-	}
-	um.LogImportant(fmt.Sprintf("Launching profile %q", profile.Name))
-	um.LogVerbose(fmt.Sprintf("Profile config: version=%q savePath=%q server=%q company=%q", profile.Version, profile.SavePath, profile.ServerIpPort, profile.ServerCompanyNumber))
-
-	requested := strings.TrimSpace(profile.Version)
-	version := requested
-	client := apppkg.EffectiveClient(profile.Client, um.Config.DefaultClient)
-
-	if client == "custom" {
-		folder := strings.TrimSpace(profile.CustomExecutablePath)
-		if folder == "" {
-			if updateStatus != nil {
-				updateStatus("Failed: custom executable folder is not set")
-			}
-			um.LogImportant("Custom client selected but no executable folder is configured.")
-			if onError != nil {
-				onError()
-			}
-			return
+// confirmVeryOldVersion asks whether to download a build that needs manual setup
+// and blocks until the user answers. Callers are background goroutines, so the
+// dialog is raised through fyne.Do.
+func (um *UIManager) confirmVeryOldVersion(message string) bool {
+	proceed := make(chan bool, 1)
+	fyne.Do(func() {
+		confirm := um.newConfirmDialog("Very Old OpenTTD Version", "Continue", "Cancel", message, func(ok bool) {
+			um.blockingConfirm, um.blockingConfirmHide = nil, nil
+			proceed <- ok
+		})
+		confirm.Show()
+		// Escape reaches only the raw overlay, whose Hide() skips this callback;
+		// route it through the dialog's own Hide() so proceed always gets a value.
+		if top, ok := um.Window.Canvas().Overlays().Top().(*widget.PopUp); ok {
+			um.blockingConfirm = top
+			um.blockingConfirmHide = confirm.Hide
 		}
-		if _, err := os.Stat(folder); err != nil {
-			if updateStatus != nil {
-				updateStatus("Failed: custom executable folder does not exist")
-			}
-			um.LogImportant(fmt.Sprintf("Custom executable folder not found: %s (%v)", folder, err))
-			if onError != nil {
-				onError()
-			}
-			return
-		}
-		um.LogVerbose(fmt.Sprintf("Using custom executable folder: %s", folder))
-		if updateStatus != nil {
-			updateStatus("Starting OpenTTD from custom folder")
-		}
-		// context.Background() here (not a cancellable ctx) is deliberate: once
-		// ExecuteOpenTTD's exec.CommandContext starts the game, cancelling would kill it.
-		started := platform.ExecuteOpenTTD(context.Background(), folder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
-		reportLaunchResult(started, updateStatus, onError)
-		return
-	}
-
-	isLatestRequest := apppkg.IsLatestVersion(requested)
-	latestTrack := apppkg.LatestTrack(client, requested)
-
-	if isLatestRequest {
-		if updateStatus != nil {
-			updateStatus(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
-		}
-		um.LogImportant(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
-		version = platform.CheckForNewVersionForClientTrack(ctx, client, um.Config, latestTrack)
-		if errors.Is(ctx.Err(), context.Canceled) {
-			// A cancel here must abort the whole launch, not fall back to
-			// launching whatever's already installed; that would be Cancel
-			// silently not cancelling, and the launch band would show a
-			// dishonest "Launched" straight after the user clicked Cancel.
-			um.LogImportant("Cancelled: version check was cancelled by the user.")
-			if updateStatus != nil {
-				updateStatus("Cancelled")
-			}
-			if onError != nil {
-				onError()
-			}
-			return
-		}
-		if version == "" {
-			// The remote lookup failed or returned nothing, typically because the
-			// download server is unreachable (offline). Skip the update check and
-			// fall back to launching the newest install already on disk.
-			um.LogImportant("Could not reach the download server to check for a newer version; falling back to the latest local install.")
-			if updateStatus != nil {
-				updateStatus("Update check unavailable (offline?), using latest local install")
-			}
-			// Highest-version install on this track (matches the online launch target
-			// and the status dot); NOT newest-by-mod-time, which a re-downloaded older build wins.
-			versionFolder := apppkg.HighestInstalledFolderInRoot(um.Config, client, latestTrack)
-			if versionFolder == "" {
-				if updateStatus != nil {
-					updateStatus("Failed: offline and no local install found for client")
-				}
-				um.LogImportant("No local install found for client, and the download server could not be reached.")
-				if onError != nil {
-					onError()
-				}
-				return
-			}
-			um.LogVerbose(fmt.Sprintf("Using latest local version folder: %s", versionFolder))
-			if updateStatus != nil {
-				updateStatus("Starting OpenTTD from latest local install")
-			}
-			started := platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
-			reportLaunchResult(started, updateStatus, onError)
-			return
-		}
-	}
-	if requested != "" && !isLatestRequest {
-		if updateStatus != nil {
-			updateStatus(fmt.Sprintf("Using requested %s version %s", client, version))
-		}
-		um.LogImportant(fmt.Sprintf("Using requested %s version %s", client, version))
-	}
-
-	if updateStatus != nil {
-		updateStatus("Looking for local version folder")
-	}
-	versionFolder := platform.FindVersionFolderClient(platform.ClientDownloadDir(um.Config, client), version, client, um.Config)
-	if versionFolder == "" {
-		if updateStatus != nil {
-			updateStatus("Version not found locally, downloading")
-		}
-		um.LogImportant(fmt.Sprintf("Version %s not found locally. Attempting to download for client %s.", version, client))
-		// Block until user confirms before downloading a pre-1.2.0 vanilla build (no bundled graphics).
-		if (client == "vanilla" || client == "vanilla-nightly") && platform.VanillaNeedsBaseSetWarning(version) {
-			proceed := make(chan bool, 1)
-			msg := fmt.Sprintf("OpenTTD %s needs manual setup before it will run through RunTTD. "+
-				"Versions before 1.2.0 don't include free graphics, so you'll need original "+
-				"Transport Tycoon Deluxe data files to play. Some old releases also predate builds for many systems.", version)
-			fyne.Do(func() {
-				confirm := um.newConfirmDialog("Very Old OpenTTD Version", "Continue", "Cancel", msg, func(ok bool) {
-					um.blockingConfirm, um.blockingConfirmHide = nil, nil
-					proceed <- ok
-				})
-				confirm.Show()
-				// Escape reaches only the raw overlay, whose Hide() skips this callback;
-				// route it through the dialog's own Hide() so proceed always gets a value.
-				if top, ok := um.Window.Canvas().Overlays().Top().(*widget.PopUp); ok {
-					um.blockingConfirm = top
-					um.blockingConfirmHide = confirm.Hide
-				}
-			})
-			if !<-proceed {
-				um.LogImportant(fmt.Sprintf("Cancelled: %s needs manual setup before it can run.", version))
-				if updateStatus != nil {
-					updateStatus("Cancelled (version needs manual setup)")
-				}
-				if onError != nil {
-					onError()
-				}
-				return
-			}
-		}
-		if !platform.DownloadAndExtractVersionForClientWithLogger(ctx, version, client, um.Config, um.Logger, onProgress) {
-			if errors.Is(ctx.Err(), context.Canceled) {
-				if updateStatus != nil {
-					updateStatus("Cancelled")
-				}
-				um.LogImportant(fmt.Sprintf("Cancelled: download of version %s was cancelled by the user.", version))
-			} else {
-				if updateStatus != nil {
-					updateStatus(fmt.Sprintf("Failed: download of version %s did not complete", version))
-				}
-				um.LogImportant(fmt.Sprintf("Failed to download version %s for client %s.", version, client))
-			}
-			if onError != nil {
-				onError()
-			}
-			return
-		}
-		// A new folder landed on disk; the dot cache's answers for this client are
-		// now stale regardless of which view (or none) is showing when this completes.
-		um.diskLookups.invalidate()
-		if updateStatus != nil {
-			updateStatus("Download complete, resolving extracted folder")
-		}
-		versionFolder = platform.FindVersionFolderClient(platform.ClientDownloadDir(um.Config, client), version, client, um.Config)
-		if versionFolder == "" {
-			if updateStatus != nil {
-				updateStatus("Failed: downloaded version folder could not be located")
-			}
-			um.LogImportant("Failed to locate downloaded version.")
-			if onError != nil {
-				onError()
-			}
-			return
-		}
-	}
-
-	// A cancel can land here with nothing left to interrupt (e.g. the version was
-	// already installed locally, so the download step above never even ran);
-	// check explicitly rather than launching anyway just because nothing failed.
-	if errors.Is(ctx.Err(), context.Canceled) {
-		um.LogImportant("Cancelled: launch was cancelled by the user before starting OpenTTD.")
-		if updateStatus != nil {
-			updateStatus("Cancelled")
-		}
-		if onError != nil {
-			onError()
-		}
-		return
-	}
-
-	um.LogVerbose(fmt.Sprintf("Using version folder: %s", versionFolder))
-	if updateStatus != nil {
-		updateStatus("Starting OpenTTD")
-	}
-	started := platform.ExecuteOpenTTD(context.Background(), versionFolder, profile, um.Config.DocsBasePath, apppkg.ClientSupportsCompanyPassword(client), um)
-	reportLaunchResult(started, updateStatus, onError)
+	})
+	return <-proceed
 }
