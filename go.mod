@@ -5,6 +5,7 @@ go 1.26
 require (
 	fyne.io/fyne/v2 v2.7.4
 	github.com/dweymouth/fyne-advanced-list v0.0.0-20250211191927-58ea85eec72c
+	github.com/go-ole/go-ole v1.3.0
 	github.com/ncruces/zenity v0.10.14
 	golang.org/x/mod v0.36.0
 )
