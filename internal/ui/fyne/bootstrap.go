@@ -50,6 +50,8 @@ type UIManager struct {
 	confirmAction       func()        // the open confirm's Confirm(); Fyne's dialog buttons ignore Enter and take no focus
 	editorOverlay       *widget.PopUp // the open profile editor, for the scoped Escape handler; nil when closed
 	editorOnEscape      func()        // Escape on the editor overlay routes here (dirty -> discard-confirm)
+	shortcutOverlay     *widget.PopUp // the open create-shortcut dialog; nil when closed
+	shortcutOnEscape    func()        // Escape on the shortcut overlay routes here, clearing the handles above
 	libraryRescan       func()        // set by showLibraryView while it's the active view; the F5 accelerator's target, nil (no-op) elsewhere
 	viewEscape          func()        // set by the full-screen library/log views; Escape's target while one is showing, nil (no-op) elsewhere
 	launchInProgress    bool          // the cross-path launch guard; mainView.launchInProgress is a per-view mirror

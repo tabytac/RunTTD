@@ -318,6 +318,13 @@ func (mv *mainView) refreshDetails() {
 			ColorName: theme.ColorNameForeground,
 		},
 	})
+	// Text-only: the + icon already means "new profile" in this view, and the
+	// auto-launch button directly below is text-only too.
+	shortcutBtn := widget.NewButton("Create Shortcut", func() {
+		um.showShortcutDialog(profile)
+	})
+	shortcutBtn.Importance = widget.LowImportance
+
 	verb, target := intentParts(profile)
 	intentSegs := []widget.RichTextSegment{&widget.TextSegment{
 		Text:  verb,
@@ -335,7 +342,12 @@ func (mv *mainView) refreshDetails() {
 	}
 	intent := widget.NewRichText(intentSegs...)
 	intent.Wrapping = fyne.TextWrapWord
-	header := container.NewVBox(name, intent)
+	// Border, not VBox: the button keeps its own width at the top right while the
+	// wrapping name and intent take the rest of the row.
+	header := container.NewVBox(
+		container.NewBorder(nil, nil, nil, container.NewVBox(shortcutBtn), name),
+		intent,
+	)
 	mv.detailsContainer.Add(NewThemedBox(ColorNameDetailHeader, container.NewPadded(header)))
 
 	// In-context auto-launch toggle; persists immediately, unlike the save-gated dialog.
@@ -773,6 +785,8 @@ func (um *UIManager) escapeOverlayAction(top fyne.CanvasObject) func() {
 		return um.settingsOnEscape
 	case top == um.editorOverlay && um.editorOnEscape != nil:
 		return um.editorOnEscape
+	case top == um.shortcutOverlay && um.shortcutOnEscape != nil:
+		return um.shortcutOnEscape
 	case top == um.blockingConfirm && um.blockingConfirmHide != nil:
 		return um.blockingConfirmHide
 	default:
