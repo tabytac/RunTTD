@@ -198,7 +198,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	customFolderEntry.SetPlaceHolder("Folder containing openttd executable")
 
 	var customFolderBtn *dialogButton
-	customFolderBtn = newDialogButton("Browse...", func() {
+	customFolderBtn = newDialogButton("Browse…", func() {
 		customFolderBtn.Disable()
 		um.browseDirectory(&customFolderEntry.Entry, "Select Custom Executable Folder", "Custom Executable Folder", customFolderBtn.Enable)
 	}, onEscape)
@@ -442,7 +442,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	// browseConfigBtn is declared via var/assign (not :=) so its own onTapped
 	// closure below can reference it to disable/re-enable itself around the picker.
 	var browseConfigBtn *dialogButton
-	browseConfigBtn = newDialogButton("Browse...", func() {
+	browseConfigBtn = newDialogButton("Browse…", func() {
 		browseConfigBtn.Disable() // stops a second picker stacking on top while this one is open
 		go func() {
 			defer fyne.Do(browseConfigBtn.Enable)
@@ -515,7 +515,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	updateFolderInstructions(autoLatestFilterRadio.Selected)
 
 	var browseFileBtn *dialogButton
-	browseFileBtn = newDialogButton("Browse File...", func() {
+	browseFileBtn = newDialogButton("Browse file…", func() {
 		browseFileBtn.Disable()
 		go func() {
 			defer fyne.Do(browseFileBtn.Enable)
@@ -547,7 +547,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	browseFileBtn.Icon = theme.FileIcon()
 
 	var browseFolderBtn *dialogButton
-	browseFolderBtn = newDialogButton("Browse Folder...", func() {
+	browseFolderBtn = newDialogButton("Browse folder…", func() {
 		browseFolderBtn.Disable()
 		go func() {
 			defer fyne.Do(browseFolderBtn.Enable)
@@ -865,10 +865,10 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	form := container.NewBorder(statusLabel, nil, nil, nil, tabs)
 
 	saveBtn = newDialogButton("Save", func() { saveProfile(false) }, onEscape)
-	saveAndRunBtn = newDialogButton("Save & Run", func() { saveProfile(true) }, onEscape)
+	saveAndRunBtn = newDialogButton("Save & run", func() { saveProfile(true) }, onEscape)
 	if isNew {
 		saveBtn.SetText("Create")
-		saveAndRunBtn.SetText("Create & Run")
+		saveAndRunBtn.SetText("Create & run")
 	}
 
 	// Dirty-state compares live widget values to a baseline snapshot, the same
@@ -940,9 +940,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}
 	updateState()
 
-	dialogTitle := "Edit Profile"
+	dialogTitle := "Edit profile"
 	if isNew {
-		dialogTitle = "Create Profile"
+		dialogTitle = "Create profile"
 	}
 	editDialog = NewModalDialog(um.Window.Canvas(), dialogTitle, form, cancelBtn, saveBtn, saveAndRunBtn)
 	editDialog.Resize(fyne.NewSize(850, 600))

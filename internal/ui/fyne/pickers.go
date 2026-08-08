@@ -101,7 +101,7 @@ func (um *UIManager) browseDirectory(entry *widget.Entry, title, logLabel string
 				})
 			}
 		}()
-		um.Logger.Append(fmt.Sprintf("Opening %s picker...", logLabel))
+		um.Logger.Append(fmt.Sprintf("Opening %s picker…", logLabel))
 		directory, err := zenity.SelectFile(
 			zenity.Directory(),
 			zenity.Title(title),

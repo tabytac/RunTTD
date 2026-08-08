@@ -177,7 +177,7 @@ func (um *UIManager) showLibraryView() {
 			empty.Alignment = fyne.TextAlignCenter
 			empty.Wrapping = fyne.TextWrapWord
 			listBox.Add(container.NewPadded(empty))
-			cleanupBtn.SetText("Clean Up Unused")
+			cleanupBtn.SetText("Clean up unused")
 			cleanupBtn.Disable()
 			listBox.Refresh()
 			return
@@ -215,7 +215,7 @@ func (um *UIManager) showLibraryView() {
 		} else {
 			summary.SetText(fmt.Sprintf("%d %s · %s total · none unused",
 				len(entries), plural(len(entries), "version"), humanSize(total)))
-			cleanupBtn.SetText("Clean Up Unused")
+			cleanupBtn.SetText("Clean up unused")
 			cleanupBtn.Disable()
 		}
 		listBox.Refresh()
@@ -238,7 +238,7 @@ func (um *UIManager) showLibraryView() {
 		}()
 	}
 
-	cleanupBtn = um.newLibraryButton("Clean Up Unused", func() {})
+	cleanupBtn = um.newLibraryButton("Clean up unused", func() {})
 	cleanupBtn.Importance = widget.DangerImportance
 	cleanupBtn.Disable()
 
@@ -381,7 +381,7 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), af
 	if len(e.ReferencedBy) > 0 {
 		msg += "\n\nWarning: used by profile(s): " + strings.Join(e.ReferencedBy, ", ")
 	}
-	confirmDlg := um.newConfirmDialog("Delete Installed Version", "Delete", "Cancel", msg, func(ok bool) {
+	confirmDlg := um.newConfirmDialog("Delete installed version", "Delete", "Cancel", msg, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -415,7 +415,7 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, busy func(boo
 		total += e.SizeBytes
 	}
 	msg := fmt.Sprintf("Remove %d unused version(s), freeing %s?%s", len(orphans), humanSize(total), list)
-	confirmDlg := um.newConfirmDialog("Clean Up Unused Versions", "Clean Up", "Cancel", msg, func(ok bool) {
+	confirmDlg := um.newConfirmDialog("Clean up unused versions", "Clean up", "Cancel", msg, func(ok bool) {
 		if !ok {
 			return
 		}

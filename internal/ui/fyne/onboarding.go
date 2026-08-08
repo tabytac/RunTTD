@@ -29,7 +29,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	parentDirEntry.SetPlaceHolder("Folder where OpenTTD game files / executables will be automatically installed")
 
 	var parentDirBtn *widget.Button
-	parentDirBtn = widget.NewButton("Browse...", func() {
+	parentDirBtn = widget.NewButton("Browse…", func() {
 		parentDirBtn.Disable()
 		um.browseDirectory(parentDirEntry, "Select Parent Directory", "Parent Directory", parentDirBtn.Enable)
 	})
@@ -44,7 +44,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	validationLabel.Hide()
 
 	var docsBasePathBtn *widget.Button
-	docsBasePathBtn = widget.NewButton("Browse...", func() {
+	docsBasePathBtn = widget.NewButton("Browse…", func() {
 		docsBasePathBtn.Disable()
 		um.browseDirectory(docsBasePathEntry, "Select Docs Base Path", "Docs Base Path", docsBasePathBtn.Enable)
 	})

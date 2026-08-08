@@ -320,7 +320,7 @@ func (mv *mainView) refreshDetails() {
 	})
 	// Text-only: the + icon already means "new profile" in this view, and the
 	// auto-launch button directly below is text-only too.
-	shortcutBtn := widget.NewButton("Create Shortcut", func() {
+	shortcutBtn := widget.NewButton("Create shortcut", func() {
 		um.showShortcutDialog(profile)
 	})
 	shortcutBtn.Importance = widget.LowImportance
@@ -486,7 +486,7 @@ func (mv *mainView) deleteSelected() {
 		return
 	}
 	profileName := um.Config.Profiles[mv.selectedIdx].Name
-	confirmDlg := um.newConfirmDialog("Delete Profile", "Delete", "Cancel",
+	confirmDlg := um.newConfirmDialog("Delete profile", "Delete", "Cancel",
 		fmt.Sprintf("Are you sure you want to delete profile %q?", profileName),
 		func(confirmed bool) {
 			if confirmed {
@@ -852,7 +852,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	mv.launchPhase.Wrapping = fyne.TextWrapWord
 	mv.launchBar = widget.NewProgressBar()
 	mv.launchSpin = widget.NewProgressBarInfinite()
-	mv.launchLogsBtn = widget.NewButton("View Logs", func() {
+	mv.launchLogsBtn = widget.NewButton("View logs", func() {
 		if mv.launchLogsIdx >= 0 {
 			um.showLogView(mv.launchLogsIdx)
 		}
@@ -901,7 +901,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	mv.duplicateBtn = widget.NewButton("Duplicate", mv.duplicateSelected)
 	mv.deleteBtn = widget.NewButton("Delete", mv.deleteSelected)
 
-	mv.runBtn = widget.NewButton("Run Selected", mv.runSelected)
+	mv.runBtn = widget.NewButton("Run selected", mv.runSelected)
 	mv.runBtn.Importance = widget.HighImportance
 
 	mv.seeLogsBtn = widget.NewButtonWithIcon("Logs", theme.DocumentIcon(), func() {
@@ -925,7 +925,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	)
 
 	mv.searchEntry = newSearchEntry()
-	mv.searchEntry.SetPlaceHolder("Search profiles...")
+	mv.searchEntry.SetPlaceHolder("Search profiles…")
 
 	// Header band: title, live total count, and the primary New action.
 	title := widget.NewRichText(&widget.TextSegment{
@@ -946,7 +946,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	mv.noResults.Hide()
 
 	// First-run state (no profiles exist yet).
-	firstRunBtn := widget.NewButtonWithIcon("New Profile", theme.ContentAddIcon(), func() {
+	firstRunBtn := widget.NewButtonWithIcon("New profile", theme.ContentAddIcon(), func() {
 		um.showProfileEditor(-1, true)
 	})
 	firstRunBtn.Importance = widget.HighImportance
@@ -1163,7 +1163,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		}
 	})
 
-	// A "Save & Run" from the editor defers its launch to here, so it goes through
+	// A "Save & run" from the editor defers its launch to here, so it goes through
 	// the normal path (AutoOpenLog + launch band) once this view is live.
 	if um.pendingLaunchIdx >= 0 {
 		idx := um.pendingLaunchIdx

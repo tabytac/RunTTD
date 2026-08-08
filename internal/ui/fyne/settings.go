@@ -257,7 +257,7 @@ func (um *UIManager) showSettingsView() {
 	parentDirEntry.Validate()
 
 	var parentDirBtn *dialogButton
-	parentDirBtn = newDialogButton("Browse...", func() {
+	parentDirBtn = newDialogButton("Browse…", func() {
 		parentDirBtn.Disable()
 		um.browseDirectory(&parentDirEntry.Entry, "Select Parent Directory", "Parent Directory (Settings)", parentDirBtn.Enable)
 	}, onEscape)
@@ -280,7 +280,7 @@ func (um *UIManager) showSettingsView() {
 	validationLabel.Hide()
 
 	var docsBasePathBtn *dialogButton
-	docsBasePathBtn = newDialogButton("Browse...", func() {
+	docsBasePathBtn = newDialogButton("Browse…", func() {
 		docsBasePathBtn.Disable()
 		um.browseDirectory(&docsBasePathEntry.Entry, "Select Docs Base Path", "Docs Base Path (Settings)", docsBasePathBtn.Enable)
 	}, onEscape)
@@ -556,7 +556,7 @@ func (um *UIManager) showSettingsView() {
 		}
 	}
 	commitSave = saveSettings
-	saveBtn := newDialogButton("Save Settings", saveSettings, onEscape)
+	saveBtn := newDialogButton("Save settings", saveSettings, onEscape)
 
 	statusLabel := widget.NewLabel("")
 	statusLabel.Wrapping = fyne.TextWrapWord
@@ -596,7 +596,7 @@ func (um *UIManager) showSettingsView() {
 
 	// Reset stages the factory defaults into the widgets (persisted only on Save);
 	// theme/accent persist immediately via applyAppearance (persist-on-click model).
-	resetBtn := newDialogButton("Reset to Defaults", func() {
+	resetBtn := newDialogButton("Reset to defaults", func() {
 		um.newConfirmDialog("Reset to defaults?", "Reset", "Cancel",
 			"Reset all settings to their defaults? Your profiles are not affected.",
 			func(ok bool) {
@@ -624,7 +624,7 @@ func (um *UIManager) showSettingsView() {
 
 	// statusLabel sits below the tabs (above the toolbar) so the blocking hint is visible from any tab.
 	content := container.NewBorder(nil, statusLabel, nil, nil, tabs)
-	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global Settings", content, resetBtn, cancelBtn, saveBtn)
+	settingsDialog = NewModalDialog(um.Window.Canvas(), "Global settings", content, resetBtn, cancelBtn, saveBtn)
 	// ModalPopUp isn't drag-resizable; this is the initial size, kept honest by the Border-centred scrolls.
 	settingsDialog.Resize(fyne.NewSize(760, 560))
 
@@ -632,7 +632,7 @@ func (um *UIManager) showSettingsView() {
 	um.settingsOverlay = settingsDialog
 	um.settingsOnEscape = cancelOrConfirm
 
-	titleLabel := findTitleLabel(settingsDialog.Content, "Global Settings")
+	titleLabel := findTitleLabel(settingsDialog.Content, "Global settings")
 	// refreshDirty reflects unsaved edits: Save turns high-importance and the title gains " *".
 	refreshDirty = func() {
 		dirty := isDirty()
@@ -644,9 +644,9 @@ func (um *UIManager) showSettingsView() {
 		saveBtn.Refresh()
 		if titleLabel != nil {
 			if dirty {
-				titleLabel.SetText("Global Settings *")
+				titleLabel.SetText("Global settings *")
 			} else {
-				titleLabel.SetText("Global Settings")
+				titleLabel.SetText("Global settings")
 			}
 		}
 	}

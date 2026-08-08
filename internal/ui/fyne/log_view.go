@@ -127,16 +127,16 @@ func (um *UIManager) showLogView(profileIdx int) {
 		um.viewEscape = nil
 		um.Window.SetContent(um.makeMainView())
 	}
-	closeBtn := newDialogButton("Back to Profiles", back, um.runViewEscape)
+	closeBtn := newDialogButton("Back to profiles", back, um.runViewEscape)
 
-	copyBtn := newDialogButton("Copy to Clipboard", func() {
+	copyBtn := newDialogButton("Copy to clipboard", func() {
 		um.App.Clipboard().SetContent(strings.Join(um.Logger.GetAll(), "\n"))
 		um.showToast("Logs copied to clipboard!")
 	}, um.runViewEscape)
 	copyBtn.Icon = theme.ContentCopyIcon()
 
-	clearBtn := newDialogButton("Clear Logs", func() {
-		confirmDlg := um.newConfirmDialog("Clear Logs?", "Clear", "Cancel",
+	clearBtn := newDialogButton("Clear logs", func() {
+		confirmDlg := um.newConfirmDialog("Clear logs?", "Clear", "Cancel",
 			"Remove all messages from this view? Any saved log file is left untouched.",
 			func(ok bool) {
 				if !ok {
@@ -185,7 +185,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 	if isLaunch {
 		if um.launchInProgress {
 			// The original launch is still running (this is a fresh showLogView,
-			// e.g. after "Back to Profiles" then Run again); um.launchCancel still
+			// e.g. after "Back to profiles" then Run again); um.launchCancel still
 			// targets it, so offer Cancel here too even though this view's own
 			// status/progress aren't wired to that goroutine.
 			um.showToast("A launch is already in progress")
@@ -251,7 +251,7 @@ func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, 
 func (um *UIManager) confirmVeryOldVersion(message string) bool {
 	proceed := make(chan bool, 1)
 	fyne.Do(func() {
-		confirm := um.newConfirmDialog("Very Old OpenTTD Version", "Continue", "Cancel", message, func(ok bool) {
+		confirm := um.newConfirmDialog("Very old OpenTTD version", "Continue", "Cancel", message, func(ok bool) {
 			um.blockingConfirm, um.blockingConfirmHide = nil, nil
 			proceed <- ok
 		})
