@@ -66,8 +66,15 @@ which is the reliable way to tell the two apart.
 
 RunTTD is a windowed program, so an interactive prompt does not wait for it and
 bare output can tangle with the prompt. Pipe for clean text, for example
-"RunTTD --help | more", and read an exit code through something that waits,
-such as "start /wait RunTTD.exe ..." from cmd.
+"RunTTD --help | more", and read an exit code through something that waits:
+
+  cmd         start /wait RunTTD.exe --headless --wait -p "My Profile"
+  PowerShell  (Start-Process .\RunTTD.exe -Wait -PassThru -ArgumentList
+                '--headless --wait -p "My Profile"').ExitCode
+
+Give PowerShell the arguments as one string rather than a list: a list is
+rejoined without quoting, so a profile name with a space in it arrives as two
+arguments and the second is rejected.
 `
 
 // cliOptions is the parsed command line.
