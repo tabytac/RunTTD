@@ -51,16 +51,37 @@ func (um *UIManager) hideLaunchCancel() {
 	}
 }
 
+// openingLaunchStatus is the status a log view opens on. A launch already in
+// flight is not restarted by opening this view, so its own progress is the
+// honest thing to show rather than a fixed opening line that never advances.
+func (um *UIManager) openingLaunchStatus(isLaunch bool) string {
+	if isLaunch && um.launchInProgress && um.launchStatus != "" {
+		return um.launchStatus
+	}
+	return "Preparing launch"
+}
+
+// launchViewProfileIdx redirects a log-view request to the launch already in
+// flight. Opening this view will not start the requested profile, so describing
+// it would caption one launch's logs with another launch's details.
+func (um *UIManager) launchViewProfileIdx(requested int) int {
+	if requested >= 0 && um.launchInProgress && um.launchProfileIdx >= 0 && um.launchProfileIdx < len(um.Config.Profiles) {
+		return um.launchProfileIdx
+	}
+	return requested
+}
+
 // showLogView shows a screen with live logs while launching a profile or in standalone mode
 func (um *UIManager) showLogView(profileIdx int) {
 	var profile domain.Profile
 	isLaunch := profileIdx >= 0
+	profileIdx = um.launchViewProfileIdx(profileIdx)
 	if isLaunch {
 		profile = um.Config.Profiles[profileIdx]
 	}
 
 	statusBinding := binding.NewString()
-	_ = statusBinding.Set("Preparing launch")
+	_ = statusBinding.Set(um.openingLaunchStatus(isLaunch))
 
 	var summaryObj fyne.CanvasObject
 	if isLaunch {
