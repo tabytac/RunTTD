@@ -56,13 +56,19 @@ Flags:
 precedence over a configured startup profile. Without --wait a headless run
 exits as soon as the game has started, matching the way RunTTD detaches it.
 
-Exit codes: 0 launched, 1 invalid flags or a startup failure, 2 no such profile,
-3 profile setup problem, 4 download or version problem, 5 launch declined,
-6 OpenTTD did not start.
+Exit codes:
+  0  launched
+  1  invalid flags, a startup failure, or a game that ended without a code
+  2  no such profile, an ambiguous name, or setup not finished
+  3  profile setup problem
+  4  download or version problem
+  5  launch declined
+  6  OpenTTD did not start
 
 Under --wait the game's own exit code is returned once it has started, so it can
-reuse any of those values. A run that never started always says why on stderr,
-which is the reliable way to tell the two apart.
+reuse any of those values. Every run that fails to start says why on stderr; the
+only started run that also writes to stderr is the game-ended-without-a-code
+case above, which is why that one shares code 1.
 
 RunTTD is a windowed program, so an interactive prompt does not wait for it and
 bare output can tangle with the prompt. Pipe for clean text, for example
