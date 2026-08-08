@@ -15,11 +15,24 @@ import (
 )
 
 // showError displays a plain-message error dialog on the main window.
-func (um *UIManager) showError(msg string) { dialog.ShowError(errors.New(msg), um.Window) }
+func (um *UIManager) showError(msg string) { um.showErrorDialog(errors.New(msg)) }
 
 // showErrorf displays an error dialog from a format string (use %w to keep a wrapped cause).
 func (um *UIManager) showErrorf(format string, a ...any) {
-	dialog.ShowError(fmt.Errorf(format, a...), um.Window)
+	um.showErrorDialog(fmt.Errorf(format, a...))
+}
+
+// showErrorDialog shows err and arms Enter to dismiss it. Fyne's error dialog
+// leaves its button unfocused, so Enter would otherwise fall through to the
+// canvas and die, unlike every confirm in the app.
+func (um *UIManager) showErrorDialog(err error) {
+	d := dialog.NewError(err, um.Window)
+	um.confirmAction = func() {
+		um.confirmAction = nil
+		d.Hide()
+	}
+	d.SetOnClosed(func() { um.confirmAction = nil })
+	d.Show()
 }
 
 const (

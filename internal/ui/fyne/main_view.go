@@ -52,14 +52,14 @@ type mainView struct {
 	launchPhase      *widget.Label
 	launchBar        *widget.ProgressBar
 	launchSpin       *widget.ProgressBarInfinite
-	launchLogsBtn    *widget.Button
-	cancelBtn        *widget.Button
+	launchLogsBtn    *viewButton
+	cancelBtn        *viewButton
 	launchBand       *ThemedBox
-	runBtn           *widget.Button
-	editBtn          *widget.Button
-	duplicateBtn     *widget.Button
-	deleteBtn        *widget.Button
-	seeLogsBtn       *widget.Button
+	runBtn           *viewButton
+	editBtn          *viewButton
+	duplicateBtn     *viewButton
+	deleteBtn        *viewButton
+	seeLogsBtn       *viewButton
 	searchEntry      *searchEntry
 	noResults        *fyne.Container
 	firstRun         *fyne.Container
@@ -374,7 +374,7 @@ func (mv *mainView) refreshDetails() {
 	name.Wrapping = fyne.TextWrapWord
 	// Text-only: the + icon already means "new profile" in this view, and the
 	// auto-launch button directly below is text-only too.
-	shortcutBtn := widget.NewButton("Create shortcut", func() {
+	shortcutBtn := um.newViewButton("Create shortcut", func() {
 		um.showShortcutDialog(profile)
 	})
 	shortcutBtn.Importance = widget.LowImportance
@@ -406,7 +406,7 @@ func (mv *mainView) refreshDetails() {
 
 	// In-context auto-launch toggle; persists immediately, unlike the save-gated dialog.
 	isStartup := profile.Name == um.Config.AutoLaunchProfile && um.Config.AutoLaunchProfile != ""
-	autoBtn := widget.NewButton("", nil)
+	autoBtn := um.newViewButton("", nil)
 	if isStartup {
 		autoBtn.SetText("★ Launches on startup · click to turn off")
 		autoBtn.Importance = widget.HighImportance
@@ -906,13 +906,13 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	mv.launchPhase.Wrapping = fyne.TextWrapWord
 	mv.launchBar = widget.NewProgressBar()
 	mv.launchSpin = widget.NewProgressBarInfinite()
-	mv.launchLogsBtn = widget.NewButton("View logs", func() {
+	mv.launchLogsBtn = um.newViewButton("View logs", func() {
 		if mv.launchLogsIdx >= 0 {
 			um.showLogView(mv.launchLogsIdx)
 		}
 	})
 	mv.launchLogsBtn.Importance = widget.LowImportance
-	mv.cancelBtn = widget.NewButton("Cancel", func() {
+	mv.cancelBtn = um.newViewButton("Cancel", func() {
 		if mv.launchCancel != nil {
 			mv.launchCancel()
 		}
@@ -940,35 +940,35 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	mv.recomputeVisible()
 	mv.buildProfileList()
 
-	newBtn := widget.NewButtonWithIcon("New", theme.ContentAddIcon(), func() {
+	newBtn := um.newViewIconButton("New", theme.ContentAddIcon(), func() {
 		um.showProfileEditor(-1, true)
 	})
 	newBtn.Importance = widget.HighImportance
 
-	mv.editBtn = widget.NewButton("Edit", func() {
+	mv.editBtn = um.newViewButton("Edit", func() {
 		if mv.selectedIdx >= 0 {
 			um.showProfileEditor(mv.selectedIdx, false)
 		} else {
 			um.showError("select a profile to edit")
 		}
 	})
-	mv.duplicateBtn = widget.NewButton("Duplicate", mv.duplicateSelected)
-	mv.deleteBtn = widget.NewButton("Delete", mv.deleteSelected)
+	mv.duplicateBtn = um.newViewButton("Duplicate", mv.duplicateSelected)
+	mv.deleteBtn = um.newViewButton("Delete", mv.deleteSelected)
 
-	mv.runBtn = widget.NewButton("Run selected", mv.runSelected)
+	mv.runBtn = um.newViewButton("Run selected", mv.runSelected)
 	mv.runBtn.Importance = widget.HighImportance
 
-	mv.seeLogsBtn = widget.NewButtonWithIcon("Logs", theme.DocumentIcon(), func() {
+	mv.seeLogsBtn = um.newViewIconButton("Logs", theme.DocumentIcon(), func() {
 		um.showLogView(-1)
 	})
 	mv.seeLogsBtn.Importance = widget.LowImportance
 
-	manageInstallsBtn := widget.NewButtonWithIcon("Installs", theme.StorageIcon(), func() {
+	manageInstallsBtn := um.newViewIconButton("Installs", theme.StorageIcon(), func() {
 		um.showLibraryView()
 	})
 	manageInstallsBtn.Importance = widget.LowImportance
 
-	settingsBtn := widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() {
+	settingsBtn := um.newViewIconButton("Settings", theme.SettingsIcon(), func() {
 		um.showSettingsView()
 	})
 	settingsBtn.Importance = widget.LowImportance
@@ -1000,7 +1000,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	mv.noResults.Hide()
 
 	// First-run state (no profiles exist yet).
-	firstRunBtn := widget.NewButtonWithIcon("New profile", theme.ContentAddIcon(), func() {
+	firstRunBtn := um.newViewIconButton("New profile", theme.ContentAddIcon(), func() {
 		um.showProfileEditor(-1, true)
 	})
 	firstRunBtn.Importance = widget.HighImportance
@@ -1015,7 +1015,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	// swallow the click that has to reach Undo.
 	mv.undoLabel = widget.NewLabel("")
 	mv.undoLabel.Wrapping = fyne.TextWrapWord
-	undoBtn := widget.NewButton("Undo", mv.undoDelete)
+	undoBtn := um.newViewButton("Undo", mv.undoDelete)
 	undoBtn.Importance = widget.HighImportance
 	mv.undoBand = NewThemedBox(ColorNameDetailHeader, container.NewPadded(
 		container.NewBorder(nil, nil, nil, undoBtn, mv.undoLabel),
@@ -1043,6 +1043,13 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	// clicks elsewhere: Fyne routes keys to the focused widget OR the canvas, never
 	// both, so this Entry keeping focus would otherwise swallow every later key.
 	mv.searchEntry.onEscape = mv.clearSearch
+	// The hint under the list promises Enter launches the selection; typing a
+	// filter should not be the one place that stops being true.
+	mv.searchEntry.onEnter = func() {
+		if mv.selectionSurvivesFilter() {
+			mv.runSelected()
+		}
+	}
 	mv.updateEmptyState()
 
 	dragHint := widget.NewLabel("Drag rows to reorder")
@@ -1121,8 +1128,8 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	headerLabel := widget.NewLabel("RunTTD")
 	headerLabel.TextStyle = fyne.TextStyle{Bold: true}
 	titleBox := container.NewHBox(headerLabel, mutedLabel(versionCaption(um.Version)))
-	var themeToggleBtn *widget.Button
-	themeToggleBtn = widget.NewButtonWithIcon("", theme.ColorPaletteIcon(), func() {
+	var themeToggleBtn *viewButton
+	themeToggleBtn = um.newViewIconButton("", theme.ColorPaletteIcon(), func() {
 		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(themeToggleBtn)
 		pos.Y += themeToggleBtn.Size().Height
 		um.showThemeCustomizer(pos)
@@ -1137,7 +1144,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	um.startUpdateCheck(headerRight)
 
 	mainContent := container.NewBorder(header, nil, nil, nil, split)
-	um.Window.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
+	handleKey := func(event *fyne.KeyEvent) {
 		if event.Name == fyne.KeyEscape {
 			if action := um.escapeAction(); action != nil {
 				action()
@@ -1186,7 +1193,9 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 				mv.runSelected()
 			}
 		}
-	})
+	}
+	um.Window.Canvas().SetOnTypedKey(handleKey)
+	um.viewKeys = handleKey // a focused viewButton hands back what it did not use
 
 	// Modifier-combo accelerators: Canvas.AddShortcut fires regardless of focus for
 	// any focused widget that isn't Shortcutable (Button/Select/Check/List all
@@ -1260,7 +1269,7 @@ func (um *UIManager) startUpdateCheck(headerRight *fyne.Container) {
 // (left of the theme button) that opens the release page when clicked. Must be
 // called on the main goroutine (inside fyne.Do or a UI callback).
 func (um *UIManager) addUpdatePill(headerRight *fyne.Container, tag, releaseURL string) {
-	pill := widget.NewButton("↻  Update to "+tag, func() {
+	pill := um.newViewButton("↻  Update to "+tag, func() {
 		if u, perr := neturl.Parse(releaseURL); perr == nil {
 			if err := fyne.CurrentApp().OpenURL(u); err != nil {
 				um.Logger.Append(fmt.Sprintf("could not open the release page for %s: %v", tag, err))
@@ -1340,7 +1349,7 @@ func (um *UIManager) showThemeCustomizer(pos fyne.Position) {
 		rect.CornerRadius = 4
 		colorButtons[idx] = rect
 
-		btn := widget.NewButton("", func() {
+		btn := um.newViewButton("", func() {
 			apply(um.Config.ThemeVariant, idx)
 			updateButtons()
 		})

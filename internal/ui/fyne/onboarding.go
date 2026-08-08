@@ -23,18 +23,23 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	subtitle := NewSectionDescription("Confirm your installation folders and preferences to get started.")
 	subtitle.Alignment = fyne.TextAlignCenter
 
+	// Every field's Enter routes here; the action itself is defined once the
+	// widgets it reads exist.
+	var tryContinue func()
+	onEnter := func() { tryContinue() }
+
 	// --- Installation paths ---
-	parentDirEntry := widget.NewEntry()
+	parentDirEntry := newDialogEntry(nil, onEnter)
 	parentDirEntry.SetText(um.Config.ParentDir)
 	parentDirEntry.SetPlaceHolder("Folder where OpenTTD game files / executables will be automatically installed")
 
-	var parentDirBtn *widget.Button
-	parentDirBtn = widget.NewButton("Browse…", func() {
+	var parentDirBtn *dialogButton
+	parentDirBtn = newDialogButton("Browse…", func() {
 		parentDirBtn.Disable()
-		um.browseDirectory(parentDirEntry, "Select Parent Directory", "Parent Directory", parentDirBtn.Enable)
-	})
+		um.browseDirectory(&parentDirEntry.Entry, "Select Parent Directory", "Parent Directory", parentDirBtn.Enable)
+	}, nil)
 
-	docsBasePathEntry := widget.NewEntry()
+	docsBasePathEntry := newDialogEntry(nil, onEnter)
 	docsBasePathEntry.SetText(um.Config.DocsBasePath)
 	docsBasePathEntry.SetPlaceHolder("Folder where your saves and configuration (openttd.cfg) are stored")
 
@@ -43,15 +48,15 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 	validationLabel := mutedLabel("")
 	validationLabel.Hide()
 
-	var docsBasePathBtn *widget.Button
-	docsBasePathBtn = widget.NewButton("Browse…", func() {
+	var docsBasePathBtn *dialogButton
+	docsBasePathBtn = newDialogButton("Browse…", func() {
 		docsBasePathBtn.Disable()
-		um.browseDirectory(docsBasePathEntry, "Select Docs Base Path", "Docs Base Path", docsBasePathBtn.Enable)
-	})
+		um.browseDirectory(&docsBasePathEntry.Entry, "Select Docs Base Path", "Docs Base Path", docsBasePathBtn.Enable)
+	}, nil)
 
 	// --- Preferences ---
 	// Default Client is required: starts unselected (unless config has one) and gates Continue below.
-	defaultClientSelect := widget.NewSelect(defaultClientOptions, func(string) {})
+	defaultClientSelect := newDialogSelect(defaultClientOptions, func(string) {}, nil, onEnter)
 	if label, ok := revDefaultClientMap[um.Config.DefaultClient]; ok {
 		defaultClientSelect.SetSelected(label)
 	}
@@ -79,7 +84,7 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 			defaultClientSelect.Selected != ""
 	}
 
-	continueBtn := widget.NewButton("Continue", func() {
+	continueBtn := newDialogButton("Continue", func() {
 		if !validate() {
 			return
 		}
@@ -102,8 +107,20 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		}
 
 		um.Window.SetContent(um.makeMainView())
-	})
+	}, nil)
 	continueBtn.Importance = widget.HighImportance
+	// Enter from anywhere on the screen, including with nothing focused, which is
+	// how the view opens: there is no other view to inherit a key handler from.
+	tryContinue = func() {
+		if !continueBtn.Disabled() {
+			continueBtn.OnTapped()
+		}
+	}
+	um.Window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		if ev.Name == fyne.KeyReturn || ev.Name == fyne.KeyEnter {
+			tryContinue()
+		}
+	})
 
 	// Debounced: os.Stat runs 300ms after typing pauses, off the UI thread, since
 	// the path can be an unreachable network share (cancel-and-reset, not just a

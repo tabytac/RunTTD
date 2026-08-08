@@ -189,9 +189,15 @@ func (um *UIManager) buildAppearanceTab() fyne.CanvasObject {
 		rect.CornerRadius = 4
 		colorButtons[idx] = rect
 
-		btn := widget.NewButton("", func() {
+		// A bare button here would swallow Escape just by holding focus, unlike the
+		// Light/Dark control directly above it.
+		btn := newDialogButton("", func() {
 			um.applyAppearance(um.Config.ThemeVariant, idx)
 			updateButtons()
+		}, func() {
+			if um.settingsOnEscape != nil {
+				um.settingsOnEscape()
+			}
 		})
 		btn.Importance = widget.LowImportance
 

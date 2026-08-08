@@ -38,10 +38,47 @@ func (b *rightClickButton) TypedKey(ev *fyne.KeyEvent) {
 	b.Button.TypedKey(ev)
 }
 
-// searchEntry is an Entry that invokes onEscape when Escape is pressed.
+// viewButton is a Button for the profile view that hands back the keys it does
+// not use. Fyne delivers a key to the focused widget or the canvas but never
+// both, so a Tab-focused stock button silently eats the view's accelerators:
+// the quick-launch digits, Delete, F5 and Escape all die on it.
+type viewButton struct {
+	widget.Button
+	onKey func(*fyne.KeyEvent)
+}
+
+func (um *UIManager) newViewButton(label string, tapped func()) *viewButton {
+	return um.newViewIconButton(label, nil, tapped)
+}
+
+func (um *UIManager) newViewIconButton(label string, icon fyne.Resource, tapped func()) *viewButton {
+	b := &viewButton{onKey: um.routeViewKey}
+	b.Text = label
+	b.Icon = icon
+	b.OnTapped = tapped
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func (b *viewButton) TypedKey(key *fyne.KeyEvent) {
+	switch key.Name {
+	case fyne.KeyReturn, fyne.KeyEnter:
+		b.Tapped(nil) // activating the focused button beats the view's Enter-to-launch
+		return
+	case fyne.KeySpace:
+		b.Button.TypedKey(key)
+		return
+	}
+	if b.onKey != nil {
+		b.onKey(key)
+	}
+}
+
+// searchEntry is an Entry that invokes onEscape when Escape is pressed, and
+// onEnter for Enter, which the on-screen hint promises launches the selection.
 type searchEntry struct {
 	widget.Entry
-	onEscape func()
+	onEscape, onEnter func()
 }
 
 func newSearchEntry() *searchEntry {
@@ -51,9 +88,17 @@ func newSearchEntry() *searchEntry {
 }
 
 func (e *searchEntry) TypedKey(key *fyne.KeyEvent) {
-	if key.Name == fyne.KeyEscape && e.onEscape != nil {
-		e.onEscape()
-		return
+	switch key.Name {
+	case fyne.KeyEscape:
+		if e.onEscape != nil {
+			e.onEscape()
+			return
+		}
+	case fyne.KeyReturn, fyne.KeyEnter:
+		if e.onEnter != nil {
+			e.onEnter()
+			return
+		}
 	}
 	e.Entry.TypedKey(key)
 }
