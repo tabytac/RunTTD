@@ -790,7 +790,13 @@ func (um *UIManager) escapeOverlayAction(top fyne.CanvasObject) func() {
 	case top == um.blockingConfirm && um.blockingConfirmHide != nil:
 		return um.blockingConfirmHide
 	default:
-		return top.Hide
+		// A raw Hide skips the dialog's own callback, so a confirm dismissed here
+		// would leave its affirmative action armed and answer the next overlay's
+		// Enter instead of its own.
+		return func() {
+			um.confirmAction = nil
+			top.Hide()
+		}
 	}
 }
 
