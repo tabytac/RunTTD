@@ -459,7 +459,8 @@ func (um *UIManager) showSettingsView() {
 	networkContent := container.NewVBox(
 		NewSectionHeader("Download Sources"),
 		mirrorBanner,
-		NewLabeledField("Vanilla Releases CDN base URL", "Where stable releases are fetched from.", vanillaMirrorEntry),
+		NewLabeledField("Vanilla Releases CDN base URL",
+			"Where vanilla releases, including betas and release candidates, are fetched from.", vanillaMirrorEntry),
 		NewLabeledField("Vanilla Nightly CDN base URL", "Where nightly builds are fetched from.", nightlyMirrorEntry),
 		NewLabeledField("JGRPP GitHub API URL", "Where JGR's Patchpack releases are looked up.", jgrppApiUrlEntry),
 		NewSectionHeader("System"),

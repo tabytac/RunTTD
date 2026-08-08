@@ -108,7 +108,7 @@ func (um *UIManager) addPathField(s *section, label, value string, isFile bool) 
 		}
 		if err != nil {
 			um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", value, err))
-			um.showErrorf("couldn't open the location: %w", err)
+			um.showErrorf("could not open the folder: %w", err)
 		}
 	})
 	btn.Importance = widget.LowImportance

@@ -75,7 +75,7 @@ func (um *UIManager) newConfirmDialog(title, confirm, dismiss, msg string, callb
 // dialog above already told the user.
 func (um *UIManager) saveConfigOrWarn() bool {
 	if err := domain.SaveConfig(um.ConfigPath, um.Config); err != nil {
-		um.showErrorf("could not save to %s: %w", um.ConfigPath, err)
+		um.showErrorf("could not save your changes to %s: %w", um.ConfigPath, err)
 		return false
 	}
 	return true

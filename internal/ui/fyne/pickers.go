@@ -97,7 +97,7 @@ func (um *UIManager) browseDirectory(entry *widget.Entry, title, logLabel string
 			if r := recover(); r != nil {
 				um.Logger.Append(fmt.Sprintf("CRITICAL: Zenity panicked: %v", r))
 				fyne.Do(func() {
-					um.showErrorf("could not open the %s picker: %v", logLabel, r)
+					um.showErrorf("could not open the folder picker: %v", r)
 				})
 			}
 		}()
@@ -113,7 +113,7 @@ func (um *UIManager) browseDirectory(entry *widget.Entry, title, logLabel string
 		}
 		if err != nil {
 			fyne.Do(func() {
-				um.showErrorf("could not open the %s picker: %w", logLabel, err)
+				um.showErrorf("could not open the folder picker: %w", err)
 			})
 			return
 		}
