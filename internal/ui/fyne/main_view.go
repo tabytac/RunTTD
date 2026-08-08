@@ -175,6 +175,7 @@ func (mv *mainView) launchIndex(idx int) {
 
 	profile := um.Config.Profiles[idx]
 	mv.launchLogsIdx = idx
+	um.launchProfileIdx = idx
 
 	// Reset the band to a fresh "working" state (marquee until download starts).
 	mv.launchLogsBtn.Hide()
@@ -182,7 +183,7 @@ func (mv *mainView) launchIndex(idx int) {
 	mv.launchSpin.Show()
 	mv.launchPhase.Importance = widget.MediumImportance
 	mv.launchPhase.TextStyle = fyne.TextStyle{}
-	mv.launchPhase.SetText("Starting " + profile.Name)
+	um.publishLaunchStatus("Starting " + profile.Name)
 	mv.launchBand.Show()
 	mv.launchBand.Refresh()
 	mv.runBtn.Disable()
@@ -197,43 +198,14 @@ func (mv *mainView) launchIndex(idx int) {
 	go func() {
 		defer fyne.Do(func() {
 			um.launchInProgress = false
-			mv.launchInProgress = false
 			cancel()
-			mv.launchCancel = nil
 			um.launchCancel = nil
-			mv.cancelBtn.Hide()
 			um.hideLaunchCancel() // a log view opened over this launch has its own Cancel showing
-			mv.launchSpin.Hide()
-			mv.launchBar.Hide()
-			mv.runBtn.Enable()
-			mv.updateButtonStates()
-			if failed {
-				mv.launchPhase.Importance = widget.DangerImportance
-				mv.launchPhase.SetText(strings.TrimPrefix(mv.launchPhase.Text, "Failed: "))
-				mv.launchPhase.Refresh()
-				mv.launchLogsBtn.Show()
-				return
-			}
-			mv.launchPhase.Importance = widget.MediumImportance
-			mv.launchPhase.TextStyle = fyne.TextStyle{Bold: true}
-			mv.launchPhase.SetText("Launched " + profile.Name)
-			mv.launchPhase.Refresh()
-			if um.profileListRefresh != nil {
-				um.profileListRefresh() // launchProfile already invalidated the disk cache on a fresh download
-			}
-			gen := mv.launchGen
-			go func() {
-				time.Sleep(6000 * time.Millisecond)
-				fyne.Do(func() {
-					if mv.shouldAutoHide(gen) {
-						mv.launchBand.Hide()
-					}
-				})
-			}()
+			um.finishLaunch(failed, profile.Name)
 		})
 		um.launchProfile(ctx, profile,
 			func(status string) {
-				fyne.Do(func() { mv.launchPhase.SetText(status) })
+				fyne.Do(func() { um.publishLaunchStatus(status) })
 			},
 			func(done, total int64) {
 				if total <= 0 {
@@ -243,7 +215,7 @@ func (mv *mainView) launchIndex(idx int) {
 					fyne.Do(func() {
 						mv.launchBar.Hide()
 						mv.launchSpin.Show()
-						mv.launchPhase.SetText("Extracting (this can take a moment for large installs)")
+						um.publishLaunchStatus("Extracting (this can take a moment for large installs)")
 						mv.cancelBtn.Hide() // extraction isn't cancellable; stop offering to
 					})
 					return
@@ -262,6 +234,71 @@ func (mv *mainView) launchIndex(idx int) {
 			func() { failed = true },
 		)
 	}()
+}
+
+// finishLaunch settles the band and buttons once a launch ends. It runs on
+// whichever view is on screen, which is not always the one that started the
+// launch: saving an edit or returning from the library rebuilds the view while
+// the launch goroutine carries on.
+func (mv *mainView) finishLaunch(failed bool, profileName string) {
+	um := mv.um
+	mv.launchInProgress = false
+	mv.launchCancel = nil
+	mv.cancelBtn.Hide()
+	mv.launchSpin.Hide()
+	mv.launchBar.Hide()
+	mv.runBtn.Enable()
+	mv.updateButtonStates()
+	if failed {
+		// A cancel arrives on the same channel as a failure, but the user asked for
+		// it: red and an invitation to read the logs would be alarming.
+		if !strings.HasPrefix(mv.launchPhase.Text, "Cancelled") {
+			mv.launchPhase.Importance = widget.DangerImportance
+			mv.launchLogsBtn.Show()
+		}
+		mv.launchPhase.SetText(strings.TrimPrefix(mv.launchPhase.Text, "Failed: "))
+		mv.launchPhase.Refresh()
+		return
+	}
+	mv.launchPhase.Importance = widget.MediumImportance
+	mv.launchPhase.TextStyle = fyne.TextStyle{Bold: true}
+	mv.launchPhase.SetText("Launched " + profileName)
+	mv.launchPhase.Refresh()
+	if um.profileListRefresh != nil {
+		um.profileListRefresh() // launchProfile already invalidated the disk cache on a fresh download
+	}
+	gen := mv.launchGen
+	go func() {
+		time.Sleep(6000 * time.Millisecond)
+		fyne.Do(func() {
+			if mv.shouldAutoHide(gen) {
+				mv.launchBand.Hide()
+			}
+		})
+	}()
+}
+
+// adoptLaunch shows an already-running launch in a freshly built view, so the
+// band, its Cancel and the disabled Run all reflect a launch this view did not
+// start. Without it a rebuilt view offers an enabled Run that silently does
+// nothing, and no way to cancel the download.
+func (mv *mainView) adoptLaunch() {
+	um := mv.um
+	mv.launchInProgress = true
+	mv.launchLogsIdx = um.launchProfileIdx
+	mv.launchPhase.Importance = widget.MediumImportance
+	mv.launchPhase.SetText(um.launchStatus)
+	// Match the state launchIndex sets up: marquee until this view sees progress
+	// of its own, which it will not, since the download reports to the old one.
+	mv.launchLogsBtn.Hide()
+	mv.launchBar.Hide()
+	mv.launchSpin.Show()
+	mv.launchBand.Show()
+	if um.launchCancel != nil {
+		mv.launchCancel = um.launchCancel
+		mv.cancelBtn.Show()
+	}
+	mv.runBtn.Disable()
 }
 
 // shouldAutoHide reports whether a success auto-hide timer started for gen may
@@ -681,7 +718,7 @@ func (mv *mainView) buildProfileList() {
 			row := padding.Objects[0].(*fyne.Container)
 			text := row.Objects[0].(*fyne.Container)
 			badge := row.Objects[1].(*widget.Label)
-			right := row.Objects[2].(*fyne.Container)                       // the HBox
+			right := row.Objects[2].(*fyne.Container) // the HBox
 			warn := right.Objects[0].(*fyne.Container)
 			marker := right.Objects[1].(*fyne.Container)
 			dot := right.Objects[2].(*fyne.Container).Objects[0].(*statusDot) // dotWrap -> dot
@@ -1055,6 +1092,12 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 		if d := mv.displayPos(mv.selectedIdx); d >= 0 {
 			mv.profileList.Select(widget.ListItemID(d))
 		}
+	}
+	// A launch outlives the view that started it, so the newest view is always the
+	// one that renders and settles it. This has to follow the widgets it touches.
+	um.mainView = mv
+	if um.launchInProgress {
+		mv.adoptLaunch()
 	}
 	mv.updateButtonStates()
 	mv.refreshDetails()
