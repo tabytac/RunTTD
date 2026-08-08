@@ -4,12 +4,18 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
 	apppkg "runttd/internal/app"
 	"runttd/internal/domain"
 )
+
+// A popup is otherwise sized from its content's minimum, which for a lone entry
+// is barely wider than the buttons under it. The zero height that goes with this
+// leaves the height to the content, so the dialog grows with what it holds.
+const shortcutDialogWidth = 560
 
 // showShortcutDialog asks for a title, then writes a shortcut that launches
 // profile headlessly. The command line is fixed, so the only choice here is what
@@ -48,6 +54,7 @@ func (um *UIManager) showShortcutDialog(profile domain.Profile) {
 
 	content := container.NewVBox(titleEntry, hint)
 	popup = NewModalDialog(um.Window.Canvas(), "Create Shortcut", content, cancelBtn, createBtn)
+	popup.Resize(fyne.NewSize(shortcutDialogWidth, 0))
 	um.shortcutOverlay, um.shortcutOnEscape = popup, dismiss
 	popup.Show()
 	um.Window.Canvas().Focus(titleEntry)
