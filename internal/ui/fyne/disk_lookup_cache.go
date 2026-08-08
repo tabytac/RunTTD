@@ -9,7 +9,7 @@ type diskLookupEntry struct {
 }
 
 // diskLookupCache memoizes "does (client, track-or-version) resolve to an
-// installed folder" and "does this custom path exist" off the UI thread — both
+// installed folder" and "does this custom path exist" off the UI thread; both
 // are plain filesystem calls that can hang for the full SMB timeout on an
 // unreachable network share.
 //
@@ -17,7 +17,7 @@ type diskLookupEntry struct {
 // setupIssueCache (a soft advisory warning, tolerant of staleness until the
 // profile changes), a stale disk answer here is a real inaccuracy: the dot must
 // reflect a fresh download or a library deletion right away. So this cache has
-// no TTL and isn't keyed by profile — it's invalidated wholesale by invalidate()
+// no TTL and isn't keyed by profile; it's invalidated wholesale by invalidate()
 // at the few places installed folders actually change (a launch completing, a
 // library delete/cleanup, or a settings save that could move the install root).
 //

@@ -9,7 +9,7 @@ import (
 )
 
 // Official endpoints. A config may override these (custom mirrors), but only
-// with an https URL — see sanitizeURLs.
+// with an https URL; see sanitizeURLs.
 const (
 	DefaultJgrppApiUrl   = "https://api.github.com/repos/JGRennison/OpenTTD-patches"
 	DefaultVanillaMirror = "https://cdn.openttd.org/openttd-releases/"
@@ -17,7 +17,7 @@ const (
 )
 
 // Window size bounds. The min floor rejects an unset (0) or implausibly small
-// saved size — e.g. a value mis-captured during teardown — so the next launch
+// saved size (e.g. a value mis-captured during teardown), so the next launch
 // falls back to a usable default rather than an unusable sliver.
 const (
 	DefaultWindowWidth  = 940

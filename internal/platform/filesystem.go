@@ -134,7 +134,7 @@ func logExtractOutput(logger *Logger, out []byte) {
 // runExtractor runs an extraction command with no console window, logging its output, reporting a clear error if the tool is missing or extraction fails
 func runExtractor(tool, archivePath string, cmd *exec.Cmd, logger *Logger) error {
 	if _, err := exec.LookPath(tool); err != nil {
-		return fmt.Errorf("%q not found on PATH — install it to extract %s", tool, filepath.Base(archivePath))
+		return fmt.Errorf("%q not found on PATH; install it to extract %s", tool, filepath.Base(archivePath))
 	}
 	cmd.SysProcAttr = GetNoWindowSysProcAttr()
 	out, err := cmd.CombinedOutput()
@@ -187,7 +187,7 @@ func ExtractArchive(archivePath, destDir string, logger *Logger) error {
 // ExtractDMG mounts a macOS DMG and copies over any contained .app bundles into target directory
 func ExtractDMG(dmgPath, destDir string) error {
 	if _, err := exec.LookPath("hdiutil"); err != nil {
-		return fmt.Errorf("%q not found on PATH — install it to extract %s", "hdiutil", filepath.Base(dmgPath))
+		return fmt.Errorf("%q not found on PATH; install it to extract %s", "hdiutil", filepath.Base(dmgPath))
 	}
 	mountPoint, err := os.MkdirTemp("", "runttd_dmg_mount_")
 	if err != nil {

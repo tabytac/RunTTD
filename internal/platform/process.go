@@ -24,7 +24,7 @@ type ProcessObserver interface {
 // detached platform routines. versionFolder is the resolved client install
 // directory; docsBasePath anchors relative save/config paths; obs receives
 // lifecycle and logging callbacks. Returns whether the process actually
-// started (obs.OnStarted() was called) — callers must check this rather than
+// started (obs.OnStarted() was called); callers must check this rather than
 // assume success, since every failure here is otherwise reported only via
 // LogImportant.
 func ExecuteOpenTTD(

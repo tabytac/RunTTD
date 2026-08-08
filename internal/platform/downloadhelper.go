@@ -134,7 +134,7 @@ func swapInVersionFolder(src, dst, downloadDir string, rename func(string, strin
 
 	if err := rename(src, dst); err != nil {
 		// Restore the old install. If even that fails, the only intact copy is the
-		// backup — keep it and tell the user where, rather than deleting it.
+		// backup; keep it and tell the user where, rather than deleting it.
 		if restoreErr := rename(backup, dst); restoreErr != nil {
 			return fmt.Errorf("install update failed (%w) and the previous version could not be restored (%v); it is preserved at %s", err, restoreErr, backup)
 		}

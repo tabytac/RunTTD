@@ -27,7 +27,7 @@ func IsLatestVersion(version string) bool {
 // EffectiveClient resolves the client a profile actually uses: its own client,
 // else cfg.DefaultClient, else "jgrpp". This is the canonical fallback the launch
 // path, library, and status dot must all share (an empty Client is a shipped
-// state — the default profile has none).
+// state: the default profile has none).
 func EffectiveClient(profileClient, defaultClient string) string {
 	if c := strings.TrimSpace(profileClient); c != "" {
 		return c
@@ -66,7 +66,7 @@ func LatestTrack(client, version string) string {
 }
 
 // ClientLatestForTrack returns the newest upstream tag for a client on a given
-// track ("stable"/"testing") — the track-aware counterpart of ClientLatest,
+// track ("stable"/"testing"); the track-aware counterpart of ClientLatest,
 // which is stable-only. Returns "" on error/empty.
 func ClientLatestForTrack(ctx context.Context, clientID, track string, cfg *domain.Config) string {
 	return platform.CheckForNewVersionForClientTrack(ctx, clientID, cfg, track)
