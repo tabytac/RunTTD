@@ -38,10 +38,11 @@ func GenerateProfileShortcut(profile domain.Profile, title string) (string, erro
 		name = profile.Name
 	}
 	return platform.CreateShortcut(exeDir, platform.ShortcutSpec{
-		Name:        name,
-		ExePath:     exePath,
-		Args:        ProfileShortcutArgs(profile.Name),
-		WorkDir:     exeDir,
-		Description: fmt.Sprintf("Launch the %s profile in RunTTD without opening the launcher window.", profile.Name),
+		Name:    name,
+		ExePath: exePath,
+		Args:    ProfileShortcutArgs(profile.Name),
+		WorkDir: exeDir,
+		// The one fact the shortcut's own name can lose, since the title is free text.
+		Description: "RunTTD profile: " + profile.Name,
 	})
 }
