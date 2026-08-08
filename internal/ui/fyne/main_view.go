@@ -301,6 +301,19 @@ func (mv *mainView) adoptLaunch() {
 	mv.runBtn.Disable()
 }
 
+// clearSearch drops the filter and returns to the full list, then blurs so
+// quick-launch (digits, Enter) works again immediately rather than staying dead
+// until the user clicks elsewhere: Fyne routes keys to the focused widget OR the
+// canvas, never both, so the search Entry keeping focus would swallow every
+// later key. It answers Escape both from the Entry itself and, via viewEscape,
+// from anywhere else on the profile view, which is what the empty state promises.
+func (mv *mainView) clearSearch() {
+	if mv.searchEntry.Text != "" {
+		mv.searchEntry.SetText("") // triggers OnChanged, which resets the filter
+	}
+	mv.um.Window.Canvas().Unfocus()
+}
+
 // shouldAutoHide reports whether a success auto-hide timer started for gen may
 // still hide the band: only if no newer launch has bumped launchGen and none is
 // in flight.
@@ -355,6 +368,10 @@ func (mv *mainView) refreshDetails() {
 			ColorName: theme.ColorNameForeground,
 		},
 	})
+	// Unwrapped, this reports its full width as a minimum, and a vertical Scroll
+	// passes that straight out: a long name would push the whole window past the
+	// screen rather than being given two lines.
+	name.Wrapping = fyne.TextWrapWord
 	// Text-only: the + icon already means "new profile" in this view, and the
 	// auto-launch button directly below is text-only too.
 	shortcutBtn := widget.NewButton("Create shortcut", func() {
@@ -1025,12 +1042,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	// (digits, Enter) works again immediately rather than staying dead until the user
 	// clicks elsewhere: Fyne routes keys to the focused widget OR the canvas, never
 	// both, so this Entry keeping focus would otherwise swallow every later key.
-	mv.searchEntry.onEscape = func() {
-		if mv.searchEntry.Text != "" {
-			mv.searchEntry.SetText("") // triggers OnChanged, which resets the filter
-		}
-		um.Window.Canvas().Unfocus()
-	}
+	mv.searchEntry.onEscape = mv.clearSearch
 	mv.updateEmptyState()
 
 	dragHint := widget.NewLabel("Drag rows to reorder")
@@ -1096,6 +1108,7 @@ func (um *UIManager) makeMainView() fyne.CanvasObject {
 	// A launch outlives the view that started it, so the newest view is always the
 	// one that renders and settles it. This has to follow the widgets it touches.
 	um.mainView = mv
+	um.viewEscape = mv.clearSearch
 	if um.launchInProgress {
 		mv.adoptLaunch()
 	}

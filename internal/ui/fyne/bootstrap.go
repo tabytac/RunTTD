@@ -53,7 +53,7 @@ type UIManager struct {
 	shortcutOverlay       *widget.PopUp // the open create-shortcut dialog; nil when closed
 	shortcutOnEscape      func()        // Escape on the shortcut overlay routes here, clearing the handles above
 	libraryRescan         func()        // set by showLibraryView while it's the active view; the F5 accelerator's target, nil (no-op) elsewhere
-	viewEscape            func()        // set by the full-screen library/log views; Escape's target while one is showing, nil (no-op) elsewhere
+	viewEscape            func()        // Escape's target for the view on screen: Back in the library/log views, clear-the-search in the profile view
 	launchInProgress      bool          // the cross-path launch guard; mainView.launchInProgress is a per-view mirror
 	launchCancel          func()        // cancels the in-flight launch's download context, if any; nil once no launch is running or the download step has already finished
 	launchCancelBtn       *dialogButton // the log view Cancel button currently on screen; a reopened view replaces it
