@@ -40,28 +40,29 @@ type UIManager struct {
 	upstream              *upstreamCache
 	setupIssues           *setupIssueCache
 	diskLookups           *diskLookupCache
-	runAsync              func(func())         // how the three async caches spawn work; nil means a fresh goroutine (see startAsync)
-	profileListRefresh    func()               // set by the main view; refreshes the profile list from any goroutine (via fyne.Do)
-	detailsRefresh        func()               // set by the main view; rebuilds the details pane from any goroutine (via fyne.Do)
-	settingsOverlay       *widget.PopUp        // the open settings dialog, for the scoped Escape handler; nil when closed
-	settingsOnEscape      func()               // Escape on the settings overlay routes here (dirty -> discard-confirm)
-	blockingConfirm       *widget.PopUp        // a confirm whose caller blocks on its response; raw overlay.Hide() would skip the callback and hang forever
-	blockingConfirmHide   func()               // resolves blockingConfirm via the dialog's own Hide(), so Escape still answers "No"
-	confirmAction         func()               // the open confirm's Confirm(); Fyne's dialog buttons ignore Enter and take no focus
-	editorOverlay         *widget.PopUp        // the open profile editor, for the scoped Escape handler; nil when closed
-	editorOnEscape        func()               // Escape on the editor overlay routes here (dirty -> discard-confirm)
-	shortcutOverlay       *widget.PopUp        // the open create-shortcut dialog; nil when closed
-	shortcutOnEscape      func()               // Escape on the shortcut overlay routes here, clearing the handles above
-	libraryRescan         func()               // set by showLibraryView while it's the active view; the F5 accelerator's target, nil (no-op) elsewhere
-	viewEscape            func()               // Escape's target for the view on screen: Back in the library/log views, clear-the-search in the profile view
-	launchInProgress      bool                 // the cross-path launch guard; mainView.launchInProgress is a per-view mirror
-	launchCancel          func()               // cancels the in-flight launch's download context, if any; nil once no launch is running or the download step has already finished
-	launchCancelBtn       *dialogButton        // the log view Cancel button currently on screen; a reopened view replaces it
-	launchStatus          string               // the in-flight launch's latest status line, so a view built mid-launch can show where it got to
-	launchProfileIdx      int                  // the profile an in-flight launch is for, so an adopting view can point View logs at it
-	mainView              *mainView            // the newest profile view; a launch outlives the view that began it, so it reports here rather than into captured widgets
-	viewKeys              func(*fyne.KeyEvent) // the profile view's bare-key handler, so a focused button can hand back what it did not use
-	launchPipeline        launchPipelineFunc   // tests substitute the network-bound pipeline; nil means um.launchProfile
+	runAsync              func(func())                            // how the three async caches spawn work; nil means a fresh goroutine (see startAsync)
+	runAfter              func(time.Duration, func()) *time.Timer // how the dialog debounces delay work; nil means time.AfterFunc (see startDebounce)
+	profileListRefresh    func()                                  // set by the main view; refreshes the profile list from any goroutine (via fyne.Do)
+	detailsRefresh        func()                                  // set by the main view; rebuilds the details pane from any goroutine (via fyne.Do)
+	settingsOverlay       *widget.PopUp                           // the open settings dialog, for the scoped Escape handler; nil when closed
+	settingsOnEscape      func()                                  // Escape on the settings overlay routes here (dirty -> discard-confirm)
+	blockingConfirm       *widget.PopUp                           // a confirm whose caller blocks on its response; raw overlay.Hide() would skip the callback and hang forever
+	blockingConfirmHide   func()                                  // resolves blockingConfirm via the dialog's own Hide(), so Escape still answers "No"
+	confirmAction         func()                                  // the open confirm's Confirm(); Fyne's dialog buttons ignore Enter and take no focus
+	editorOverlay         *widget.PopUp                           // the open profile editor, for the scoped Escape handler; nil when closed
+	editorOnEscape        func()                                  // Escape on the editor overlay routes here (dirty -> discard-confirm)
+	shortcutOverlay       *widget.PopUp                           // the open create-shortcut dialog; nil when closed
+	shortcutOnEscape      func()                                  // Escape on the shortcut overlay routes here, clearing the handles above
+	libraryRescan         func()                                  // set by showLibraryView while it's the active view; the F5 accelerator's target, nil (no-op) elsewhere
+	viewEscape            func()                                  // Escape's target for the view on screen: Back in the library/log views, clear-the-search in the profile view
+	launchInProgress      bool                                    // the cross-path launch guard; mainView.launchInProgress is a per-view mirror
+	launchCancel          func()                                  // cancels the in-flight launch's download context, if any; nil once no launch is running or the download step has already finished
+	launchCancelBtn       *dialogButton                           // the log view Cancel button currently on screen; a reopened view replaces it
+	launchStatus          string                                  // the in-flight launch's latest status line, so a view built mid-launch can show where it got to
+	launchProfileIdx      int                                     // the profile an in-flight launch is for, so an adopting view can point View logs at it
+	mainView              *mainView                               // the newest profile view; a launch outlives the view that began it, so it reports here rather than into captured widgets
+	viewKeys              func(*fyne.KeyEvent)                    // the profile view's bare-key handler, so a focused button can hand back what it did not use
+	launchPipeline        launchPipelineFunc                      // tests substitute the network-bound pipeline; nil means um.launchProfile
 }
 
 // snapshotConfig returns a copy for background goroutines to read: settings
@@ -150,6 +151,17 @@ func (um *UIManager) persistWindowSize(w, h int) {
 	if err := domain.SaveConfig(um.ConfigPath, um.Config); err != nil {
 		um.Logger.Append(fmt.Sprintf("could not save window size: %v", err))
 	}
+}
+
+// startDebounce schedules fn through runAfter, or time.AfterFunc when it is
+// nil. Tests substitute an inline runner: under the test driver fyne.Do runs
+// on the calling goroutine, so a timer firing mid-test would mutate widgets
+// off the main goroutine while the test renders.
+func (um *UIManager) startDebounce(d time.Duration, fn func()) *time.Timer {
+	if um.runAfter != nil {
+		return um.runAfter(d, fn)
+	}
+	return time.AfterFunc(d, fn)
 }
 
 // startAsync dispatches fn through runAsync, or a fresh goroutine when it is nil.

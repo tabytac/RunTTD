@@ -699,7 +699,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		saveBase := filepath.Join(docsBase, "save")
 
 		gen := pathCheckGuard.next()
-		pathCheckTimer = time.AfterFunc(300*time.Millisecond, func() {
+		pathCheckTimer = um.startDebounce(300*time.Millisecond, func() {
 			warn := pathExistsWarning("config file", configPath, docsBase)
 			if warn == "" && checkSave {
 				warn = pathExistsWarning("save path", rawSave, saveBase)

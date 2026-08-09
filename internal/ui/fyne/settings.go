@@ -310,7 +310,7 @@ func (um *UIManager) showSettingsView() {
 			return
 		}
 		gen := docsCheckGuard.next()
-		docsCheckTimer = time.AfterFunc(300*time.Millisecond, func() {
+		docsCheckTimer = um.startDebounce(300*time.Millisecond, func() {
 			cfgPath := filepath.Join(path, "openttd.cfg")
 			_, statErr := os.Stat(cfgPath)
 			fyne.Do(func() {
