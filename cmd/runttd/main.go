@@ -212,6 +212,10 @@ func (o *consoleObserver) LogVerbose(msg string) {
 
 func (o *consoleObserver) OnStarted() {}
 
+// launchPipeline is app.LaunchProfile behind a seam, so tests can drive
+// runHeadless without a network or a real game.
+var launchPipeline = app.LaunchProfile
+
 // runHeadless launches one profile with no window and returns the process exit
 // code. Progress goes to stdout and failures to stderr; a headless run shows no
 // dialog, since a modal would hang an unattended script.
@@ -220,7 +224,7 @@ func runHeadless(cfg *domain.Config, logPath string, profile domain.Profile, wai
 	obs := &consoleObserver{logger: logger, verbose: cfg.Verbose}
 
 	var waitForGame func() int
-	result := app.LaunchProfile(context.Background(), profile, app.LaunchDeps{
+	result := launchPipeline(context.Background(), profile, app.LaunchDeps{
 		Config:       cfg,
 		Logger:       logger,
 		Observer:     obs,
