@@ -67,31 +67,19 @@ func (j *jgrppClient) DisplayName() string { return "JGRPP" }
 func (j *jgrppClient) FetchVersions(ctx context.Context, cfg *domain.Config) ([]string, error) {
 	return platform.FetchAvailableVersions(ctx, cfg)
 }
-func (j *jgrppClient) Latest(ctx context.Context, cfg *domain.Config) (string, error) {
-	return platform.CheckForNewVersion(ctx, cfg, nil), nil
-}
-func (j *jgrppClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
-	return platform.DownloadAndExtractVersionWithLogger(ctx, version, cfg, logger, nil), nil
-}
 func (j *jgrppClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
 	folder := platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, "jgrpp"), version, "jgrpp", cfg)
 	return folder, nil
 }
 
-// customClient is a placeholder for user-managed executables. All "what version is available
-// remotely" and "download/extract" methods are no-ops; the profile carries the folder directly.
+// customClient is a placeholder for user-managed executables: version listing
+// and lookup are no-ops, since the profile carries the folder directly.
 type customClient struct{}
 
 func (c *customClient) ID() string          { return "custom" }
 func (c *customClient) DisplayName() string { return "Custom Executable" }
 func (c *customClient) FetchVersions(ctx context.Context, cfg *domain.Config) ([]string, error) {
 	return nil, nil
-}
-func (c *customClient) Latest(ctx context.Context, cfg *domain.Config) (string, error) {
-	return "", nil
-}
-func (c *customClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
-	return false, nil
 }
 func (c *customClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
 	return "", nil
@@ -115,14 +103,6 @@ func (v *vanillaClient) DisplayName() string {
 func (v *vanillaClient) FetchVersions(ctx context.Context, cfg *domain.Config) ([]string, error) {
 	return platform.FetchAvailableVersionsForClient(ctx, v.ID(), cfg)
 }
-func (v *vanillaClient) Latest(ctx context.Context, cfg *domain.Config) (string, error) {
-	latest := platform.CheckForNewVersionForClient(ctx, v.ID(), cfg)
-	return latest, nil
-}
-func (v *vanillaClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
-	ok := platform.DownloadAndExtractVersionForClientWithLogger(ctx, version, v.ID(), cfg, logger, nil)
-	return ok, nil
-}
 func (v *vanillaClient) FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error) {
 	folder := platform.FindVersionFolderClient(platform.ClientDownloadDir(cfg, v.ID()), version, v.ID(), cfg)
 	return folder, nil
@@ -141,14 +121,6 @@ func withClient[T any](clientID string, fn func(Client) (T, error)) (T, error) {
 
 func ClientFetchVersions(ctx context.Context, clientID string, cfg *domain.Config) ([]string, error) {
 	return withClient(clientID, func(c Client) ([]string, error) { return c.FetchVersions(ctx, cfg) })
-}
-
-func ClientLatest(ctx context.Context, clientID string, cfg *domain.Config) (string, error) {
-	return withClient(clientID, func(c Client) (string, error) { return c.Latest(ctx, cfg) })
-}
-
-func ClientDownloadAndExtract(ctx context.Context, clientID, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
-	return withClient(clientID, func(c Client) (bool, error) { return c.DownloadAndExtract(ctx, version, cfg, logger) })
 }
 
 func ClientFindInstalled(ctx context.Context, clientID, version string, cfg *domain.Config) (string, error) {

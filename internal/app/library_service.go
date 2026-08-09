@@ -66,8 +66,7 @@ func LatestTrack(client, version string) string {
 }
 
 // ClientLatestForTrack returns the newest upstream tag for a client on a given
-// track ("stable"/"testing"); the track-aware counterpart of ClientLatest,
-// which is stable-only. Returns "" on error/empty.
+// track ("stable"/"testing"). Returns "" on error/empty.
 func ClientLatestForTrack(ctx context.Context, clientID, track string, cfg *domain.Config) string {
 	// nil logger: the status dot polls this and its silence is documented policy.
 	return platform.CheckForNewVersionForClientTrack(ctx, clientID, cfg, track, nil)

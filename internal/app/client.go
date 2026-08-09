@@ -4,15 +4,16 @@ import (
 	"context"
 
 	"runttd/internal/domain"
-	"runttd/internal/platform"
 )
 
-// Client defines the contract that different engine types (e.g. Vanilla, JGRPP) must implement to support download, updates, and identification
+// Client is the registry contract for an engine track: its identity and
+// display name, its selectable version list, and where a version is installed.
+// The launch pipeline is deliberately not behind it; launch.go dispatches on
+// client ID directly, since resolving and downloading need track, logger and
+// progress plumbing plus per-client policy this interface does not carry.
 type Client interface {
 	ID() string
 	DisplayName() string
 	FetchVersions(ctx context.Context, cfg *domain.Config) ([]string, error)
-	Latest(ctx context.Context, cfg *domain.Config) (string, error)
-	DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error)
 	FindInstalled(ctx context.Context, version string, cfg *domain.Config) (string, error)
 }
