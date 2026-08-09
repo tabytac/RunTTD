@@ -444,6 +444,14 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	var browseConfigBtn *dialogButton
 	browseConfigBtn = newDialogButton("Browse…", func() {
 		browseConfigBtn.Disable() // stops a second picker stacking on top while this one is open
+		// Widget and config reads stay on the UI thread; both can change mid-pick.
+		docsBase := um.Config.DocsBasePath
+		startPath := strings.TrimSpace(configFileEntry.Text)
+		if startPath == "" && docsBase != "" {
+			startPath = filepath.Join(docsBase, "openttd.cfg")
+		} else if startPath != "" && !filepath.IsAbs(startPath) && docsBase != "" {
+			startPath = filepath.Join(docsBase, startPath)
+		}
 		go func() {
 			defer fyne.Do(browseConfigBtn.Enable)
 			defer func() {
@@ -451,14 +459,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 					um.Logger.Append(fmt.Sprintf("CRITICAL: config picker panicked: %v", r))
 				}
 			}()
-			startPath := strings.TrimSpace(configFileEntry.Text)
-			if startPath == "" && um.Config.DocsBasePath != "" {
-				startPath = filepath.Join(um.Config.DocsBasePath, "openttd.cfg")
-			} else if startPath != "" && !filepath.IsAbs(startPath) && um.Config.DocsBasePath != "" {
-				startPath = filepath.Join(um.Config.DocsBasePath, startPath)
-			}
-
-			path, err := um.browseConfigPath(startPath)
+			path, err := um.browseConfigPath(docsBase, startPath)
 			if err != nil {
 				fyne.Do(func() { um.showErrorf("could not open config picker: %w", err) })
 				return
@@ -517,6 +518,14 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	var browseFileBtn *dialogButton
 	browseFileBtn = newDialogButton("Browse file…", func() {
 		browseFileBtn.Disable()
+		docsBase, startPath := um.Config.DocsBasePath, savePathEntry.Text
+		if startPath == "" {
+			if docsBase != "" {
+				startPath = filepath.Join(docsBase, "save")
+			}
+		} else if !filepath.IsAbs(startPath) && docsBase != "" {
+			startPath = filepath.Join(docsBase, "save", startPath)
+		}
 		go func() {
 			defer fyne.Do(browseFileBtn.Enable)
 			defer func() {
@@ -524,16 +533,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 					um.Logger.Append(fmt.Sprintf("CRITICAL: file picker panicked: %v", r))
 				}
 			}()
-			startPath := savePathEntry.Text
-			if startPath == "" {
-				if um.Config.DocsBasePath != "" {
-					startPath = filepath.Join(um.Config.DocsBasePath, "save")
-				}
-			} else if !filepath.IsAbs(startPath) && um.Config.DocsBasePath != "" {
-				startPath = filepath.Join(um.Config.DocsBasePath, "save", startPath)
-			}
-
-			path, err := um.browseSavePath(startPath, "Select Save or Scenario", false)
+			path, err := um.browseSavePath(docsBase, startPath, "Select Save or Scenario", false)
 			if err != nil {
 				fyne.Do(func() { um.showErrorf("could not open file picker: %w", err) })
 				return
@@ -549,6 +549,14 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	var browseFolderBtn *dialogButton
 	browseFolderBtn = newDialogButton("Browse folder…", func() {
 		browseFolderBtn.Disable()
+		docsBase, startPath := um.Config.DocsBasePath, savePathEntry.Text
+		if startPath == "" {
+			if docsBase != "" {
+				startPath = filepath.Join(docsBase, "save")
+			}
+		} else if !filepath.IsAbs(startPath) && docsBase != "" {
+			startPath = filepath.Join(docsBase, "save", startPath)
+		}
 		go func() {
 			defer fyne.Do(browseFolderBtn.Enable)
 			defer func() {
@@ -556,16 +564,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 					um.Logger.Append(fmt.Sprintf("CRITICAL: folder picker panicked: %v", r))
 				}
 			}()
-			startPath := savePathEntry.Text
-			if startPath == "" {
-				if um.Config.DocsBasePath != "" {
-					startPath = filepath.Join(um.Config.DocsBasePath, "save")
-				}
-			} else if !filepath.IsAbs(startPath) && um.Config.DocsBasePath != "" {
-				startPath = filepath.Join(um.Config.DocsBasePath, "save", startPath)
-			}
-
-			path, err := um.browseSavePath(startPath, "Select Save Folder", true)
+			path, err := um.browseSavePath(docsBase, startPath, "Select Save Folder", true)
 			if err != nil {
 				fyne.Do(func() { um.showErrorf("could not open folder picker: %w", err) })
 				return
@@ -874,7 +873,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	// Dirty-state compares live widget values to a baseline snapshot, the same
 	// approach the settings dialog uses, so Cancel/Escape can't silently discard edits.
 	type profileSnapshot struct {
-		name, client, version, customFolder, mode                string
+		name, client, version, customFolder, mode                 string
 		ipPort, serverPass, companyNum, companyPass               string
 		savePath, extraArgs, configFile, newgrf, autoLatestFilter string
 		noConfigSave, applyExtraArgs                              bool

@@ -255,7 +255,7 @@ func (um *UIManager) showLogView(profileIdx int) {
 // Cancel button works.
 func (um *UIManager) launchProfile(ctx context.Context, profile domain.Profile, updateStatus func(status string), onProgress platform.ProgressFunc, onError func()) {
 	apppkg.LaunchProfile(ctx, profile, apppkg.LaunchDeps{
-		Config:           um.Config,
+		Config:           um.snapshotConfig(),
 		Logger:           um.Logger,
 		Observer:         um,
 		UpdateStatus:     updateStatus,

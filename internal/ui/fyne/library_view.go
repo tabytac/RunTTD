@@ -227,8 +227,9 @@ func (um *UIManager) showLibraryView() {
 		summary.SetText("Scanning installed clients…")
 		listBox.Objects = nil
 		listBox.Refresh()
+		cfg := um.snapshotConfig()
 		go func() {
-			entries := apppkg.BuildLibrary(context.Background(), um.Config)
+			entries := apppkg.BuildLibrary(context.Background(), cfg)
 			fyne.Do(func() {
 				if gen != scanGen {
 					return // a newer scan or Back superseded this one
@@ -386,8 +387,9 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), af
 			return
 		}
 		busy(true)
+		cfg := um.snapshotConfig()
 		go func() {
-			err := platform.DeleteInstalledVersion(um.Config, e.Path)
+			err := platform.DeleteInstalledVersion(cfg, e.Path)
 			fyne.Do(func() {
 				busy(false)
 				if err != nil {
@@ -420,10 +422,11 @@ func (um *UIManager) confirmCleanup(orphans []domain.LibraryEntry, busy func(boo
 			return
 		}
 		busy(true)
+		cfg := um.snapshotConfig()
 		go func() {
 			var failed int
 			for _, e := range orphans {
-				if err := platform.DeleteInstalledVersion(um.Config, e.Path); err != nil {
+				if err := platform.DeleteInstalledVersion(cfg, e.Path); err != nil {
 					failed++
 					um.Logger.Append(fmt.Sprintf("Cleanup failed for %s: %v", e.Path, err))
 				} else {

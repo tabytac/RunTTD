@@ -63,6 +63,16 @@ type UIManager struct {
 	viewKeys              func(*fyne.KeyEvent) // the profile view's bare-key handler, so a focused button can hand back what it did not use
 }
 
+// snapshotConfig returns a copy for background goroutines to read: settings
+// and editor saves write *um.Config on the UI thread mid-flight, and it has no
+// mutex. Profiles is copied too, since an editor save writes elements of the
+// shared backing array; Profile itself is all value types, so this is deep.
+func (um *UIManager) snapshotConfig() *domain.Config {
+	cfg := *um.Config
+	cfg.Profiles = append([]domain.Profile(nil), um.Config.Profiles...)
+	return &cfg
+}
+
 // routeViewKey passes a key a focused widget declined on to the view's own
 // handler, which is otherwise only reachable when nothing has focus.
 func (um *UIManager) routeViewKey(key *fyne.KeyEvent) {
