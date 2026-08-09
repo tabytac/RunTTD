@@ -96,6 +96,28 @@ func canonicalOSTag(tag string) string {
 // version slice is everything between "openttd-" and this boundary.
 var osTagStart = regexp.MustCompile(`-(?:windows|mingw|macos|macosx|linux)\b`)
 
+// jgrppOSTagStart is osTagStart's jgrpp counterpart, matched case-insensitively
+// because jgrpp's MINGW custom builds tag their OS in upper case (MINGW-winNN)
+// unlike every other build this launcher installs.
+var jgrppOSTagStart = regexp.MustCompile(`(?i)-(?:windows|mingw|macos|macosx|linux)\b`)
+
+// jgrppVersionMatchesFolder reports whether a jgrpp folder is exactly the
+// requested version, the same exact-match rule VersionMatchesFolder applies to
+// vanilla: comparing the version slice (between "jgrpp-" and the OS tag) for
+// equality, so a pin on "0.46.1" never matches an installed "0.46.12" folder,
+// and "0.66" never matches a "0.66-rc1" pre-release.
+func jgrppVersionMatchesFolder(name, version string) bool {
+	idx := strings.Index(name, "jgrpp-")
+	if idx < 0 {
+		return false
+	}
+	n := name[idx+len("jgrpp-"):]
+	if loc := jgrppOSTagStart.FindStringIndex(n); loc != nil {
+		n = n[:loc[0]]
+	}
+	return n == version
+}
+
 // VersionMatchesFolder reports whether a vanilla folder is exactly the requested
 // version. It compares the version slice (between the "openttd-" prefix and the
 // OS tag) for equality, so "1.2.0" never matches a "1.2.0-beta1" folder.
@@ -246,7 +268,7 @@ func FindVersionFolderClient(parentDir, version, client string, cfg *domain.Conf
 			if len(platformAliases) > 0 && !FolderMatchesAnyAlias(strings.ToLower(name), platformAliases) {
 				continue
 			}
-			if strings.Contains(name, fmt.Sprintf("jgrpp-%s", version)) || (strings.Contains(name, version) && strings.Contains(strings.ToLower(name), "jgrpp")) {
+			if jgrppVersionMatchesFolder(name, version) {
 				return filepath.Join(parentDir, name)
 			}
 		case "vanilla", "vanilla-nightly":
