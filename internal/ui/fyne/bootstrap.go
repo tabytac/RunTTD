@@ -1,7 +1,6 @@
 package fyne
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"path/filepath"
@@ -65,66 +64,6 @@ type UIManager struct {
 	launchPipeline        launchPipelineFunc   // tests substitute the network-bound pipeline; nil means um.launchProfile
 }
 
-type launchPipelineFunc func(ctx context.Context, profile domain.Profile, updateStatus func(string), onProgress platform.ProgressFunc, onError func())
-
-// startLaunch runs the launch pipeline for the profile at idx, owning the
-// cross-view state: the guard, cancel, status and completion live here because
-// a launch outlives the view that starts it. onStatus and onProgress render
-// into the starting view and may be nil; status also reaches whichever profile
-// view is current. Returns false when a launch is already running.
-func (um *UIManager) startLaunch(idx int, onStatus func(string), onProgress platform.ProgressFunc) bool {
-	if um.launchInProgress || idx < 0 || idx >= len(um.Config.Profiles) {
-		return false
-	}
-	um.launchInProgress = true
-	um.launchProfileIdx = idx
-	profile := um.Config.Profiles[idx]
-
-	ctx, cancel := context.WithCancel(context.Background())
-	um.launchCancel = cancel
-
-	emit := func(status string) {
-		um.publishLaunchStatus(status)
-		if onStatus != nil {
-			onStatus(status)
-		}
-	}
-	emit("Starting " + profile.Name)
-
-	pipeline := um.launchPipeline
-	if pipeline == nil {
-		pipeline = um.launchProfile
-	}
-	failed := false
-	um.startAsync(func() {
-		defer fyne.Do(func() {
-			um.launchInProgress = false
-			cancel()
-			um.launchCancel = nil
-			um.hideLaunchCancel() // a log view opened over this launch has its own Cancel showing
-			um.finishLaunch(failed, profile.Name)
-		})
-		pipeline(ctx, profile,
-			func(status string) { fyne.Do(func() { emit(status) }) },
-			func(done, total int64) {
-				// Extraction is a synthesized status, fanned out like the rest;
-				// it is also the point past which cancelling stops being offered.
-				if total > 0 && done >= total {
-					fyne.Do(func() {
-						emit("Extracting (this can take a moment for large installs)")
-						um.hideLaunchCancel()
-					})
-				}
-				if onProgress != nil {
-					onProgress(done, total)
-				}
-			},
-			func() { failed = true },
-		)
-	})
-	return true
-}
-
 // snapshotConfig returns a copy for background goroutines to read: settings
 // and editor saves write *um.Config on the UI thread mid-flight, and it has no
 // mutex. Profiles is copied too, since an editor save writes elements of the
@@ -133,34 +72,6 @@ func (um *UIManager) snapshotConfig() *domain.Config {
 	cfg := *um.Config
 	cfg.Profiles = append([]domain.Profile(nil), um.Config.Profiles...)
 	return &cfg
-}
-
-// routeViewKey passes a key a focused widget declined on to the view's own
-// handler, which is otherwise only reachable when nothing has focus.
-func (um *UIManager) routeViewKey(key *fyne.KeyEvent) {
-	if um.viewKeys != nil {
-		um.viewKeys(key)
-	}
-}
-
-// publishLaunchStatus records a launch's progress text and shows it on the
-// current view. A launch survives a view rebuild (saving an edit, or leaving and
-// returning from the library), so it cannot write to the widgets of the view
-// that started it.
-func (um *UIManager) publishLaunchStatus(status string) {
-	um.launchStatus = status
-	if um.mainView != nil {
-		um.mainView.launchPhase.SetText(status)
-	}
-}
-
-// finishLaunch settles the band and buttons on the current view once a launch
-// ends, for the same reason publishLaunchStatus does not use captured widgets.
-func (um *UIManager) finishLaunch(failed bool, profileName string) {
-	um.launchStatus = ""
-	if um.mainView != nil {
-		um.mainView.finishLaunch(failed, profileName)
-	}
 }
 
 // NewUIManager creates a new UIManager instance, configuring the static app icons and custom presets theme
