@@ -246,7 +246,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		gen := versionFetchGuard.next()
 		versionEntry.PlaceHolder = "Loading versions…"
 		versionEntry.Refresh()
-		go func() {
+		um.startAsync(func() {
 			versions, err := app.ClientFetchVersions(context.Background(), clientID, um.Config)
 			fyne.Do(func() {
 				if !versionFetchGuard.current(gen) {
@@ -267,7 +267,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 				}
 				versionEntry.Refresh()
 			})
-		}()
+		})
 	}
 	// updateState is defined later, but the client radio callback may need to call it.
 	var updateState func()
@@ -892,6 +892,12 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	isDirty := func() bool { return current() != baseline }
 
 	hideEditor = func() {
+		// The pending path check goes with the dialog: its result would render
+		// into widgets that no longer exist on screen.
+		if pathCheckTimer != nil {
+			pathCheckTimer.Stop()
+		}
+		pathCheckGuard.next()
 		um.editorOverlay = nil
 		um.editorOnEscape = nil
 		editDialog.Hide()

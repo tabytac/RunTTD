@@ -484,8 +484,13 @@ func (um *UIManager) showSettingsView() {
 	var refreshDirty func() // assigned below once the dialog exists; captured early by resetBtn
 
 	// hideSettings clears the scoped-Escape refs (Task 11) on every dialog hide so a
-	// stale overlay ref can't mis-route a later Escape.
+	// stale overlay ref can't mis-route a later Escape. The pending path check goes
+	// with it: its result would render into a dialog that no longer exists.
 	hideSettings := func() {
+		if docsCheckTimer != nil {
+			docsCheckTimer.Stop()
+		}
+		docsCheckGuard.next()
 		um.settingsOverlay = nil
 		um.settingsOnEscape = nil
 		settingsDialog.Hide()
