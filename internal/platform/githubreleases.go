@@ -63,24 +63,31 @@ func FetchAvailableVersions(ctx context.Context, config *domain.Config) ([]strin
 	return versions, nil
 }
 
-// CheckForNewVersion fetches the latest JGRPP release tag and returns its formatted version suffix
-func CheckForNewVersion(ctx context.Context, config *domain.Config) string {
+// CheckForNewVersion fetches the latest JGRPP release tag and returns its
+// formatted version suffix. Failures return ""; the reason goes to logger
+// (nil-safe), never stdout, which the windowsgui build discards.
+func CheckForNewVersion(ctx context.Context, config *domain.Config, logger *Logger) string {
+	logf := func(format string, args ...any) {
+		if logger != nil {
+			logger.Append(fmt.Sprintf(format, args...))
+		}
+	}
 	repoURL := fmt.Sprintf("%s/releases/latest", config.JgrppApiUrl)
 
 	resp, err := doGETWithRetry(ctx, httpClient, repoURL)
 	if err != nil {
-		fmt.Printf("Failed to get latest release info: %v\n", err)
+		logf("Failed to get latest release info: %v", err)
 		return ""
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		fmt.Printf("Failed to get latest release info: HTTP %d\n", resp.StatusCode)
+		logf("Failed to get latest release info: HTTP %d", resp.StatusCode)
 		return ""
 	}
 
 	var releaseInfo domain.ReleaseInfo
 	if err := json.NewDecoder(resp.Body).Decode(&releaseInfo); err != nil {
-		fmt.Printf("Failed to parse latest release info: %v\n", err)
+		logf("Failed to parse latest release info: %v", err)
 		return ""
 	}
 

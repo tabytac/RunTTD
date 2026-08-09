@@ -9,10 +9,11 @@ import (
 
 // Logger manages the launcher diagnostics logging session, supporting both in-memory buffering and file writing
 type Logger struct {
-	mu        sync.Mutex
-	lines     []string
-	logToFile bool
-	logPath   string
+	mu         sync.Mutex
+	lines      []string
+	logToFile  bool
+	logPath    string
+	fileWarned bool
 }
 
 // NewLogger instantiates a new Logger instance
@@ -20,13 +21,14 @@ func NewLogger(logToFile bool, logPath string) *Logger {
 	return &Logger{logToFile: logToFile, logPath: logPath}
 }
 
-func appendToLogFile(path, msg string) {
+func appendToLogFile(path, msg string) error {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return
+		return err
 	}
 	defer f.Close()
-	_, _ = f.WriteString(fmt.Sprintf("[%s] %s\n", time.Now().Format(time.RFC3339), msg))
+	_, err = f.WriteString(fmt.Sprintf("[%s] %s\n", time.Now().Format(time.RFC3339), msg))
+	return err
 }
 
 // Append logs a new message to the memory buffer and optionally persists it to the file path
@@ -38,7 +40,12 @@ func (l *Logger) Append(s string) {
 		l.lines = l.lines[len(l.lines)-2000:]
 	}
 	if l.logToFile {
-		appendToLogFile(l.logPath, s)
+		// One in-memory note, not one per line: the file log is the documented
+		// diagnostic channel, so it must not fail without a trace anywhere.
+		if err := appendToLogFile(l.logPath, s); err != nil && !l.fileWarned {
+			l.fileWarned = true
+			l.lines = append(l.lines, fmt.Sprintf("Log to file is on, but %s could not be written: %v", l.logPath, err))
+		}
 	}
 }
 

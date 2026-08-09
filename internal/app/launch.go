@@ -125,7 +125,7 @@ func LaunchProfile(ctx context.Context, profile domain.Profile, deps LaunchDeps)
 	if isLatestRequest {
 		deps.status(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
 		deps.Observer.LogImportant(fmt.Sprintf("Resolving latest %s version (%s)", client, latestTrack))
-		version = platform.CheckForNewVersionForClientTrack(ctx, client, deps.Config, latestTrack)
+		version = platform.CheckForNewVersionForClientTrack(ctx, client, deps.Config, latestTrack, deps.Logger)
 		if errors.Is(ctx.Err(), context.Canceled) {
 			// A cancel here must abort the whole launch, not fall back to
 			// launching whatever's already installed; that would be Cancel

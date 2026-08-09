@@ -271,15 +271,16 @@ func FetchAvailableVersionsForClient(ctx context.Context, client string, cfg *do
 
 // CheckForNewVersionForClient fetches the latest version tag name from CDN / GitHub
 func CheckForNewVersionForClient(ctx context.Context, client string, cfg *domain.Config) string {
-	return CheckForNewVersionForClientTrack(ctx, client, cfg, "stable")
+	return CheckForNewVersionForClientTrack(ctx, client, cfg, "stable", nil)
 }
 
-// CheckForNewVersionForClientTrack returns version filtered by track (stable / testing)
-func CheckForNewVersionForClientTrack(ctx context.Context, client string, cfg *domain.Config, track string) string {
+// CheckForNewVersionForClientTrack returns version filtered by track (stable / testing).
+// logger (nil-safe) receives the reason when the lookup fails.
+func CheckForNewVersionForClientTrack(ctx context.Context, client string, cfg *domain.Config, track string, logger *Logger) string {
 	switch client {
 	case "jgrpp":
 		// Stable-only: /releases/latest excludes pre-releases. A testing track would branch on `track` here.
-		return CheckForNewVersion(ctx, cfg)
+		return CheckForNewVersion(ctx, cfg, logger)
 	case "vanilla", "vanilla-nightly":
 		versions, err := FetchAvailableVersionsForClient(ctx, client, cfg)
 		if err != nil || len(versions) == 0 {
@@ -344,6 +345,7 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 
 	downloadDir := ClientDownloadDir(cfg, client)
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
+		logf("Could not create download folder %s: %v", downloadDir, err)
 		return false
 	}
 

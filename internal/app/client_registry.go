@@ -59,7 +59,7 @@ func (j *jgrppClient) FetchVersions(ctx context.Context, cfg *domain.Config) ([]
 	return platform.FetchAvailableVersions(ctx, cfg)
 }
 func (j *jgrppClient) Latest(ctx context.Context, cfg *domain.Config) (string, error) {
-	return platform.CheckForNewVersion(ctx, cfg), nil
+	return platform.CheckForNewVersion(ctx, cfg, nil), nil
 }
 func (j *jgrppClient) DownloadAndExtract(ctx context.Context, version string, cfg *domain.Config, logger *platform.Logger) (bool, error) {
 	return platform.DownloadAndExtractVersionWithLogger(ctx, version, cfg, logger, nil), nil
