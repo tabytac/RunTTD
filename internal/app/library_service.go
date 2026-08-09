@@ -156,13 +156,7 @@ func BuildLibrary(ctx context.Context, cfg *domain.Config) []domain.LibraryEntry
 
 	refs := map[string][]string{} // folder path -> profile names
 	for _, p := range cfg.Profiles {
-		client := strings.TrimSpace(p.Client)
-		if client == "" {
-			client = strings.TrimSpace(cfg.DefaultClient)
-			if client == "" {
-				client = "jgrpp"
-			}
-		}
+		client := EffectiveClient(p.Client, cfg.DefaultClient)
 		if client == "custom" {
 			continue
 		}

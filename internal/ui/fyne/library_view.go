@@ -62,30 +62,19 @@ func osDisplayLabel(tag string) string {
 	return tag
 }
 
-// clientDisplayName maps a client id to its library group header label.
+// clientDisplayName maps a client id to its library group header label; the
+// registry is the one table of client names, so the two cannot drift.
 func clientDisplayName(client string) string {
-	switch client {
-	case "jgrpp":
-		return "JGRPP"
-	case "vanilla":
-		return "Vanilla OpenTTD (Releases)"
-	case "vanilla-nightly":
-		return "Vanilla OpenTTD (Nightly)"
-	default:
-		return "Unrecognised"
+	if name := apppkg.ClientDisplayName(client); name != "" {
+		return name
 	}
+	return "Unrecognised"
 }
 
 // shortClientLabel returns a compact client tag for tight spaces like the
 // profile list row. An empty client resolves to the configured default.
 func shortClientLabel(client, defaultClient string) string {
-	if client == "" {
-		client = defaultClient
-		if client == "" {
-			client = "jgrpp"
-		}
-	}
-	switch client {
+	switch apppkg.EffectiveClient(client, defaultClient) {
 	case "jgrpp":
 		return "JGRPP"
 	case "vanilla":

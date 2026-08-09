@@ -42,6 +42,15 @@ func GetClient(id string) Client {
 	return clientRegistry[id]
 }
 
+// ClientDisplayName returns the registered display name for a client ID, or ""
+// when the ID is unknown, so UI callers choose their own fallback label.
+func ClientDisplayName(id string) string {
+	if c := GetClient(id); c != nil {
+		return c.DisplayName()
+	}
+	return ""
+}
+
 // IsKnownClient reports whether clientID is registered. Empty defaults to jgrpp.
 func IsKnownClient(clientID string) bool {
 	if clientID == "" {

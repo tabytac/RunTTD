@@ -92,6 +92,12 @@ func defaultVersionOptions(clientID string) []string {
 	}
 }
 
+// versionOptionsFor assembles the version dropdown: the per-track "latest"
+// presets first, then the fetched list, which is pure network data.
+func versionOptionsFor(clientID string, fetched []string) []string {
+	return append(defaultVersionOptions(clientID), fetched...)
+}
+
 // displayVersion turns a stored version into the field's display string, normalizing the "latest" aliases per track.
 func displayVersion(clientID, stored string) string {
 	s := strings.TrimSpace(stored)
@@ -253,10 +259,9 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 					versionTrackHint.SetText(versionFetchFailedHint)
 					versionTrackHint.Show()
 				} else {
-					if len(versions) > 0 {
-						um.CachedVersions = versions
-						versionEntry.SetOptions(versions)
-					}
+					options := versionOptionsFor(clientID, versions)
+					um.CachedVersions = options
+					versionEntry.SetOptions(options)
 					versionEntry.PlaceHolder = versionEntryPlaceholder
 					applyVersionHint(clientID)
 				}
@@ -292,13 +297,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		}
 	}, onEscape)
 	// Preselect client and version display for new and existing profiles.
-	currentClient := strings.TrimSpace(profile.Client)
-	if currentClient == "" {
-		currentClient = strings.TrimSpace(um.Config.DefaultClient)
-		if currentClient == "" {
-			currentClient = "jgrpp"
-		}
-	}
+	currentClient := app.EffectiveClient(profile.Client, um.Config.DefaultClient)
 	versionEntry.SetOptions(defaultVersionOptions(currentClient))
 	versionEntry.SetText(displayVersion(currentClient, profile.Version))
 	if sel, ok := revDefaultClientMap[currentClient]; ok {

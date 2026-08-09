@@ -55,10 +55,9 @@ func FetchAvailableVersions(ctx context.Context, config *domain.Config) ([]strin
 		return nil, fmt.Errorf("failed to parse release info: %w", err)
 	}
 
-	versions := []string{"latest"}
+	versions := make([]string, 0, len(releases))
 	for _, release := range releases {
-		tag := strings.TrimPrefix(release.TagName, "jgrpp-")
-		versions = append(versions, tag)
+		versions = append(versions, strings.TrimPrefix(release.TagName, "jgrpp-"))
 	}
 	return versions, nil
 }

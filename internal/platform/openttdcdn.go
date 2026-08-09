@@ -232,21 +232,15 @@ func FetchAvailableVersionsForClient(ctx context.Context, client string, cfg *do
 		if client == "vanilla-nightly" {
 			base := cfg.NightlyMirror
 			if base == "" {
-				base = "https://cdn.openttd.org/openttd-nightlies/"
+				base = domain.DefaultNightlyMirror
 			}
-			recent, err := FetchRecentNightlyVersions(ctx, base, 10)
-			if err != nil {
-				return nil, err
-			}
-			out := []string{"latest"}
-			out = append(out, recent...)
-			return out, nil
+			return FetchRecentNightlyVersions(ctx, base, 10)
 		}
 
 		// Scrape stable CDN version folders from index
 		base := cfg.VanillaMirror
 		if base == "" {
-			base = "https://cdn.openttd.org/openttd-releases/"
+			base = domain.DefaultVanillaMirror
 		}
 		resp, err := doGETWithRetry(ctx, httpClient, base)
 		if err != nil {
@@ -260,10 +254,7 @@ func FetchAvailableVersionsForClient(ctx context.Context, client string, cfg *do
 		if err != nil {
 			return nil, fmt.Errorf("failed to read vanilla index: %w", err)
 		}
-		versions := ParseCDNVersionFoldersFromHTML(string(body))
-		out := []string{"latest (Stable)", "latest (Testing)"}
-		out = append(out, versions...)
-		return out, nil
+		return ParseCDNVersionFoldersFromHTML(string(body)), nil
 	default:
 		return nil, fmt.Errorf("unknown client: %s", client)
 	}
@@ -291,11 +282,7 @@ func CheckForNewVersionForClientTrack(ctx context.Context, client string, cfg *d
 			if vv == "" {
 				continue
 			}
-			lower := strings.ToLower(vv)
-			if lower == "latest (stable)" || lower == "latest (testing)" || lower == "latest" {
-				continue
-			}
-			if track == "stable" && IsPreReleaseVersion(lower) {
+			if track == "stable" && IsPreReleaseVersion(strings.ToLower(vv)) {
 				continue
 			}
 			return vv
@@ -321,11 +308,11 @@ func DownloadAndExtractVersionForClientWithLogger(ctx context.Context, version, 
 	if client == "vanilla-nightly" {
 		base = cfg.NightlyMirror
 		if base == "" {
-			base = "https://cdn.openttd.org/openttd-nightlies/"
+			base = domain.DefaultNightlyMirror
 		}
 	}
 	if base == "" {
-		base = "https://cdn.openttd.org/openttd-releases/"
+		base = domain.DefaultVanillaMirror
 	}
 
 	platformAliases := NightlyPlatformAliases(cfg)
