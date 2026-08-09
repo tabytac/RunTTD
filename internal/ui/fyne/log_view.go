@@ -199,54 +199,33 @@ func (um *UIManager) showLogView(profileIdx int) {
 	um.viewEscape = back
 	um.Window.SetContent(content)
 
-	// Launch OpenTTD in background if requested. Guarded at the UIManager level
-	// (not mainView.launchInProgress, which this path bypasses entirely) so
-	// leaving this view mid-download and pressing Run again can't start a second
-	// concurrent download into the same folder.
+	// Launch through the shared runner so the guard, cancel, status and
+	// completion behave identically to a launch started from the profile view;
+	// only the rendering here (the status binding) is this view's own.
 	if isLaunch {
-		if um.launchInProgress {
-			// The original launch is still running (this is a fresh showLogView,
-			// e.g. after "Back to profiles" then Run again); um.launchCancel still
-			// targets it, so offer Cancel here too even though this view's own
+		lastPct := -1
+		started := um.startLaunch(profileIdx, func(status string) {
+			// binding.String.Set is documented safe from any goroutine.
+			_ = statusBinding.Set(status)
+		}, func(done, total int64) {
+			if total <= 0 || done >= total {
+				return // unknown size or extracting: the status sink carries those
+			}
+			pct := int(done * 100 / total)
+			if pct == lastPct {
+				return // throttle to whole-percent steps
+			}
+			lastPct = pct
+			_ = statusBinding.Set(fmt.Sprintf("Downloading… %d%%", pct))
+		})
+		if !started {
+			// The launch already in flight keeps running; um.launchCancel still
+			// targets it, so Cancel works from here even though this view's own
 			// status/progress aren't wired to that goroutine.
 			um.showToast("A launch is already in progress")
-			um.launchCancelBtn = cancelBtn
-			cancelBtn.Show()
-		} else {
-			um.launchInProgress = true
-			ctx, cancel := context.WithCancel(context.Background())
-			um.launchCancel = cancel
-			um.launchCancelBtn = cancelBtn
-			cancelBtn.Show()
-			lastPct := -1
-			go func() {
-				defer fyne.Do(func() {
-					um.launchInProgress = false
-					cancel()
-					um.launchCancel = nil
-					um.hideLaunchCancel()
-				})
-				um.launchProfile(ctx, profile, func(status string) {
-					// binding.String.Set is documented safe from any goroutine.
-					_ = statusBinding.Set(status)
-				}, func(done, total int64) {
-					if total <= 0 {
-						return // unknown size: leave the current status text alone
-					}
-					if done >= total {
-						fyne.Do(um.hideLaunchCancel) // extraction isn't cancellable; stop offering to
-						_ = statusBinding.Set("Extracting (this can take a moment for large installs)")
-						return
-					}
-					pct := int(done * 100 / total)
-					if pct == lastPct {
-						return // throttle to whole-percent steps
-					}
-					lastPct = pct
-					_ = statusBinding.Set(fmt.Sprintf("Downloading… %d%%", pct))
-				}, nil)
-			}()
 		}
+		um.launchCancelBtn = cancelBtn
+		cancelBtn.Show()
 	}
 }
 

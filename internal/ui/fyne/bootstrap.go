@@ -1,6 +1,7 @@
 package fyne
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"path/filepath"
@@ -61,6 +62,67 @@ type UIManager struct {
 	launchProfileIdx      int                  // the profile an in-flight launch is for, so an adopting view can point View logs at it
 	mainView              *mainView            // the newest profile view; a launch outlives the view that began it, so it reports here rather than into captured widgets
 	viewKeys              func(*fyne.KeyEvent) // the profile view's bare-key handler, so a focused button can hand back what it did not use
+	launchPipeline        launchPipelineFunc   // tests substitute the network-bound pipeline; nil means um.launchProfile
+}
+
+type launchPipelineFunc func(ctx context.Context, profile domain.Profile, updateStatus func(string), onProgress platform.ProgressFunc, onError func())
+
+// startLaunch runs the launch pipeline for the profile at idx, owning the
+// cross-view state: the guard, cancel, status and completion live here because
+// a launch outlives the view that starts it. onStatus and onProgress render
+// into the starting view and may be nil; status also reaches whichever profile
+// view is current. Returns false when a launch is already running.
+func (um *UIManager) startLaunch(idx int, onStatus func(string), onProgress platform.ProgressFunc) bool {
+	if um.launchInProgress || idx < 0 || idx >= len(um.Config.Profiles) {
+		return false
+	}
+	um.launchInProgress = true
+	um.launchProfileIdx = idx
+	profile := um.Config.Profiles[idx]
+
+	ctx, cancel := context.WithCancel(context.Background())
+	um.launchCancel = cancel
+
+	emit := func(status string) {
+		um.publishLaunchStatus(status)
+		if onStatus != nil {
+			onStatus(status)
+		}
+	}
+	emit("Starting " + profile.Name)
+
+	pipeline := um.launchPipeline
+	if pipeline == nil {
+		pipeline = um.launchProfile
+	}
+	failed := false
+	um.startAsync(func() {
+		defer fyne.Do(func() {
+			um.launchInProgress = false
+			cancel()
+			um.launchCancel = nil
+			um.hideLaunchCancel() // a log view opened over this launch has its own Cancel showing
+			um.finishLaunch(failed, profile.Name)
+		})
+		pipeline(ctx, profile,
+			func(status string) { fyne.Do(func() { emit(status) }) },
+			func(done, total int64) {
+				// Extraction is a synthesized status, fanned out like the rest;
+				// it is also the point past which cancelling stops being offered.
+				if total > 0 && done >= total {
+					fyne.Do(func() {
+						emit("Extracting (this can take a moment for large installs)")
+						um.hideLaunchCancel()
+					})
+				}
+				if onProgress != nil {
+					onProgress(done, total)
+				}
+			},
+			func() { failed = true },
+		)
+	})
+	return true
 }
 
 // snapshotConfig returns a copy for background goroutines to read: settings

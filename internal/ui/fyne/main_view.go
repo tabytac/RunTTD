@@ -169,71 +169,50 @@ func (mv *mainView) launchIndex(idx int) {
 	if um.launchInProgress {
 		return // the visible band is the feedback; a toast overlay would block Cancel for 3s
 	}
-	um.launchInProgress = true
 	mv.launchInProgress = true
 	mv.launchGen++
-
-	profile := um.Config.Profiles[idx]
 	mv.launchLogsIdx = idx
-	um.launchProfileIdx = idx
 
-	// Reset the band to a fresh "working" state (marquee until download starts).
+	// Reset the band to a fresh "working" state (marquee until download starts)
+	// before startLaunch publishes its first status into the phase label.
 	mv.launchLogsBtn.Hide()
 	mv.launchBar.Hide()
 	mv.launchSpin.Show()
 	mv.launchPhase.Importance = widget.MediumImportance
 	mv.launchPhase.TextStyle = fyne.TextStyle{}
-	um.publishLaunchStatus("Starting " + profile.Name)
+
+	lastPct := -1
+	um.startLaunch(idx, nil, func(done, total int64) {
+		if total <= 0 {
+			return // unknown size: stay on the marquee
+		}
+		if done >= total {
+			fyne.Do(func() {
+				mv.launchBar.Hide()
+				mv.launchSpin.Show()
+				mv.cancelBtn.Hide() // extraction isn't cancellable; stop offering to
+			})
+			return
+		}
+		pct := int(done * 100 / total)
+		if pct == lastPct {
+			return // throttle to whole-percent steps
+		}
+		lastPct = pct
+		fyne.Do(func() {
+			mv.launchSpin.Hide()
+			mv.launchBar.Show()
+			mv.launchBar.SetValue(float64(done) / float64(total))
+		})
+	})
+
 	mv.launchBand.Show()
 	mv.launchBand.Refresh()
 	mv.runBtn.Disable()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	mv.launchCancel = cancel
-	um.launchCancel = cancel // a log view opened over this launch offers a working Cancel
-	mv.cancelBtn.Show()
-
-	failed := false
-	lastPct := -1
-	go func() {
-		defer fyne.Do(func() {
-			um.launchInProgress = false
-			cancel()
-			um.launchCancel = nil
-			um.hideLaunchCancel() // a log view opened over this launch has its own Cancel showing
-			um.finishLaunch(failed, profile.Name)
-		})
-		um.launchProfile(ctx, profile,
-			func(status string) {
-				fyne.Do(func() { um.publishLaunchStatus(status) })
-			},
-			func(done, total int64) {
-				if total <= 0 {
-					return // unknown size: stay on the marquee
-				}
-				if done >= total {
-					fyne.Do(func() {
-						mv.launchBar.Hide()
-						mv.launchSpin.Show()
-						um.publishLaunchStatus("Extracting (this can take a moment for large installs)")
-						mv.cancelBtn.Hide() // extraction isn't cancellable; stop offering to
-					})
-					return
-				}
-				pct := int(done * 100 / total)
-				if pct == lastPct {
-					return // throttle to whole-percent steps
-				}
-				lastPct = pct
-				fyne.Do(func() {
-					mv.launchSpin.Hide()
-					mv.launchBar.Show()
-					mv.launchBar.SetValue(float64(done) / float64(total))
-				})
-			},
-			func() { failed = true },
-		)
-	}()
+	if um.launchCancel != nil {
+		mv.launchCancel = um.launchCancel
+		mv.cancelBtn.Show()
+	}
 }
 
 // finishLaunch settles the band and buttons once a launch ends. It runs on
