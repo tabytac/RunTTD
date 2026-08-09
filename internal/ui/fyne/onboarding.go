@@ -97,14 +97,14 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		if mapped, ok := defaultClientMap[defaultClientSelect.Selected]; ok {
 			um.Config.DefaultClient = mapped
 		}
-		um.Config.FirstRun = false
-
 		// First write of the config; a failure here means setup runs again next launch.
 		if err := domain.SaveConfig(um.ConfigPath, um.Config); err != nil {
-			// Stay on setup: continuing would leave every later save failing too.
+			// Stay on setup, with FirstRun intact: clearing it before a failed
+			// save would let a later window-close write skip setup for good.
 			um.showErrorf("could not save your settings to %s: %w", um.ConfigPath, err)
 			return
 		}
+		um.Config.FirstRun = false
 
 		um.Window.SetContent(um.makeMainView())
 	}, nil)
@@ -117,6 +117,20 @@ func (um *UIManager) makeOnboardingView() fyne.CanvasObject {
 		}
 	}
 	um.Window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		// A dialog on top (the failed-save error) owns the keys: Enter must
+		// answer it, not re-run the save and stack a second dialog over it.
+		if top := um.Window.Canvas().Overlays().Top(); top != nil {
+			switch ev.Name {
+			case fyne.KeyReturn, fyne.KeyEnter:
+				if um.confirmAction != nil {
+					um.confirmAction()
+				}
+			case fyne.KeyEscape:
+				um.confirmAction = nil
+				top.Hide()
+			}
+			return
+		}
 		if ev.Name == fyne.KeyReturn || ev.Name == fyne.KeyEnter {
 			tryContinue()
 		}
