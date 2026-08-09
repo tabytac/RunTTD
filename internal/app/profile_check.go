@@ -9,7 +9,7 @@ import (
 )
 
 // ProfileSetupIssue reports why launching p would silently miss its configured
-// intent, or "" when it wouldn't. Resolution mirrors ExecuteOpenTTD via the
+// intent, or "" when it wouldn't. Resolution mirrors StartOpenTTD via the
 // shared platform helpers. It does blocking disk I/O on the profile's save/config
 // paths, which may be absolute and on a slow or unreachable network share, so
 // callers must run it off the UI thread (see the fyne setupIssueCache).

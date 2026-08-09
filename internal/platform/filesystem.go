@@ -292,50 +292,6 @@ func FindVersionFolderClient(parentDir, version, client string, cfg *domain.Conf
 	return ""
 }
 
-// FindLatestFolderClientWithConfig locates the latest installed folder for a given profile client, using active config platform rules
-func FindLatestFolderClientWithConfig(parentDir, client string, cfg *domain.Config) string {
-	entries, err := os.ReadDir(parentDir)
-	if err != nil {
-		return ""
-	}
-
-	var latestFolder string
-	var latestTime time.Time
-	platformAliases := ClientPlatformAliases(cfg)
-
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue // skip dot-prefixed temp/backup dirs (.extract-, .bak-)
-		}
-		name := strings.ToLower(entry.Name())
-		switch client {
-		case "jgrpp":
-			if !strings.Contains(name, "jgrpp") {
-				continue
-			}
-			if len(platformAliases) > 0 && !FolderMatchesAnyAlias(name, platformAliases) {
-				continue
-			}
-		case "vanilla", "vanilla-nightly":
-			if !strings.Contains(name, "openttd") {
-				continue
-			}
-			if len(platformAliases) > 0 && !FolderMatchesAnyAlias(name, platformAliases) {
-				continue
-			}
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		if info.ModTime().After(latestTime) {
-			latestTime = info.ModTime()
-			latestFolder = filepath.Join(parentDir, entry.Name())
-		}
-	}
-	return latestFolder
-}
-
 // FindLatestSaveFile crawls save directory files returning the newest game file matching the specified save filter
 func FindLatestSaveFile(gamePath string, filter string) string {
 	entries, err := os.ReadDir(gamePath)

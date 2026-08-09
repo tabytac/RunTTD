@@ -20,25 +20,6 @@ type ProcessObserver interface {
 	OnStarted()
 }
 
-// ExecuteOpenTTD starts the OpenTTD application for the given profile using
-// detached platform routines. versionFolder is the resolved client install
-// directory; docsBasePath anchors relative save/config paths; obs receives
-// lifecycle and logging callbacks. Returns whether the process actually
-// started (obs.OnStarted() was called); callers must check this rather than
-// assume success, since every failure here is otherwise reported only via
-// LogImportant.
-func ExecuteOpenTTD(
-	ctx context.Context,
-	versionFolder string,
-	profile domain.Profile,
-	docsBasePath string,
-	allowCompanyPassword bool,
-	obs ProcessObserver,
-) bool {
-	started, _ := StartOpenTTD(ctx, versionFolder, profile, docsBasePath, allowCompanyPassword, obs)
-	return started
-}
-
 // neverStarted is the wait function handed back for a game that never ran.
 func neverStarted() int { return -1 }
 
