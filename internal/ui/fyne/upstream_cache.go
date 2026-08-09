@@ -79,3 +79,11 @@ func (c *upstreamCache) store(track, tag string, state upstreamState) {
 	defer c.mu.Unlock()
 	c.m[track] = upstreamEntry{tag: tag, state: state, fetched: c.now()}
 }
+
+// invalidate drops every cached answer, so a changed mirror or API URL cannot
+// keep serving tags fetched from the old source for the rest of the TTL.
+func (c *upstreamCache) invalidate() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.m = make(map[string]upstreamEntry)
+}

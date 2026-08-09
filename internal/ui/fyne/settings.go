@@ -529,9 +529,11 @@ func (um *UIManager) showSettingsView() {
 			*um.Config = prevConfig
 			return // leave the dialog open so the edits aren't lost; the user can retry
 		}
-		// ParentDir/SubfolderPerClient may have moved where installs are searched;
-		// invalidate unconditionally so a stale answer can't survive a nil hook.
+		// ParentDir/SubfolderPerClient may have moved where installs are searched,
+		// and a mirror or API URL change makes cached upstream tags come from the
+		// wrong source; invalidate unconditionally so a stale answer can't survive.
 		um.diskLookups.invalidate()
+		um.upstream.invalidate()
 		if um.profileListRefresh != nil {
 			um.profileListRefresh() // move the §14 startup marker if AutoLaunchProfile changed here
 		}
