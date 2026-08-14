@@ -13,6 +13,7 @@ type Profile struct {
 	ServerCompanyPassword string `json:"serverCompanyPassword"`
 	LaunchMode            string `json:"launchMode"` // "", "file", "folder", "multiplayer"
 	AutoLatestFilter      string `json:"autoLatestFilter"`
+	SaveSearchSubfolders  bool   `json:"saveSearchSubfolders"` // folder mode searches the whole tree; zero-value false keeps the top-level-only search of profiles saved before this field existed
 	ExtraArgs             string `json:"extraArgs"`
 	Client                string `json:"client"`               // "jgrpp", "vanilla", "vanilla-nightly", "custom"; empty resolves via app.EffectiveClient (config default, else "jgrpp")
 	CustomExecutablePath  string `json:"customExecutablePath"` // folder containing openttd binary; only used when Client=="custom"

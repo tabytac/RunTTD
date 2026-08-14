@@ -45,7 +45,7 @@ func StartOpenTTD(
 			info, err := os.Stat(gamePath)
 			if err == nil {
 				if info.IsDir() {
-					saveFile = FindLatestSaveFile(gamePath, profile.AutoLatestFilter)
+					saveFile = FindLatestSaveFile(gamePath, profile.AutoLatestFilter, profile.SaveSearchSubfolders)
 				} else {
 					saveFile = gamePath
 				}

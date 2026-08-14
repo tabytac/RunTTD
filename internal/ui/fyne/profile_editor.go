@@ -415,6 +415,13 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 	}, onEscape)
 	updateFolderInstructions(autoLatestFilterRadio.Selected)
 
+	includeSubfoldersCheck := newDialogCheck("Include subfolders", func(bool) {
+		if refreshDirty != nil {
+			refreshDirty()
+		}
+	}, onEscape, onEnter)
+	includeSubfoldersCheck.SetChecked(profile.SaveSearchSubfolders)
+
 	var browseFileBtn *dialogButton
 	browseFileBtn = newDialogButton("Browse file…", func() {
 		browseFileBtn.Disable()
@@ -489,6 +496,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		widget.NewSeparator(),
 		widget.NewLabel("File Type Filter"),
 		container.NewHBox(autoLatestFilterRadio.Container),
+		includeSubfoldersCheck,
 	}
 	pathManualOption.Objects = []fyne.CanvasObject{
 		widget.NewSeparator(),
@@ -650,6 +658,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		profile.ServerCompanyPassword = companyPassEntry.Text
 		profile.LaunchMode = modeMap[modeSelect.Selected]
 		profile.AutoLatestFilter = revFilterLabelMap[autoLatestFilterRadio.Selected]
+		profile.SaveSearchSubfolders = includeSubfoldersCheck.Checked
 		profile.ExtraArgs = strings.TrimSpace(extraArgsEntry.Text)
 
 		// Persist NewGRF scan mode
@@ -776,7 +785,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 		name, client, version, customFolder, mode                 string
 		ipPort, serverPass, companyNum, companyPass               string
 		savePath, extraArgs, configFile, newgrf, autoLatestFilter string
-		noConfigSave, applyExtraArgs                              bool
+		noConfigSave, applyExtraArgs, includeSubfolders           bool
 	}
 	current := func() profileSnapshot {
 		return profileSnapshot{
@@ -787,6 +796,7 @@ func (um *UIManager) showProfileEditor(profileIdx int, isNew bool) {
 			savePath: savePathEntry.Text, extraArgs: extraArgsEntry.Text, configFile: configFileEntry.Text,
 			newgrf: newgrfRadio.Selected, autoLatestFilter: autoLatestFilterRadio.Selected,
 			noConfigSave: noConfigSaveCheck.Checked, applyExtraArgs: applyExtraArgsCheck.Checked,
+			includeSubfolders: includeSubfoldersCheck.Checked,
 		}
 	}
 	baseline := current()

@@ -2,6 +2,7 @@ package platform
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -292,19 +293,22 @@ func FindVersionFolderClient(parentDir, version, client string, cfg *domain.Conf
 	return ""
 }
 
-// FindLatestSaveFile crawls save directory files returning the newest game file matching the specified save filter
-func FindLatestSaveFile(gamePath string, filter string) string {
-	entries, err := os.ReadDir(gamePath)
-	if err != nil {
-		return ""
-	}
-
+// FindLatestSaveFile returns the newest game file in gamePath matching the
+// specified save filter, by mod time. includeSubfolders extends the search to
+// the whole tree; directory symlinks are never followed either way.
+func FindLatestSaveFile(gamePath string, filter string, includeSubfolders bool) string {
 	var latestFile string
 	var latestTime time.Time
 
-	for _, entry := range entries {
+	_ = filepath.WalkDir(gamePath, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // unreadable entry: skip it rather than abort the search
+		}
 		if entry.IsDir() {
-			continue
+			if !includeSubfolders && path != gamePath {
+				return fs.SkipDir
+			}
+			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
 
@@ -321,14 +325,15 @@ func FindLatestSaveFile(gamePath string, filter string) string {
 		if match {
 			info, err := entry.Info()
 			if err != nil {
-				continue
+				return nil
 			}
 			if info.ModTime().After(latestTime) {
 				latestTime = info.ModTime()
-				latestFile = filepath.Join(gamePath, entry.Name())
+				latestFile = path
 			}
 		}
-	}
+		return nil
+	})
 	return latestFile
 }
 

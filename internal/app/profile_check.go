@@ -20,7 +20,7 @@ func ProfileSetupIssue(p domain.Profile, docsBasePath string) string {
 			gamePath := platform.ResolveProfileSavePath(docsBasePath, p.SavePath)
 			if info, err := os.Stat(gamePath); err != nil {
 				return "Save path not found"
-			} else if info.IsDir() && platform.FindLatestSaveFile(gamePath, p.AutoLatestFilter) == "" {
+			} else if info.IsDir() && platform.FindLatestSaveFile(gamePath, p.AutoLatestFilter, p.SaveSearchSubfolders) == "" {
 				return "No matching saves in the save folder"
 			}
 		}
