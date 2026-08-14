@@ -151,7 +151,8 @@ func (um *UIManager) showLibraryView() {
 
 	var cleanupBtn *dialogButton
 	var rescan func()
-	var busy func(active bool) // toggles the surrounding controls off while a delete runs
+	var busyControls func(active bool) // toggles the surrounding controls off while a delete or one-off launch runs
+	var busy func(active bool)         // delete's bracket: busyControls plus the Removing… summary line
 
 	render := func(entries []domain.LibraryEntry) {
 		listBox.Objects = nil
@@ -183,12 +184,13 @@ func (um *UIManager) showLibraryView() {
 		}
 
 		// Render grouped by client, version-desc within each group.
+		launch := func(e domain.LibraryEntry) { um.launchInstalledEntry(e, busyControls) }
 		for _, g := range apppkg.GroupLibrary(entries, um.Config) {
 			head := NewSectionHeader(fmt.Sprintf("%s: %d %s",
 				clientDisplayName(g.Client), len(g.Entries), pluralVersions(len(g.Entries), g.Client)))
 			listBox.Add(head)
 			for _, e := range g.Entries {
-				listBox.Add(um.libraryRow(e, busy, rescan))
+				listBox.Add(um.libraryRow(e, launch, busy, rescan))
 			}
 		}
 
@@ -236,16 +238,16 @@ func (um *UIManager) showLibraryView() {
 	refreshBtn.Icon = theme.ViewRefreshIcon()
 
 	// A delete can be slow (a large or network-hosted folder), so it runs off the UI
-	// thread; busy disables the surrounding controls for that stretch. render()'s
-	// own Enable/Disable of cleanupBtn on completion is left alone: rescan (called
+	// thread; busyControls disables the surrounding controls for that stretch, and
+	// also brackets a one-off launch's brief start window. render()'s own
+	// Enable/Disable of cleanupBtn on completion is left alone: rescan (called
 	// after busy(false)) re-derives whether anything is still unused. Per-row delete
 	// buttons are deliberately left enabled, so two different rows can delete
 	// concurrently; each targets its own path, and a stale rescan from one is
 	// superseded by the other's, so this is accepted rather than gated.
-	busy = func(active bool) {
+	busyControls = func(active bool) {
 		deleting = active
 		if active {
-			summary.SetText("Removing…")
 			um.viewEscape = nil // Escape leaves this view too, so it goes with the disabled Back button
 			backBtn.Disable()
 			cleanupBtn.Disable()
@@ -258,6 +260,12 @@ func (um *UIManager) showLibraryView() {
 		}
 		backBtn.Enable()
 		refreshBtn.Enable()
+	}
+	busy = func(active bool) {
+		if active {
+			summary.SetText("Removing…")
+		}
+		busyControls(active)
 	}
 
 	header := container.NewBorder(nil, nil, summary, container.NewHBox(refreshBtn))
@@ -300,7 +308,7 @@ func pluralVersions(n int, client string) string {
 
 // libraryRow builds one grouped row: status color-bar, version title with an
 // inline status chip, muted size/date, and icon-only actions.
-func (um *UIManager) libraryRow(e domain.LibraryEntry, busy func(bool), afterChange func()) fyne.CanvasObject {
+func (um *UIManager) libraryRow(e domain.LibraryEntry, launch func(domain.LibraryEntry), busy func(bool), afterChange func()) fyne.CanvasObject {
 	// Title is the version (client is the group header); fall back to folder base.
 	titleText := e.Version
 	if titleText == "" {
@@ -338,6 +346,9 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, busy func(bool), afterCha
 
 	meta := widget.NewLabel(fmt.Sprintf("%s · %s", humanSize(e.SizeBytes), e.ModTime.Format("2006-01-02")))
 
+	launchBtn := um.newLibraryButton("", func() { launch(e) })
+	launchBtn.Icon = theme.MediaPlayIcon()
+	launchBtn.Importance = widget.LowImportance
 	revealBtn := um.newLibraryButton("", func() {
 		if err := platform.RevealInFileManager(e.Path); err != nil {
 			um.Logger.Append(fmt.Sprintf("Reveal failed for %s: %v", e.Path, err))
@@ -354,7 +365,7 @@ func (um *UIManager) libraryRow(e domain.LibraryEntry, busy func(bool), afterCha
 
 	titleRow := container.NewHBox(titleObjects...)
 	left := container.NewVBox(titleRow, meta)
-	actions := container.NewHBox(revealBtn, deleteBtn)
+	actions := container.NewHBox(launchBtn, revealBtn, deleteBtn)
 
 	bar := canvas.NewRectangle(barColor)
 	bar.SetMinSize(fyne.NewSize(4, 1))
@@ -395,6 +406,41 @@ func (um *UIManager) confirmDeleteOne(e domain.LibraryEntry, busy func(bool), af
 	})
 	confirmDlg.SetConfirmImportance(widget.DangerImportance)
 	confirmDlg.Show()
+}
+
+// launchInstalledEntry starts a one-off launch of an installed folder, as it
+// sits on disk and with no profile settings. It shares the cross-path launch
+// guard with profile launches; busy disables the view's controls for the brief
+// start window, so Back cannot land while the guard is set and hit adoptLaunch
+// with no profile index to adopt. Feedback is a toast or an error dialog.
+func (um *UIManager) launchInstalledEntry(e domain.LibraryEntry, busy func(bool)) {
+	if um.launchInProgress {
+		um.showToast("A launch is already running")
+		return
+	}
+	um.launchInProgress = true
+	busy(true)
+	title := e.Version
+	if title == "" {
+		title = filepath.Base(e.Path)
+	}
+	cfg := um.snapshotConfig()
+	um.startAsync(func() {
+		result := apppkg.LaunchInstalledFolder(e.Path, e.Client, apppkg.LaunchDeps{
+			Config:   cfg,
+			Logger:   um.Logger,
+			Observer: um,
+		})
+		fyne.Do(func() {
+			um.launchInProgress = false
+			busy(false)
+			if result == apppkg.LaunchStarted {
+				um.showToast("Launched " + title)
+			} else {
+				um.showErrorf("could not start OpenTTD from %s; see the logs for details", e.Path)
+			}
+		})
+	})
 }
 
 // confirmCleanup removes all orphan folders after a single confirm, off the UI thread.

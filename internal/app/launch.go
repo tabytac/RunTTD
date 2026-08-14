@@ -215,6 +215,22 @@ func LaunchProfile(ctx context.Context, profile domain.Profile, deps LaunchDeps)
 	return deps.execute(context.Background(), versionFolder, profile, client)
 }
 
+// LaunchInstalledFolder starts the game from an already-installed folder with
+// no profile settings: main menu, no save, no server, no extra arguments. The
+// folder is launched as-is, never re-resolved through version matching, so two
+// same-version installs differing only by OS tag cannot collapse into one.
+func LaunchInstalledFolder(folder, client string, deps LaunchDeps) LaunchResult {
+	if _, err := os.Stat(folder); err != nil {
+		deps.status("Failed: install folder does not exist")
+		deps.Observer.LogImportant(fmt.Sprintf("Install folder not found: %s (%v)", folder, err))
+		deps.failed()
+		return LaunchProfileError
+	}
+	deps.Observer.LogImportant(fmt.Sprintf("Launching installed version directly: %s", folder))
+	deps.status("Starting OpenTTD")
+	return deps.execute(context.Background(), folder, domain.Profile{}, client)
+}
+
 // veryOldVersionWarning is the text put to Confirm before downloading a
 // pre-1.2.0 build, so the GUI dialog and a headless refusal describe the same problem.
 func veryOldVersionWarning(version string) string {
