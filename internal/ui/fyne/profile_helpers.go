@@ -99,7 +99,13 @@ func intentParts(p domain.Profile) (verb, target string) {
 	case "file":
 		return "Load the selected file", filepath.Base(p.SavePath)
 	case "folder":
-		return "Load the most recent " + folderItemNoun(p.AutoLatestFilter) + " in", filepath.Base(p.SavePath)
+		verb := "Load the most recent " + folderItemNoun(p.AutoLatestFilter)
+		if p.SaveSearchSubfolders {
+			verb += " anywhere in"
+		} else {
+			verb += " in"
+		}
+		return verb, filepath.Base(p.SavePath)
 	case "multiplayer":
 		return "Launch and join the server at", valueOrDefault(p.ServerIpPort, "Server")
 	default:

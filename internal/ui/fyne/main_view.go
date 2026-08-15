@@ -273,6 +273,9 @@ func (mv *mainView) refreshDetails() {
 	} else if profile.LaunchMode == "folder" {
 		um.addPathField(launch, "Save Folder", profile.SavePath, false)
 		label, value := filterDisplay(profile.AutoLatestFilter)
+		if profile.SaveSearchSubfolders {
+			value += " (including subfolders)"
+		}
 		launch.addField(label, value, false)
 	}
 	if profile.LaunchMode == "multiplayer" || profile.ServerIpPort != "" {
