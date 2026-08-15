@@ -1,6 +1,7 @@
 package fyne
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 
@@ -38,6 +39,7 @@ func newSetupIssueCache() *setupIssueCache {
 func setupIssueSignature(p domain.Profile, docsBase string) string {
 	return strings.Join([]string{
 		docsBase, p.LaunchMode, p.SavePath, p.AutoLatestFilter, p.ServerIpPort, p.ConfigFilePath,
+		strconv.FormatBool(p.SaveSearchSubfolders),
 	}, "\x00")
 }
 
